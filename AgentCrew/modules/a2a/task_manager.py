@@ -151,7 +151,7 @@ class AgentTaskManager(TaskManager):
                     root=JSONRPCErrorResponse(id=request.id, error=error)
                 )
 
-            if existing_task.status.state == TaskState.input_required:
+            if existing_task.status.state in self.INPUT_REQUIRED_STATES:
                 message = convert_a2a_message_to_agent(request.params.message)
                 user_response = self._extract_text_from_message(message)
 
@@ -459,6 +459,8 @@ class AgentTaskManager(TaskManager):
                                 task.status.message = self._create_ask_tool_message(
                                     question, guided_answers
                                 )
+
+                                await self.store.save_task(task)
 
                                 await self._record_and_emit_event(
                                     task.id,
