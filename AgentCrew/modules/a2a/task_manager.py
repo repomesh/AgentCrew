@@ -339,6 +339,7 @@ class AgentTaskManager(TaskManager):
 
             input_tokens = 0
             output_tokens = 0
+            retried_count = 0
 
             async def _process_task():
                 try:
@@ -552,7 +553,11 @@ class AgentTaskManager(TaskManager):
                     from openai import BadRequestError
 
                     if isinstance(e, BadRequestError):
-                        if e.code == "model_max_prompt_tokens_exceeded":
+                        nonlocal retried_count
+                        if (
+                            e.code == "model_max_prompt_tokens_exceeded"
+                            and retried_count < 5
+                        ):
                             from AgentCrew.modules.agents import LocalAgent
                             from AgentCrew.modules.llm.model_registry import (
                                 ModelRegistry,
@@ -563,6 +568,7 @@ class AgentTaskManager(TaskManager):
                                     agent.get_model()
                                 )
                                 agent.input_tokens_usage = max_token
+                                retried_count += 1
                                 return await _process_task()
                     raise e
 
