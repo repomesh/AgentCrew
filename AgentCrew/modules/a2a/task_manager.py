@@ -58,6 +58,10 @@ if TYPE_CHECKING:
     )
 
 
+class TaskCanceledException(Exception):
+    """Raised when a task is explicitly canceled during processing."""
+
+
 class AgentTaskManager(TaskManager):
     """Manages tasks for a specific agent"""
 
@@ -75,6 +79,8 @@ class AgentTaskManager(TaskManager):
 
         self.pending_ask_responses: Dict[str, asyncio.Event] = {}
         self.ask_responses: Dict[str, str] = {}
+        self.cancel_events: Dict[str, asyncio.Event] = {}
+        self.background_tasks: Dict[str, asyncio.Task] = {}
 
         self.agent = self.agent_manager.get_agent(self.agent_name)
         if self.agent is None or not isinstance(self.agent, LocalAgent):
@@ -85,6 +91,19 @@ class AgentTaskManager(TaskManager):
     def _is_terminal_state(self, state: TaskState) -> bool:
         """Check if a state is terminal."""
         return state in self.TERMINAL_STATES
+
+    def _is_canceled(self, task_id: str) -> bool:
+        """Check if a task has been requested to cancel."""
+        event = self.cancel_events.get(task_id)
+        return event is not None and event.is_set()
+
+    def _cleanup_task_tracking(self, task_id: str) -> None:
+        """Clean up all per-task tracking state after task completes/fails/cancels."""
+        self.cancel_events.pop(task_id, None)
+        self.background_tasks.pop(task_id, None)
+        self.streaming_enabled_tasks.discard(task_id)
+        self.pending_ask_responses.pop(task_id, None)
+        self.ask_responses.pop(task_id, None)
 
     def _extract_text_from_message(self, message: Dict[str, Any]) -> str:
         """Extract text content from a message."""
@@ -213,7 +232,10 @@ class AgentTaskManager(TaskManager):
 
         await self.store.append_task_history_message(task.context_id, message)
 
-        asyncio.create_task(self._process_agent_task(self.agent, task))
+        cancel_event = asyncio.Event()
+        self.cancel_events[task_id] = cancel_event
+        bg_task = asyncio.create_task(self._process_agent_task(self.agent, task))
+        self.background_tasks[task_id] = bg_task
 
         return SendMessageResponse(
             root=SendMessageSuccessResponse(id=request.id, result=task)
@@ -412,6 +434,16 @@ class AgentTaskManager(TaskManager):
                                     ),
                                 )
 
+                        if self._is_canceled(task.id):
+                            raise TaskCanceledException(
+                                f"Task {task.id} was canceled during streaming"
+                            )
+
+                    if self._is_canceled(task.id):
+                        raise TaskCanceledException(
+                            f"Task {task.id} was canceled after streaming"
+                        )
+
                     if tool_uses and len(tool_uses) > 0:
                         if task.id in self.streaming_enabled_tasks:
                             artifact = convert_agent_response_to_a2a_artifact(
@@ -457,6 +489,10 @@ class AgentTaskManager(TaskManager):
                             )
 
                         for tool_use in tool_uses:
+                            if self._is_canceled(task.id):
+                                raise TaskCanceledException(
+                                    f"Task {task.id} was canceled during tool execution"
+                                )
                             tool_name = tool_use["name"]
 
                             if tool_name == "ask":
@@ -490,6 +526,10 @@ class AgentTaskManager(TaskManager):
                                     await asyncio.wait_for(
                                         wait_event.wait(), timeout=300
                                     )
+                                    if self._is_canceled(task.id):
+                                        raise TaskCanceledException(
+                                            f"Task {task.id} was canceled while waiting for input"
+                                        )
                                     user_answer = self.ask_responses.get(
                                         task.id, "No response received"
                                     )
@@ -564,6 +604,8 @@ class AgentTaskManager(TaskManager):
                         return await _process_task()
                     return current_response
                 except Exception as e:
+                    if isinstance(e, TaskCanceledException):
+                        raise
                     from openai import BadRequestError
 
                     if isinstance(e, BadRequestError):
@@ -587,6 +629,10 @@ class AgentTaskManager(TaskManager):
                     raise e
 
             current_response = await _process_task()
+
+            if self._is_canceled(task.id):
+                return
+
             if current_response.strip():
                 assistant_message = agent.format_message(
                     MessageType.Assistant,
@@ -630,6 +676,18 @@ class AgentTaskManager(TaskManager):
                         queue = self.streaming_tasks[key]
                         await queue.put(None)
 
+        except TaskCanceledException:
+            logger.info(f"Task {task.id} canceled during processing")
+            if task.id in self.streaming_enabled_tasks:
+                for key in list(self.streaming_tasks.keys()):
+                    if key.startswith(task.id):
+                        try:
+                            self.streaming_tasks[key].put_nowait(None)
+                        except Exception:
+                            pass
+        except asyncio.CancelledError:
+            logger.info(f"Task {task.id} asyncio task cancelled externally")
+            raise
         except Exception as e:
             logger.error(str(e))
             task_history = await self.store.get_task_history(task.context_id)
@@ -653,6 +711,8 @@ class AgentTaskManager(TaskManager):
                     if key.startswith(task.id):
                         queue = self.streaming_tasks[key]
                         await queue.put(None)
+        finally:
+            self._cleanup_task_tracking(task.id)
 
     async def on_get_task(self, request: GetTaskRequest) -> GetTaskResponse:
         """
@@ -700,21 +760,31 @@ class AgentTaskManager(TaskManager):
                 root=JSONRPCErrorResponse(id=request.id, error=error)
             )
 
+        if task_id in self.cancel_events:
+            self.cancel_events[task_id].set()
+
+        if task_id in self.pending_ask_responses:
+            self.pending_ask_responses[task_id].set()
+
+        if task_id in self.background_tasks:
+            self.background_tasks[task_id].cancel()
+
         task.status.state = TaskState.canceled
         task.status.timestamp = datetime.now().isoformat()
         await self.store.save_task(task)
 
-        if task_id in self.streaming_tasks:
-            queue = self.streaming_tasks[task_id]
-            await queue.put(
-                TaskStatusUpdateEvent(
-                    task_id=task_id,
-                    context_id=task.context_id,
-                    status=task.status,
-                    final=True,
+        for key in list(self.streaming_tasks.keys()):
+            if key.startswith(task_id):
+                queue = self.streaming_tasks[key]
+                await queue.put(
+                    TaskStatusUpdateEvent(
+                        task_id=task_id,
+                        context_id=task.context_id,
+                        status=task.status,
+                        final=True,
+                    )
                 )
-            )
-            await queue.put(None)
+                await queue.put(None)
 
         return CancelTaskResponse(
             root=CancelTaskSuccessResponse(id=request.id, result=task)
