@@ -447,6 +447,7 @@ class LocalAgent(BaseAgent):
             return
         except Exception as e:
             logger.error(f"Error during message processing: {e}")
+            logger.debug(f"Final messages at error time: {final_messages}")
             raise e
 
     def get_process_result(self):
