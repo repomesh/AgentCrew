@@ -243,11 +243,19 @@ class MCPService:
             logger.exception(
                 f"MCPService: Error in connection management for '{server_name}'"
             )
+            agent_manager = AgentManager.get_instance()
             if agent_name:
-                agent_manager = AgentManager.get_instance()
                 agent = agent_manager.get_local_agent(agent_name)
                 if agent and combined_server_id in agent.mcps_loading:
                     agent.mcps_loading.remove(combined_server_id)
+            else:
+                for enabled_agent_name in server_config.enabledForAgents:
+                    enabled_agent = agent_manager.get_local_agent(enabled_agent_name)
+                    if (
+                        enabled_agent
+                        and combined_server_id in enabled_agent.mcps_loading
+                    ):
+                        enabled_agent.mcps_loading.remove(combined_server_id)
         finally:
             logger.info(f"MCPService: Cleaning up connection for {server_name}.")
             self.sessions.pop(combined_server_id, None)
@@ -338,11 +346,17 @@ class MCPService:
             )
             return
 
+        agent_manager = AgentManager.get_instance()
         if agent_name:
-            agent_manager = AgentManager.get_instance()
             agent = agent_manager.get_local_agent(agent_name)
             if agent:
                 agent.mcps_loading.append(combined_server_id)
+        else:
+            for enabled_agent_name in server_config.enabledForAgents:
+                enabled_agent = agent_manager.get_local_agent(enabled_agent_name)
+                if enabled_agent:
+                    enabled_agent.mcps_loading.append(combined_server_id)
+
         logger.info(
             f"MCPService: Creating task for _manage_single_connection for {combined_server_id}"
         )

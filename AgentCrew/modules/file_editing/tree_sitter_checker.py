@@ -51,7 +51,7 @@ class TreeSitterChecker:
         ".cpp": "cpp",
         ".cc": "cpp",
         ".cxx": "cpp",
-        ".h": "c",
+        ".h": "cpp",
         ".hpp": "cpp",
         # ".cs": "csharp",
         ".go": "go",

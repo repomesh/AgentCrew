@@ -336,7 +336,6 @@ tools = ["memory", "browser", "web_search", "code_analysis"]
                         self.agent_manager.get_remote_system_prompt()
                     )
                     agent.is_remoting_mode = True
-                    agent.activate()
             self.agent_manager.register_agent(agent)
 
         from AgentCrew.modules.mcpclient.tool import register as mcp_register
@@ -348,7 +347,8 @@ tools = ["memory", "browser", "web_search", "code_analysis"]
 
             mcp_manager = MCPSessionManager.get_instance()
             mcp_manager.initialize_for_agent()
-            return self.agent_manager
+            for agent in self.agent_manager.agents.values():
+                agent.activate()
 
         return self.agent_manager
 
