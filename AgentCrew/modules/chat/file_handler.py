@@ -56,30 +56,53 @@ class FileHandler:
                 )
                 from docling.datamodel.pipeline_options import (
                     PdfPipelineOptions,
+                    ConvertPipelineOptions,
+                    PictureDescriptionApiOptions,
                 )
                 from docling.document_converter import (
                     DocumentConverter,
                     PdfFormatOption,
+                    WordFormatOption,
+                    ExcelFormatOption,
+                    PowerpointFormatOption,
                 )
 
-                pipeline_options = PdfPipelineOptions()
-                pipeline_options.do_ocr = True
-                pipeline_options.do_table_structure = True
-                pipeline_options.table_structure_options.do_cell_matching = True
+                pdf_pipeline_options = PdfPipelineOptions()
+                pdf_pipeline_options.do_ocr = True
+                pdf_pipeline_options.do_table_structure = True
+                pdf_pipeline_options.table_structure_options.do_cell_matching = True
 
-                pipeline_options.accelerator_options = AcceleratorOptions(
+                pdf_pipeline_options.accelerator_options = AcceleratorOptions(
                     num_threads=2, device=AcceleratorDevice.MPS
                 )
 
+                # Explicitly disable enrichment features and use a safe picture_description_options
+                # https://github.com/docling-project/docling/issues/2515
+                word_pipeline_options = ConvertPipelineOptions(
+                    do_picture_classification=False,
+                    do_picture_description=False,
+                    enable_remote_services=False,
+                    picture_description_options=PictureDescriptionApiOptions(),
+                )
+
                 if sys.platform != "darwin":
-                    pipeline_options.accelerator_options = AcceleratorOptions(
+                    pdf_pipeline_options.accelerator_options = AcceleratorOptions(
                         num_threads=4, device=AcceleratorDevice.AUTO
                     )
                 self.converter = DocumentConverter(
                     format_options={
                         InputFormat.PDF: PdfFormatOption(
-                            pipeline_options=pipeline_options
-                        )
+                            pipeline_options=pdf_pipeline_options
+                        ),
+                        InputFormat.DOCX: WordFormatOption(
+                            pipeline_options=word_pipeline_options
+                        ),
+                        InputFormat.XLSX: ExcelFormatOption(
+                            pipeline_options=word_pipeline_options
+                        ),
+                        InputFormat.PPTX: PowerpointFormatOption(
+                            pipeline_options=word_pipeline_options
+                        ),
                     }
                 )
                 logger.info("Docling converter initialized successfully")
