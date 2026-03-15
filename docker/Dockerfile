@@ -58,6 +58,7 @@ RUN apt-get update && apt-get install -y \
   # Basic runtime dependencies
   git \
   curl \
+  ripgrep \
   ca-certificates \
   xz-utils \
   libglib2.0-0 \

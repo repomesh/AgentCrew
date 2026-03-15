@@ -282,6 +282,7 @@ class GrepTextService:
         if not case_sensitive:
             cmd_parts.append("-i")
 
+        cmd_parts.append("--")
         cmd_parts.append(f"'{escaped_pattern}'")
         cmd_parts.append(f"'{path}'")
 
@@ -330,10 +331,11 @@ class GrepTextService:
             if not case_sensitive:
                 cmd_parts.append("-i")
 
+            cmd_parts.append("--")
             cmd_parts.append(f'"{escaped_pattern}"')
 
             if is_file:
-                cmd_parts.append(f'-- "{escaped_file}"')
+                cmd_parts.append(f'"{escaped_file}"')
 
             command = " ".join(cmd_parts)
         else:
@@ -358,10 +360,11 @@ class GrepTextService:
             if not case_sensitive:
                 cmd_parts.append("-i")
 
+            cmd_parts.append("--")
             cmd_parts.append(f"'{escaped_pattern}'")
 
             if is_file:
-                cmd_parts.append(f"-- '{escaped_file}'")
+                cmd_parts.append(f"'{escaped_file}'")
 
             command = " ".join(cmd_parts)
 
@@ -398,6 +401,7 @@ class GrepTextService:
         if not case_sensitive:
             cmd_parts.append("--ignore-case")
 
+        cmd_parts.append("--")
         cmd_parts.append(f"'{escaped_pattern}'")
         cmd_parts.append(f"'{path}'")
 
