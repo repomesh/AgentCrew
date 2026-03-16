@@ -88,6 +88,8 @@ RUN cd /opt \
   && rm node-${node_version}-linux-x64.tar.xz
 ENV PATH=/opt/node-${node_version}-linux-x64/bin:${PATH}
 
+RUN mkdir -p /root/.AgentCrew/{logs,memorydb,persistents,chrome_user_data}
+
 # Create non-root user
 RUN groupadd -r agentcrew && useradd -r -g agentcrew -m -d /home/agentcrew agentcrew
 

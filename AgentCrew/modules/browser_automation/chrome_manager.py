@@ -34,7 +34,6 @@ class ChromeManager:
         self.debug_port = debug_port
         self.chrome_process: Optional[subprocess.Popen] = None
         self.chrome_thread: Optional[threading.Thread] = None
-        self._shutdown = False
         self._user_data_dir = os.path.join(
             os.getenv("AGENTCREW_PERSISTENCE_DIR", "./"), "chrome_user_data"
         )
@@ -193,6 +192,7 @@ class ChromeManager:
                 "--allow-file-access-from-files",
                 f"--user-data-dir={self._user_data_dir}",
                 f"--profile-directory={profile}",
+                "about:blank",
             ]
             if is_headless:
                 chrome_args.append("--headless")
@@ -249,11 +249,6 @@ class ChromeManager:
 
     def cleanup(self):
         """Clean up Chrome process using OS-appropriate methods."""
-        if self._shutdown:
-            return
-
-        self._shutdown = True
-
         if self.chrome_process and self.chrome_process.poll() is None:
             try:
                 if self._is_windows:
@@ -262,6 +257,9 @@ class ChromeManager:
                     self._cleanup_unix()
             except (ProcessLookupError, OSError) as e:
                 logger.warning(f"Chrome process cleanup: {e}")
+
+        self.chrome_process = None
+        self.chrome_thread = None
 
     def _cleanup_windows(self):
         """Windows-specific cleanup using taskkill or terminate."""

@@ -47,13 +47,24 @@ class BrowserAutomationService:
         self.uuid_to_xpath_mapping: Dict[str, str] = {}
         self._last_page_content: str = ""
 
+    def _find_page_tab(self) -> int:
+        """Find the first tab with type 'page' from Chrome's tab list."""
+        if self.chrome_interface is None:
+            return 0
+        self.chrome_interface.get_tabs()
+        if self.chrome_interface.tabs:
+            for i, tab in enumerate(self.chrome_interface.tabs):
+                if tab.get("type") == "page":
+                    return i
+        return 0
+
     def _ensure_chrome_running(self, profile: str = "Default"):
         """Ensure Chrome browser is running and connected."""
         if not self._is_initialized:
             self._initialize_chrome(profile)
-        # Always get active content tabs
         if self.chrome_interface:
-            self.chrome_interface.connect()
+            tab_index = self._find_page_tab()
+            self.chrome_interface.connect(tab=tab_index)
 
     def _initialize_chrome(self, profile: str = "Default"):
         """Initialize Chrome browser and DevTools connection."""
@@ -67,8 +78,14 @@ class BrowserAutomationService:
             time.sleep(2)
 
             self.chrome_interface = PyChromeDevTools.ChromeInterface(
-                host="localhost", port=self.debug_port, suppress_origin=True
+                host="localhost",
+                port=self.debug_port,
+                auto_connect=False,
+                suppress_origin=True,
             )
+
+            tab_index = self._find_page_tab()
+            self.chrome_interface.connect(tab=tab_index)
 
             self.chrome_interface.Network.enable()
             self.chrome_interface.Page.enable()
@@ -102,13 +119,13 @@ class BrowserAutomationService:
 
             result = self.chrome_interface.Page.navigate(url=urllib.parse.unquote(url))
 
-            # Check if navigation was successful
             if isinstance(result, tuple) and len(result) >= 2:
                 if isinstance(result[0], dict):
                     error_text = result[0].get("result", {}).get("errorText")
                     if error_text:
                         self.chrome_manager.cleanup()
                         self._is_initialized = False
+                        self.chrome_interface = None
                         return {
                             "success": False,
                             "error": f"Navigation failed: {error_text}.Please try again",
@@ -130,9 +147,10 @@ class BrowserAutomationService:
             logger.error(f"Navigation error: {e}")
             self.chrome_manager.cleanup()
             self._is_initialized = False
+            self.chrome_interface = None
             return {
                 "success": False,
-                "error": f"Navigation error: {str(e)}. Reset the chrome, Please try to navigate again",
+                "error": f"Navigation failed: {str(e)}. Please try again",
                 "url": url,
                 "profile": profile,
             }
@@ -533,6 +551,7 @@ class BrowserAutomationService:
             if self.chrome_manager:
                 self.chrome_manager.cleanup()
             self._is_initialized = False
+            self.chrome_interface = None
         except Exception as e:
             logger.error(f"Cleanup error: {e}")
 
