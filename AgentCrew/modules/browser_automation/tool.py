@@ -163,7 +163,7 @@ def get_browser_get_content_tool_handler(
 ) -> Callable:
     """Get the handler function for the browser content extraction tool."""
 
-    def handle_browser_get_content(**params) -> Union[List[Dict[str, Any]], str]:
+    async def handle_browser_get_content(**params) -> Union[List[Dict[str, Any]], str]:
         result = browser_service.get_page_content()
         browser_service._last_page_content = result.get("content", "")
         context_image = browser_service.capture_screenshot(
@@ -192,7 +192,7 @@ def get_browser_navigate_tool_handler(
 ) -> Callable:
     """Get the handler function for the browser navigate tool."""
 
-    def handle_browser_navigate(**params) -> str:
+    async def handle_browser_navigate(**params) -> str:
         url = params.get("url")
         profile = params.get("profile", "Default")
 
@@ -219,7 +219,7 @@ def get_browser_click_tool_handler(
 ) -> Callable:
     """Get the handler function for the browser click tool."""
 
-    def handle_browser_click(**params) -> str:
+    async def handle_browser_click(**params) -> str:
         element_uuid = params.get("element_uuid")
 
         if not element_uuid:
@@ -245,7 +245,7 @@ def get_browser_scroll_to_element_tool_handler(
 ) -> Callable:
     """Get the handler function for the scroll to element tool."""
 
-    def handle_browser_scroll_to_element(**params) -> str:
+    async def handle_browser_scroll_to_element(**params) -> str:
         element_uuid = params.get("element_uuid")
 
         if not element_uuid:
@@ -308,7 +308,7 @@ def get_browser_input_tool_handler(
 ) -> Callable:
     """Get the handler function for the browser input tool."""
 
-    def handle_browser_input(**params) -> str:
+    async def handle_browser_input(**params) -> str:
         element_uuid = params.get("element_uuid")
         value = params.get("value")
 
@@ -374,7 +374,7 @@ def get_browser_get_elements_by_text_tool_handler(
 ) -> Callable:
     """Get handler function for browser get elements by text tool."""
 
-    def handle_browser_get_elements_by_text(**params) -> str:
+    async def handle_browser_get_elements_by_text(**params) -> str:
         text = params.get("text")
         if not text:
             return "Error: No text provided for element search."
@@ -452,7 +452,7 @@ def get_browser_capture_screenshot_tool_handler(
 ) -> Callable:
     """Get the handler function for the browser screenshot capture tool."""
 
-    def handle_browser_capture_screenshot(**params) -> Any:
+    async def handle_browser_capture_screenshot(**params) -> Any:
         format_param = params.get("format", "png")
         quality = params.get("quality")
         capture_beyond_viewport = params.get("capture_beyond_viewport", False)
@@ -522,7 +522,7 @@ def get_browser_refresh_tool_handler(
 ) -> Callable:
     """Get the handler function for the browser refresh tool."""
 
-    def handle_browser_refresh(**params) -> str:
+    async def handle_browser_refresh(**params) -> str:
         result = browser_service.refresh()
 
         if result.get("success", False):
@@ -592,7 +592,7 @@ def get_browser_send_key_tool_handler(
 ) -> Callable:
     """Get the handler function for the browser key send tool."""
 
-    def handle_browser_send_key(**params) -> str:
+    async def handle_browser_send_key(**params) -> str:
         key = params.get("key")
         modifiers = params.get("modifiers", "")
 

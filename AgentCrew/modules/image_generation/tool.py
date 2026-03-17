@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 from .service import ImageGenerationService
-import asyncio
 
 if TYPE_CHECKING:
     from typing import Dict, Any, Callable, Literal, List, Optional
@@ -89,7 +88,7 @@ def get_generate_image_tool_handler(image_service: ImageGenerationService) -> Ca
         Handler function
     """
 
-    def handle_generate_image(
+    async def handle_generate_image(
         prompt: str,
         output_path: str,
         size: Literal[
@@ -120,15 +119,13 @@ def get_generate_image_tool_handler(image_service: ImageGenerationService) -> Ca
         Returns:
             String with the result of the image operation
         """
-        result = asyncio.run(
-            image_service.generate_image(
-                prompt=prompt,
-                output_path=output_path,
-                size=size,
-                quality=quality,
-                model=model if model else None,
-                image_paths=editing_image_paths,
-            )
+        result = await image_service.generate_image(
+            prompt=prompt,
+            output_path=output_path,
+            size=size,
+            quality=quality,
+            model=model if model else None,
+            image_paths=editing_image_paths,
         )
 
         if not result.get("success", False):

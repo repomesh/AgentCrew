@@ -114,7 +114,7 @@ def get_ask_tool_handler() -> Callable:
         The handler function
     """
 
-    def handler(**params) -> str:
+    async def handler(**params) -> str:
         """
         Handle an ask request.
 

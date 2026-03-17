@@ -102,7 +102,7 @@ Auto syntax check (30+ langs) with rollback on error
 def get_file_write_or_edit_tool_handler(
     file_editing_service: FileEditingService,
 ) -> Callable:
-    def handle_file_write_or_edit(**params) -> str:
+    async def handle_file_write_or_edit(**params) -> str:
         file_path = params.get("file_path")
         blocks = params.get("text_or_search_replace_blocks")
 

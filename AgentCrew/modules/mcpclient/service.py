@@ -607,7 +607,7 @@ class MCPService:
             service_instance=None,
         ):  # service_instance will be self (MCPService)
             # This is the actual async handler the agent will await.
-            def actual_tool_executor(
+            async def actual_tool_executor(
                 **params,
             ) -> list[Dict[str, Any]]:
                 if server_id not in self.sessions or not self.connected_servers.get(
@@ -617,9 +617,9 @@ class MCPService:
                         f"Cannot call tool: Server '{server_id}' is not connected"
                     )
 
-                # The agent framework should be awaiting this coroutine.
-                # The call to session.call_tool is already async.
                 session = self.sessions[server_id]
+                # Note: even though this is an async function, we need to use run_async to run it
+                # in a threadsafe coroutines, use await here will make main thread wait forever.
                 result = self._run_async(session.call_tool(tool_name, params))
                 return self._format_contents(result.content)
 

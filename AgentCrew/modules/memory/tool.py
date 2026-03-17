@@ -52,7 +52,7 @@ Search for memories need to remote, use date filters to limit scope whenever pos
 def get_memory_forget_tool_handler(memory_service: BaseMemoryService) -> Callable:
     """Optimized memory forgetting handler with concise feedback."""
 
-    def handle_memory_forget(**params) -> str:
+    async def handle_memory_forget(**params) -> str:
         ids = params.get("ids", [])
 
         # Use provided agent_name or fallback to current agent
@@ -156,7 +156,7 @@ def memory_instruction_prompt():
 def get_memory_retrieve_tool_handler(memory_service: BaseMemoryService) -> Callable:
     """Optimized memory retrieval handler with concise feedback."""
 
-    def handle_memory_retrieve(**params) -> str:
+    async def handle_memory_retrieve(**params) -> str:
         query = params.get("query", "").strip()
         from_date = params.get("from_date", None)
         to_date = params.get("to_date", None)
@@ -259,7 +259,7 @@ All behaviors must follow 'when..., [action]...' format for automatic activation
 def get_learn_behavior_tool_handler(persistence_service: Any) -> Callable:
     """Optimized adaptive behavior handler with concise feedback."""
 
-    def handle_learn_behavior(**params) -> str:
+    async def handle_learn_behavior(**params) -> str:
         behavior_id = params.get("id", "").strip()
         condition = params.get("condition", "").strip()
         action_steps = params.get("action_steps", [])

@@ -68,7 +68,7 @@ def get_code_analysis_tool_handler(
 ) -> Callable:
     """Return the handler function for the code analysis tool."""
 
-    def handler(**params):
+    async def handler(**params):
         path = params.get("path", ".")
         path = os.path.expanduser(path)
 
@@ -76,11 +76,13 @@ def get_code_analysis_tool_handler(
             path = os.path.abspath(path)
 
         exclude_patterns = params.get("exclude_patterns", [])
-        result = code_analysis_service.analyze_code_structure(path, exclude_patterns)
+        result = await code_analysis_service.analyze_code_structure(
+            path, exclude_patterns
+        )
         if isinstance(result, dict):
             raise Exception(f"Failed to analyze code: {result.get('error', '')}")
 
-        project_notes = code_analysis_service.extract_project_notes(result, path)
+        project_notes = await code_analysis_service.extract_project_notes(result, path)
 
         return [
             {
@@ -159,7 +161,7 @@ def get_file_content_tool_handler(
 ):
     """Returns a function that handles the get_file_content tool."""
 
-    def handler(**params):
+    async def handler(**params):
         file_path = params.get("file_path", "./")
         start_line = params.get("start_line")
         end_line = params.get("end_line")
@@ -306,7 +308,7 @@ def get_find_files_tool_handler(service_instance: FileSearchService) -> Callable
         ]
     """
 
-    def handler(**params):
+    async def handler(**params):
         """
         Handle the find_files tool call from LLM.
 
@@ -474,7 +476,7 @@ def get_grep_text_tool_handler(service_instance: GrepTextService) -> Callable:
         Exception: For validation errors or search execution failures
     """
 
-    def handler(**params):
+    async def handler(**params):
         """
         Handle the grep_text tool call from LLM.
 

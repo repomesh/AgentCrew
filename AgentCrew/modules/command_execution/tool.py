@@ -217,7 +217,7 @@ def get_send_command_input_tool_definition(provider="claude") -> Dict[str, Any]:
 def get_run_command_tool_handler(command_service: CommandExecutionService) -> Callable:
     """Get handler for run_command tool."""
 
-    def handle_run_command(**params) -> str | Dict[str, Any]:
+    async def handle_run_command(**params) -> str | Dict[str, Any]:
         command = params.get("command")
         timeout = params.get("timeout", 5)
         working_dir = params.get("working_dir", "./")
@@ -260,7 +260,7 @@ def get_check_command_status_tool_handler(
 ) -> Callable:
     """Get handler for check_command_status tool."""
 
-    def handle_check_command_status(**params) -> str | Dict[str, Any]:
+    async def handle_check_command_status(**params) -> str | Dict[str, Any]:
         command_id = params.get("command_id")
         if not command_id:
             raise ValueError("Missing required parameter: command_id")
@@ -303,7 +303,7 @@ def get_list_running_commands_tool_handler(
 ) -> Callable:
     """Get handler for list_running_commands tool."""
 
-    def handle_list_running_commands(**params) -> str | Dict[str, Any]:
+    async def handle_list_running_commands(**params) -> str | Dict[str, Any]:
         result = command_service.list_running_commands()
 
         if result["status"] == "error":
@@ -333,7 +333,7 @@ def get_terminate_command_tool_handler(
 ) -> Callable:
     """Get handler for terminate_command tool."""
 
-    def handle_terminate_command(**params) -> str | Dict[str, Any]:
+    async def handle_terminate_command(**params) -> str | Dict[str, Any]:
         command_id = params.get("command_id")
         if not command_id:
             raise ValueError("Missing required parameter: command_id")
@@ -353,7 +353,7 @@ def get_send_command_input_tool_handler(
 ) -> Callable:
     """Get handler for send_command_input tool."""
 
-    def handle_send_command_input(**params) -> str | Dict[str, Any]:
+    async def handle_send_command_input(**params) -> str | Dict[str, Any]:
         command_id = params.get("command_id")
         input_text = params.get("input_text")
 

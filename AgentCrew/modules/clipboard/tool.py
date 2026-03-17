@@ -94,7 +94,7 @@ def get_clipboard_read_tool_handler(clipboard_service: ClipboardService) -> Call
         Function that handles clipboard read requests
     """
 
-    def handle_clipboard_read() -> str | list[Dict[str, Any]]:
+    async def handle_clipboard_read() -> str | list[Dict[str, Any]]:
         result = clipboard_service.read()
         if result["type"] == "image":
             return [
@@ -124,7 +124,7 @@ def get_clipboard_write_tool_handler(clipboard_service: ClipboardService) -> Cal
         Function that handles clipboard write requests
     """
 
-    def handle_clipboard_write(**params) -> str | list[Dict[str, Any]]:
+    async def handle_clipboard_write(**params) -> str | list[Dict[str, Any]]:
         content = params.get("content")
         if not content:
             raise Exception("Invalid Argument")

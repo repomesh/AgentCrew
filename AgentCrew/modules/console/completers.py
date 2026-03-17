@@ -182,6 +182,8 @@ class ChatCompleter(Completer):
             yield from self.drop_completer.get_completions(document, complete_event)
         elif text.startswith(("/delete_behavior ", "/update_behavior ")):
             yield from self.behavior_completer.get_completions(document, complete_event)
+        elif text.startswith("/agent_mode "):
+            yield from self.get_agent_mode_completions(document)
         elif text.startswith("/export_agent "):
             remaining_text = text[14:]  # Remove "/export_agent "
 
@@ -260,6 +262,10 @@ class ChatCompleter(Completer):
             ("/retry", "Retry the last assistant response"),
             ("/toggle_transfer", "Toggle agent transfer enforcement on/off"),
             (
+                "/agent_mode",
+                "View or switch agent interaction mode (usage: /agent_mode [transfer|delegate|none])",
+            ),
+            (
                 "/toggle_session_yolo",
                 "Toggle Auto-Approve Mode for Tool Calls (this session only)",
             ),
@@ -288,6 +294,22 @@ class ChatCompleter(Completer):
                     command,
                     start_position=-len(document.text),
                     display=f"{command} - {description}",
+                )
+
+    def get_agent_mode_completions(self, document):
+        """Yield completions for /agent_mode sub-arguments."""
+        word_before_cursor = document.get_word_before_cursor(pattern=COMPLETER_PATTERN)
+        modes = [
+            ("transfer", "Transfer mode — one agent active at a time"),
+            ("delegate", "Delegate mode — dispatch tasks to agents in parallel"),
+            ("none", "Disable agent-to-agent interaction"),
+        ]
+        for mode_val, desc in modes:
+            if mode_val.startswith(word_before_cursor):
+                yield Completion(
+                    mode_val,
+                    start_position=-len(word_before_cursor),
+                    display=f"{mode_val} - {desc}",
                 )
 
 

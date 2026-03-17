@@ -169,24 +169,6 @@ class OpenAIService(BaseLLMService):
         self.tool_handlers[tool_name] = handler_function
         logger.info(f"🔧 Registered tool: {tool_name}")
 
-    async def execute_tool(self, tool_name, tool_params):
-        """
-        Execute a registered tool with the given parameters.
-
-        Args:
-            tool_name (str): Name of the tool to execute
-            tool_params (dict): Parameters to pass to the tool
-
-        Returns:
-            dict: Result of the tool execution
-        """
-        if tool_name not in self.tool_handlers:
-            raise ValueError(f"Tool '{tool_name}' not found")
-
-        handler = self.tool_handlers[tool_name]
-        result = handler(**tool_params)
-        return result
-
     async def stream_assistant_response(self, messages) -> Any:
         """Stream the assistant's response with tool support."""
         full_model_id = f"{self._provider_name}/{self.model}"

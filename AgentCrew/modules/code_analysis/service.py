@@ -2,7 +2,6 @@ import os
 import fnmatch
 import subprocess
 import json
-import asyncio
 import base64
 from typing import Any, Dict, List, Optional, Tuple, Union, TYPE_CHECKING
 from loguru import logger
@@ -187,7 +186,7 @@ class CodeAnalysisService:
 
         return count
 
-    def _select_files_with_llm(
+    async def _select_files_with_llm(
         self, files: List[str], max_files: int = MAX_FILES_TO_ANALYZE
     ) -> List[str]:
         """Use LLM to intelligently select which files to analyze from a large repository.
@@ -239,15 +238,7 @@ Example response format:
 ["**/tests/**", "**/test_*", "**/*.test.*", "**/docs/**", "**/migrations/**", "**/__pycache__/**"]"""
 
         try:
-            loop = asyncio.get_event_loop()
-        except RuntimeError:
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-
-        try:
-            response = loop.run_until_complete(
-                self.llm_service.process_message(prompt, temperature=0)
-            )
+            response = await self.llm_service.process_message(prompt, temperature=0)
 
             response = response.strip()
             if response.startswith("```json"):
@@ -293,7 +284,7 @@ Example response format:
         ".ai/rules.md",
     ]
 
-    def extract_project_notes(self, analysis_result: str, repo_path: str) -> str:
+    async def extract_project_notes(self, analysis_result: str, repo_path: str) -> str:
         """Extract project notes, rules, and conventions from the analysis result using LLM.
 
         Sends the analyzed code structure to the LLM with a prompt to extract
@@ -350,15 +341,7 @@ Focus only on actionable insights that help a developer understand how to work w
 Keep it under 500 words."""
 
         try:
-            loop = asyncio.get_event_loop()
-        except RuntimeError:
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-
-        try:
-            response = loop.run_until_complete(
-                self.llm_service.process_message(prompt, temperature=0)
-            )
+            response = await self.llm_service.process_message(prompt, temperature=0)
 
             notes = response.strip()
             if rule_files_section:
@@ -385,7 +368,7 @@ Keep it under 500 words."""
             notes += "\n\nYou MUST read these files using the get_file tool before making any changes."
         return notes
 
-    def analyze_code_structure(
+    async def analyze_code_structure(
         self, path: str, exclude_patterns: List[str] = []
     ) -> Dict[str, Any] | str:
         """
@@ -431,7 +414,7 @@ Keep it under 500 words."""
             files_to_analyze = supported_files_rel
 
             if len(supported_files_rel) > MAX_FILES_TO_ANALYZE:
-                selected_files = self._select_files_with_llm(
+                selected_files = await self._select_files_with_llm(
                     supported_files_rel, MAX_FILES_TO_ANALYZE
                 )
                 non_analyzed_files = [

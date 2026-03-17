@@ -71,7 +71,7 @@ def get_transfer_tool_handler(agent_manager: AgentManager) -> Callable:
         The handler function
     """
 
-    def handler(**params) -> str:
+    async def handler(**params) -> str:
         """
         Handle a transfer request.
 

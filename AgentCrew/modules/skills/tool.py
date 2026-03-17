@@ -45,37 +45,38 @@ def get_activate_skill_tool_definition(
 def get_activate_skill_tool_handler(skills_service: "SkillsService"):
     activated: set = set()
 
-    def handler():
-        async def activate_skill(name: str):
-            if name in activated:
-                return f"Skill '{name}' is already loaded in this session."
+    async def handler(**params):
+        name = params.get("name", "")
+        if not name:
+            raise ValueError("Error: No skill name provided")
 
-            skill = skills_service.get_skill(name)
-            if not skill:
-                available = ", ".join(skills_service.get_skill_names())
-                return f"Skill '{name}' not found. Available skills: {available}"
+        if name in activated:
+            return f"Skill '{name}' is already loaded in this session."
 
-            body = skill["body"]
-            skill_dir = os.path.dirname(skill["location"])
-            resources = skills_service.list_resources(skill_dir)
+        skill = skills_service.get_skill(name)
+        if not skill:
+            available = ", ".join(skills_service.get_skill_names())
+            return f"Skill '{name}' not found. Available skills: {available}"
 
-            resources_xml = ""
-            if resources:
-                files_xml = "\n".join(f"  <file>{r}</file>" for r in resources)
-                resources_xml = f"\n<skill_resources>\n{files_xml}\n</skill_resources>"
+        body = skill["body"]
+        skill_dir = os.path.dirname(skill["location"])
+        resources = skills_service.list_resources(skill_dir)
 
-            activated.add(name)
+        resources_xml = ""
+        if resources:
+            files_xml = "\n".join(f"  <file>{r}</file>" for r in resources)
+            resources_xml = f"\n<skill_resources>\n{files_xml}\n</skill_resources>"
 
-            return (
-                f'<skill_content name="{name}">\n'
-                f"{body}\n\n"
-                f"Skill directory: {skill_dir}\n"
-                f"Relative paths in this skill are relative to the skill directory."
-                f"{resources_xml}\n"
-                f"</skill_content>"
-            )
+        activated.add(name)
 
-        return activate_skill
+        return (
+            f'<skill_content name="{name}">\n'
+            f"{body}\n\n"
+            f"Skill directory: {skill_dir}\n"
+            f"Relative paths in this skill are relative to the skill directory."
+            f"{resources_xml}\n"
+            f"</skill_content>"
+        )
 
     return handler
 

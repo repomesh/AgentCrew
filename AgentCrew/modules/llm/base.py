@@ -245,19 +245,23 @@ class BaseLLMService(ABC):
         """
         pass
 
-    @abstractmethod
     async def execute_tool(self, tool_name, tool_params) -> Any:
         """
         Execute a registered tool with the given parameters.
+        All handlers must be async.
 
         Args:
             tool_name (str): Name of the tool to execute
             tool_params (dict): Parameters to pass to the tool
 
         Returns:
-            dict: Result of the tool execution
+            Any: Result of the tool execution
         """
-        pass
+        if tool_name not in self.tool_handlers:
+            raise ValueError(f"Tool '{tool_name}' not found")
+
+        handler = self.tool_handlers[tool_name]
+        return await handler(**tool_params)
 
     @abstractmethod
     def _convert_internal_format(self, messages: List[Dict[str, Any]]) -> Any:

@@ -524,6 +524,10 @@ class DisplayHandlers:
                 style=RICH_STYLE_YELLOW,
             ),
             Text(
+                "Use '/agent_mode [transfer|delegate|none]' to switch agent interaction mode.",
+                style=RICH_STYLE_YELLOW,
+            ),
+            Text(
                 "Use '/toggle_session_yolo' to toggle YOLO mode (auto-approval of tool calls) in this session only.",
                 style=RICH_STYLE_YELLOW,
             ),

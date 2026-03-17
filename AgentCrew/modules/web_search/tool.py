@@ -104,7 +104,7 @@ def get_web_search_tool_handler(tavily_service: TavilySearchService):
         Function that handles web search tool calls
     """
 
-    def web_search_handler(**params):
+    async def web_search_handler(**params):
         query = params.get("query")
         search_depth = params.get("search_depth", "basic")
         max_results = params.get("max_results", 10)
@@ -138,7 +138,7 @@ def get_web_extract_tool_handler(tavily_service: TavilySearchService):
         Function that handles web extract tool calls
     """
 
-    def web_extract_handler(**params):
+    async def web_extract_handler(**params):
         url = params.get("url")
 
         if not url:

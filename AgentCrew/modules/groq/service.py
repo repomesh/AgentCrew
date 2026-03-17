@@ -180,24 +180,6 @@ class GroqService(BaseLLMService):
         self.tool_handlers[tool_definition["function"]["name"]] = handler_function
         logger.info(f"🔧 Registered tool: {tool_definition['function']['name']}")
 
-    async def execute_tool(self, tool_name, tool_params):
-        """
-        Execute a registered tool with the given parameters.
-
-        Args:
-            tool_name (str): Name of the tool to execute
-            tool_params (dict): Parameters to pass to the tool
-
-        Returns:
-            dict: Result of the tool execution
-        """
-        if tool_name not in self.tool_handlers:
-            raise ValueError(f"Tool '{tool_name}' not found")
-
-        handler = self.tool_handlers[tool_name]
-        result = handler(**tool_params)
-        return result
-
     def _convert_internal_format(self, messages: List[Dict[str, Any]]):
         for msg in messages:
             msg.pop("agent", None)
