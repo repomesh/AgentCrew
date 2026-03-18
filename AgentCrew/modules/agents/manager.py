@@ -1,9 +1,16 @@
 import tomllib as toml
 import json
+from enum import Enum
 from typing import Dict, Any, Optional, List
 
 from .base import BaseAgent
 from .local_agent import LocalAgent
+
+
+class AgentMode(str, Enum):
+    TRANSFER = "transfer"
+    DELEGATE = "delegate"
+    NONE = "none"
 
 
 class AgentManager:
@@ -92,12 +99,20 @@ class AgentManager:
         if not self._initialized:
             self.agents: Dict[str, BaseAgent] = {}
             self.current_agent: Optional[BaseAgent] = None
-            self.enforce_transfer: bool = True
+            self.agent_mode: AgentMode = AgentMode.TRANSFER
             self.one_turn_process: bool = False
             self.context_shrink_enabled: bool = True
             self.shrink_excluded_list: List[str] = []
             self._defered_transfer: str = ""
             self._initialized = True
+
+    @property
+    def enforce_transfer(self) -> bool:
+        return self.agent_mode == AgentMode.TRANSFER
+
+    @enforce_transfer.setter
+    def enforce_transfer(self, value: bool):
+        self.agent_mode = AgentMode.TRANSFER if value else AgentMode.NONE
 
     @classmethod
     def get_instance(cls):
@@ -452,50 +467,42 @@ When system access is requested:
         Generate a section for the delegate tool prompt based on available agents.
 
         Returns:
-            str: A formatted string containing transfer instructions and available agents
+            str: A formatted string containing delegation instructions
         """
 
-        return """<Delegating_Agents>
-  <Instruction>
-    - You are a specialized agent operating within a multi-agent system with delegation capabilities
-    - When your task requires specialized assistance, use the `delegate` tool
-    - Delegation allows you to temporarily request expert help without transferring full control
-    - The target agent will complete the task and return results while you remain the active conversation manager
-  </Instruction>
-  <Delegation_Protocol>
-    <Core_Delegation_Principle>
-      Delegate specific tasks to specialists while maintaining conversation ownership and context continuity. Use when you need expert assistance but want to remain in control of the overall interaction flow.
-    </Core_Delegation_Principle>
-    <Delegation_Execution_Rules>
-      1. **TASK_DESCRIPTION REQUIREMENTS:**
-         • Start with action verbs (Create, Analyze, Design, Implement, etc.)
-         • Include specific deliverables and success criteria
-         • Specify any constraints, preferences, or requirements
-         • Be precise about the expected output format or structure
+        return """<Delegate_Tool_Rules>
+  <Purpose>
+    Delegate tasks to specialist agents for independent execution.
+    You stay active and receive results as tool output.
+  </Purpose>
 
-      2. **PRE-DELEGATION COMMUNICATION:**
-         • Explain to the user why delegation is beneficial
-         • Set clear expectations about what the specialist will provide
-         • Maintain your role as the conversation manager
+  <When_To_Delegate>
+    - Task needs expertise from a specialist agent
+    - Multiple independent sub-tasks can run in parallel
+    - You need results from another agent without giving up control
+  </When_To_Delegate>
 
-      3. **AGENT_SELECTION:**
-         • Choose the single most appropriate specialist from Transferable_Agents
-         • Match task requirements to agent capabilities precisely
-         • Consider the specialist's tools and expertise domain
+  <Parallel_Delegation>
+    To delegate to multiple agents simultaneously, call the delegate tool
+    multiple times in the SAME response. All delegations execute concurrently
+    and you receive all results before your next response.
 
-      4. **POST_DELEGATION_INTEGRATION:**
-         • Review and contextualize the delegated response
-         • Integrate the results into your ongoing conversation
-         • Provide additional clarification or follow-up as needed
-    </Delegation_Execution_Rules>
-    <Tool_Usage>
-      Required parameters for `delegate` tool:
-      • `from_agent`: Your agent name (identifies the delegating agent)
-      • `target_agent`: Exact agent name from Transferable_Agents
-      • `task_description`: Clear, actionable task with specific objectives
-    </Tool_Usage>
-  </Delegation_Protocol>
-</Delegating_Agents>"""
+    Example: To research 3 topics, emit 3 delegate calls in one turn —
+    each targeting the appropriate agent with its specific task.
+  </Parallel_Delegation>
+
+  <Rules>
+    1. Write clear task_description starting with action verbs
+    2. Include only necessary context — delegated agents start fresh
+    3. Review and synthesize results before presenting to the user
+    4. Each delegated agent cannot delegate further
+  </Rules>
+
+  <Tool_Usage>
+    Required: target_agent, task_description
+    Optional: context (relevant data the agent needs)
+  </Tool_Usage>
+</Delegate_Tool_Rules>"""
 
     def get_transfer_system_prompt(self):
         """

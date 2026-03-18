@@ -41,23 +41,36 @@ class AgentToolRegistrar:
 
             register_skills(skills_service, agent)
 
-        if (
-            agent.services.get("agent_manager")
-            and agent.services["agent_manager"].enforce_transfer
-            and not agent.is_remoting_mode
-        ):
-            from AgentCrew.modules.agents.tools.transfer import (
-                register as register_transfer,
-                transfer_tool_prompt,
-            )
+        if agent.services.get("agent_manager") and not agent.is_remoting_mode:
+            from AgentCrew.modules.agents.manager import AgentMode
 
-            agent.tool_prompts.append(
-                agent.services["agent_manager"].get_agents_list_prompt()
-            )
-            register_transfer(agent.services["agent_manager"], agent)
-            agent.tool_prompts.append(
-                transfer_tool_prompt(agent.services["agent_manager"])
-            )
+            mode = agent.services["agent_manager"].agent_mode
+            if mode == AgentMode.TRANSFER:
+                from AgentCrew.modules.agents.tools.transfer import (
+                    register as register_transfer,
+                    transfer_tool_prompt,
+                )
+
+                agent.tool_prompts.append(
+                    agent.services["agent_manager"].get_agents_list_prompt()
+                )
+                register_transfer(agent.services["agent_manager"], agent)
+                agent.tool_prompts.append(
+                    transfer_tool_prompt(agent.services["agent_manager"])
+                )
+            elif mode == AgentMode.DELEGATE:
+                from AgentCrew.modules.agents.tools.delegate import (
+                    register as register_delegate,
+                    delegate_tool_prompt,
+                )
+
+                agent.tool_prompts.append(
+                    agent.services["agent_manager"].get_agents_list_prompt()
+                )
+                register_delegate(agent.services["agent_manager"], agent)
+                agent.tool_prompts.append(
+                    delegate_tool_prompt(agent.services["agent_manager"])
+                )
 
         for tool_name in agent.tools:
             if agent.services and tool_name in agent.services:

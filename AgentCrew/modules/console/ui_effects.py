@@ -13,6 +13,7 @@ from rich.live import Live
 from rich.box import HORIZONTALS
 from rich.markdown import Markdown
 from rich.panel import Panel
+from rich.text import Text
 
 from .constants import CODE_THEME, RICH_STYLE_GRAY, RICH_STYLE_GREEN
 
@@ -36,6 +37,12 @@ class UIEffects:
         self.message_handler = console_ui.message_handler
         self.spinner = itertools.cycle(["⣾", "⣽", "⣻", "⢿", "⡿", "⣟", "⣯", "⣷"])
         self.updated_text = ""
+        # Delegate animation state
+        # key: tool_use_id, value: (agent_name, start_time)
+        self._delegate_agents: dict[str, tuple[str, float]] = {}
+        self._delegate_lock = threading.Lock()
+        self._delegate_stop_event: threading.Event | None = None
+        self._delegate_thread: threading.Thread | None = None
 
     def _loading_animation(self, stop_event):
         """Display a loading animation in the terminal."""
@@ -72,6 +79,61 @@ class UIEffects:
             sys.stdout.write("\x1b[1A")  # cursor up one line
             sys.stdout.write("\x1b[2K")
 
+    def _delegate_animation(self, stop_event):
+        """Animate active delegate agents with per-agent spinners and elapsed time."""
+        spinner = itertools.cycle(["⣾", "⣽", "⣻", "⢿", "⡿", "⣟", "⣯", "⣷"])
+        with Live(
+            "", console=self.console, auto_refresh=True, refresh_per_second=10
+        ) as live:
+            while not stop_event.is_set():
+                spin = next(spinner)
+                with self._delegate_lock:
+                    agents = dict(self._delegate_agents)
+                if agents:
+                    now = time.time()
+                    parts = []
+                    for agent_name, start in agents.values():
+                        elapsed = int(now - start)
+                        parts.append(
+                            f"📋 [bold yellow]{agent_name}[/] [dim]{spin} {elapsed}s[/]"
+                        )
+                    live.update("   " + "   [dim]|[/]   ".join(parts))
+                else:
+                    live.update("")
+                time.sleep(0.1)
+            live.update("")
+            live.stop()
+            import sys
+
+            sys.stdout.write("\x1b[1A")
+            sys.stdout.write("\x1b[2K")
+
+    def start_delegate_animation(self, tool_use_id: str, agent_name: str):
+        """Register a delegation by tool_use_id and start/keep the animation running."""
+        with self._delegate_lock:
+            self._delegate_agents[tool_use_id] = (agent_name, time.time())
+        if self._delegate_thread and self._delegate_thread.is_alive():
+            return  # Already running
+        self._delegate_stop_event = threading.Event()
+        self._delegate_thread = threading.Thread(
+            target=self._delegate_animation, args=(self._delegate_stop_event,)
+        )
+        self._delegate_thread.daemon = True
+        self._delegate_thread.start()
+
+    def stop_delegate_animation(self, tool_use_id: str):
+        """Unregister a delegation by tool_use_id. Stop animation only when all are done."""
+        with self._delegate_lock:
+            self._delegate_agents.pop(tool_use_id, None)
+            any_remaining = bool(self._delegate_agents)
+        if not any_remaining:
+            if self._delegate_stop_event:
+                self._delegate_stop_event.set()
+                self._delegate_stop_event = None
+            if self._delegate_thread and self._delegate_thread.is_alive():
+                self._delegate_thread.join(timeout=0.5)
+                self._delegate_thread = None
+
     def start_loading_animation(self):
         """Start the loading animation."""
         if self._loading_thread and self._loading_thread.is_alive():
@@ -96,7 +158,6 @@ class UIEffects:
     def start_streaming_response(self, agent_name: str, is_thinking=False):
         """Start streaming the assistant's response."""
         from .constants import RICH_STYLE_GREEN_BOLD
-        from rich.text import Text
 
         header = Text(
             f"💭 {agent_name.upper()}'s thinking:"
@@ -197,7 +258,6 @@ class UIEffects:
     def finish_response(self, response: str, is_thinking: bool = False):
         """Finalize and display the complete response."""
         from .constants import RICH_STYLE_GREEN_BOLD
-        from rich.text import Text
 
         self._visible_buffer = -1
         self._tracking_buffer = 0
@@ -235,3 +295,11 @@ class UIEffects:
         """Clean up all running effects."""
         self.stop_loading_animation()
         self.finish_live_update()
+        with self._delegate_lock:
+            self._delegate_agents.clear()
+        if self._delegate_stop_event:
+            self._delegate_stop_event.set()
+            self._delegate_stop_event = None
+        if self._delegate_thread and self._delegate_thread.is_alive():
+            self._delegate_thread.join(timeout=0.5)
+            self._delegate_thread = None

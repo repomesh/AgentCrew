@@ -273,6 +273,16 @@ class ApplicationSetup:
             "global_settings", {}
         ).get("shrink_excluded", [])
 
+        from AgentCrew.modules.agents.manager import AgentMode
+
+        agent_mode_str = global_config.get("global_settings", {}).get(
+            "agent_mode", "transfer"
+        )
+        try:
+            self.agent_manager.agent_mode = AgentMode(agent_mode_str)
+        except ValueError:
+            self.agent_manager.agent_mode = AgentMode.TRANSFER
+
         llm_service = services["llm"]
 
         if config_uri:

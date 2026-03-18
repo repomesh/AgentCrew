@@ -44,6 +44,7 @@ class CommandHandler:
             or user_input.startswith("/model ")
             or user_input.startswith("/think ")
             or user_input.startswith("/toggle_transfer")
+            or user_input.startswith("/agent_mode")
             or user_input.startswith("/file ")
         ):
             self.chat_window.llm_worker.process_request.emit(user_input)
@@ -187,7 +188,7 @@ class CommandHandler:
         formatted = []
 
         for i, msg in enumerate(messages):
-            formatted_msg = {"#": i}
+            formatted_msg = {"#": i, "tool_call_id": ""}
 
             if "role" in msg:
                 formatted_msg["role"] = msg["role"]

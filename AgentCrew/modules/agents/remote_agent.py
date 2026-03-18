@@ -101,7 +101,7 @@ class RemoteAgent(BaseAgent):
         elif message_type == MessageType.FileContent:
             return None
 
-    def execute_tool_call(self, tool_name: str, tool_input: Dict) -> Any:
+    async def execute_tool_call(self, tool_name: str, tool_input: Dict) -> Any:
         return None
 
     def configure_think(self, think_setting):

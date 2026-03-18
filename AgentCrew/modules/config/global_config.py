@@ -79,6 +79,16 @@ class GlobalConfig:
             agent_manager.shrink_excluded_list = config_data.get(
                 "global_settings", {}
             ).get("shrink_excluded", [])
+
+            from AgentCrew.modules.agents.manager import AgentMode
+
+            agent_mode_str = config_data.get("global_settings", {}).get(
+                "agent_mode", "transfer"
+            )
+            try:
+                agent_manager.agent_mode = AgentMode(agent_mode_str)
+            except ValueError:
+                agent_manager.agent_mode = AgentMode.TRANSFER
         except Exception as e:
             raise ValueError(
                 f"Error writing global configuration to {config_path}: {str(e)}"

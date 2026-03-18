@@ -62,7 +62,9 @@ class CommandProcessor:
         elif user_input.lower().startswith("/jump "):
             jumped = self._handle_jump_command(user_input)
             return CommandResult(handled=jumped, clear_flag=True)
-        elif user_input.lower().startswith("/agent"):
+        elif user_input.lower().startswith("/agent_mode"):
+            return self._handle_agent_mode_command(user_input)
+        elif user_input.lower().startswith("/agent "):
             success, message = self._handle_agent_command(user_input)
             self.message_handler._notify(
                 "agent_command_result", {"success": success, "message": message}
@@ -783,19 +785,22 @@ class CommandProcessor:
         return CommandResult(handled=True, clear_flag=True)
 
     def _handle_toggle_transfer_command(self, user_input: str) -> CommandResult:
-        """Handle /toggle_transfer command to toggle the enforce_transfer property of agent_manager."""
+        """Handle /toggle_transfer command — backward-compat alias toggling between transfer and none."""
         try:
-            # Toggle the enforce_transfer property
-            current_state = self.message_handler.agent_manager.enforce_transfer
-            self.message_handler.agent_manager.enforce_transfer = not current_state
-            new_state = self.message_handler.agent_manager.enforce_transfer
+            from AgentCrew.modules.agents.manager import AgentMode
+
+            current_mode = self.message_handler.agent_manager.agent_mode
+            new_mode = (
+                AgentMode.NONE
+                if current_mode == AgentMode.TRANSFER
+                else AgentMode.TRANSFER
+            )
+            self.message_handler.agent_manager.agent_mode = new_mode
 
             self.message_handler.agent.deactivate()
-
             self.message_handler.agent.activate()
 
-            # Notify user about the state change
-            status = "enabled" if new_state else "disabled"
+            status = "enabled" if new_mode == AgentMode.TRANSFER else "disabled"
             self.message_handler._notify(
                 "system_message", f"🔄 Transfer enforcement is now {status}."
             )
@@ -806,5 +811,49 @@ class CommandProcessor:
         except Exception as e:
             self.message_handler._notify(
                 "error", f"Failed to toggle transfer enforcement: {str(e)}"
+            )
+            return CommandResult(handled=True, clear_flag=True)
+
+    def _handle_agent_mode_command(self, user_input: str) -> CommandResult:
+        """Handle /agent_mode command to view or switch agent interaction mode."""
+        try:
+            from AgentCrew.modules.agents.manager import AgentMode
+
+            parts = user_input.strip().split(maxsplit=1)
+
+            if len(parts) == 1:
+                current = self.message_handler.agent_manager.agent_mode.value
+                self.message_handler._notify(
+                    "system_message",
+                    f"🤖 Current agent mode: **{current}**\n"
+                    f"Options: transfer, delegate, none",
+                )
+                return CommandResult(handled=True, clear_flag=True)
+
+            mode_str = parts[1].lower()
+            try:
+                new_mode = AgentMode(mode_str)
+            except ValueError:
+                self.message_handler._notify(
+                    "error",
+                    f"Invalid mode '{mode_str}'. Options: transfer, delegate, none",
+                )
+                return CommandResult(handled=True, clear_flag=True)
+
+            self.message_handler.agent_manager.agent_mode = new_mode
+
+            self.message_handler.agent.deactivate()
+            self.message_handler.agent.activate()
+
+            self.message_handler._notify(
+                "system_message",
+                f"🔄 Agent mode switched to: **{new_mode.value}**",
+            )
+
+            return CommandResult(handled=True, clear_flag=True)
+
+        except Exception as e:
+            self.message_handler._notify(
+                "error", f"Failed to switch agent mode: {str(e)}"
             )
             return CommandResult(handled=True, clear_flag=True)

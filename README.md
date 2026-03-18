@@ -19,8 +19,8 @@
 
 AgentCrew is a framework for building specialized AI assistant teams. Instead of
 relying on a single AI to handle everything, you create multiple agents where
-each focuses on specific tasks. These agents collaborate by transferring work to
-whoever is best suited for the job.
+each focuses on specific tasks. These agents collaborate by transferring work to specialists
+or delegating tasks to multiple agents in parallel.
 
 Think of it like organizing a software team. You don't hire one person to do
 design, backend, frontend, and DevOps. You build a team where experts handle
@@ -70,6 +70,42 @@ and access controls. Review what your agents are doing before they do it.
 - Remote agent support for distributed team configurations
 - A2A protocol for cross-system agent collaboration
 
+### 🔄 Agent Interaction Modes
+
+AgentCrew supports two mutually exclusive modes for agent-to-agent
+collaboration, configured via `global_settings.agent_mode` in `config.json`:
+
+**Transfer mode** (default): The active agent hands off full control to a
+specialist. One agent is active at a time, and the full conversation history
+carries over. Best for deep collaboration chains where context matters.
+
+```
+User → Agent A → [transfer] → Agent B takes over the conversation
+```
+
+**Delegate mode**: The active agent dispatches tasks to one or more agents in
+parallel. Delegated agents run independently with fresh context and return
+results as tool output. The orchestrating agent stays in control and synthesizes
+the results.
+
+```
+User → Agent A → [delegate] → Agent B (task 1) ─┐
+                            → Agent C (task 2) ─┤── all run concurrently
+                            → Agent B (task 3) ─┘
+               ← Agent A receives all results and responds
+```
+
+Key details:
+
+- Switch modes at runtime with `/agent_mode [transfer|delegate|none]`
+- Parallel fan-out: the LLM emits multiple delegate calls in one turn, all
+  execute concurrently via `asyncio.gather`
+- Each delegation gets a cloned agent with its own LLM service — no shared state
+  between parallel delegates
+- Delegated agents cannot delegate further (no recursion)
+- Console shows live per-agent spinners with elapsed time during delegation
+- GUI shows progress bars per delegate with running/completed status
+
 ### 🔌 AI Provider Support
 
 - Anthropic Claude (all models including Claude 3.5 Sonnet)
@@ -98,6 +134,15 @@ and access controls. Review what your agents are doing before they do it.
   ElevenLabs or DeepInfra
 - **MCP Integration**: Connect to external tools through Model Context Protocol
   with OAuth support
+
+### ⚡ Parallel Tool Execution
+
+When the LLM emits multiple tool calls in a single turn, AgentCrew executes them
+concurrently where safe. Web searches, file reads, delegate calls, and MCP tools
+all run in parallel via `asyncio.gather`. Sequential tools like transfer, ask,
+and browser actions are handled one at a time. Results are always returned in the
+order the LLM requested, and errors are isolated per-tool — one failure doesn't
+block the others.
 
 ### 🎯 Adaptive Behavior System
 
@@ -434,6 +479,7 @@ Available in both GUI and console interfaces:
 - `/agent <name>` - Switch to different agent
 - `/consolidate <n>` - Merge messages, preserve last n
 - `/think <level>` - Enable reasoning mode (low/medium/high)
+- `/agent_mode <mode>` - Switch agent interaction mode (transfer/delegate/none)
 - `/voice` - Start voice recording
 - `/end_voice` - Stop recording and transcribe
 - `/export <agents> <file>` - Export agent configurations

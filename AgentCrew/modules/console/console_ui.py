@@ -117,11 +117,32 @@ class ConsoleUI(Observer):
             )  # data is the response chunk
         elif event == "tool_use":
             self.ui_effects.stop_loading_animation()  # Stop loading on first chunk
-            self.tool_display.display_tool_use(data)  # data is the tool use object
+            if data.get("name") == "delegate":
+                self.tool_display.display_delegate_started(data)
+                params = data.get("input") or data.get("arguments", {})
+                agent_name = (
+                    params.get("target_agent", "Agent")
+                    if isinstance(params, dict)
+                    else "Agent"
+                )
+                self.ui_effects.start_delegate_animation(
+                    data.get("id", agent_name), agent_name
+                )
+            else:
+                self.tool_display.display_tool_use(data)  # data is the tool use object
         elif event == "tool_result":
-            pass
-            self.ui_effects.start_loading_animation()  # Stop loading on first chunk
-            # self.tool_display.display_tool_result(data)  # data is dict with tool_use and tool_result
+            if data.get("tool_use", {}).get("name") == "delegate":
+                tool_use = data["tool_use"]
+                params = tool_use.get("input") or tool_use.get("arguments", {})
+                agent_name = (
+                    params.get("target_agent", "Agent")
+                    if isinstance(params, dict)
+                    else "Agent"
+                )
+                self.ui_effects.stop_delegate_animation(tool_use.get("id", agent_name))
+                self.tool_display.display_delegate_completed(tool_use)
+            else:
+                self.ui_effects.start_loading_animation()
         elif event == "tool_error":
             self.tool_display.display_tool_error(
                 data

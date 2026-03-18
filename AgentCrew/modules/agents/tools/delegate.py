@@ -1,38 +1,44 @@
 from typing import Dict, Any, Callable
-import asyncio
 
 from AgentCrew.modules.agents import AgentManager
 from AgentCrew.modules.agents.agent_runner import run_agent_loop
 
 
 def get_delegate_tool_definition(provider="claude") -> Dict[str, Any]:
-    """
-    Get the definition for the delegate tool.
-
-    Args:
-        provider: The LLM provider (claude, openai, groq)
-
-    Returns:
-        The tool definition
-    """
-    tool_description = "Delegates a specific task to a specialized agent while keeping the current agent active. The target agent will process the task with full conversation context and then be deactivated, returning control to the current agent. This is a fire-and-forget action that doesn't modify the current agent's message history."
+    tool_description = (
+        "Delegates a task to a specialized agent for independent execution. "
+        "The target agent completes the task and returns the result without "
+        "modifying your conversation history. You remain the active agent. "
+        "To delegate to MULTIPLE agents in parallel, call this tool multiple "
+        "times in the same response \u2014 all delegations will execute concurrently."
+    )
 
     tool_arguments = {
-        "from_agent": {
-            "type": "string",
-            "description": "The name of agent who calls the delegate tool (You).",
-        },
         "target_agent": {
             "type": "string",
-            "description": "The name of the specialized agent to delegate the task to. Refer to the official <Available_Agents_List> tags for available specialist agents and their capabilities.",
+            "description": (
+                "The name of the agent to delegate to. "
+                "Refer to <Available_Agents_List> for options."
+            ),
         },
         "task_description": {
             "type": "string",
-            "description": "A precise, actionable description of the task for the target agent. Start with action verbs (Create, Analyze, Design, Implement, etc.) and clearly state what the target agent needs to achieve. Include specific deliverables, success criteria, and constraints.",
+            "description": (
+                "A clear, actionable description of what the target agent "
+                "should accomplish. Start with an action verb. Include "
+                "specific deliverables and constraints."
+            ),
+        },
+        "context": {
+            "type": "string",
+            "description": (
+                "Optional. Relevant information the target agent needs. "
+                "Include only what's necessary \u2014 the agent starts fresh."
+            ),
         },
     }
 
-    tool_required = ["from_agent", "target_agent", "task_description"]
+    tool_required = ["target_agent", "task_description"]
 
     if provider == "claude":
         return {
@@ -60,33 +66,15 @@ def get_delegate_tool_definition(provider="claude") -> Dict[str, Any]:
 
 
 def get_delegate_tool_handler(agent_manager: AgentManager) -> Callable:
-    """
-    Get the handler function for the delegate tool.
+    async def handler(**params) -> str:
+        from AgentCrew.modules.agents.local_agent import LocalAgent
+        from AgentCrew.modules.llm.service_manager import (
+            ServiceManager as LLMServiceManager,
+        )
 
-    Args:
-        agent_manager: The agent manager instance
-
-    Returns:
-        The handler function
-    """
-
-    def handler(**params) -> str:
-        """
-        Handle a delegation request.
-
-        Args:
-            target_agent: The name of the agent to delegate to
-            task_description: The task description for the target agent
-
-        Returns:
-            A string containing the response from the delegated agent
-        """
-        from_agent_name = params.get("from_agent")
         target_agent_name = params.get("target_agent")
         task_description = params.get("task_description")
-
-        if not from_agent_name:
-            raise ValueError("Error: No source agent specified for delegation")
+        context = params.get("context", "")
 
         if not target_agent_name:
             raise ValueError("Error: No target agent specified")
@@ -94,117 +82,75 @@ def get_delegate_tool_handler(agent_manager: AgentManager) -> Callable:
         if not task_description:
             raise ValueError("Error: No task description specified for delegation")
 
-        # Check if target agent exists
+        from_agent_name = (
+            agent_manager.current_agent.name
+            if agent_manager.current_agent
+            else "Unknown"
+        )
+
         if target_agent_name not in agent_manager.agents:
             available_agents = ", ".join(agent_manager.agents.keys())
             raise ValueError(
                 f"Error: Agent '{target_agent_name}' not found. Available agents: {available_agents}"
             )
 
-        if from_agent_name not in agent_manager.agents:
-            available_agents = ", ".join(agent_manager.agents.keys())
+        if target_agent_name == from_agent_name:
+            raise ValueError("Error: Cannot delegate to yourself")
+
+        target_agent = agent_manager.get_local_agent(target_agent_name)
+        if not target_agent:
             raise ValueError(
-                f"Error: Agent '{from_agent_name}' not found. Available agents: {available_agents}"
+                f"Error: Could not retrieve local agent '{target_agent_name}'"
             )
 
-        # Check if trying to delegate to self
-        if (
-            agent_manager.current_agent
-            and target_agent_name == agent_manager.current_agent.name
-        ):
-            raise ValueError("Error: Cannot delegate to the same agent")
+        delegation_message = (
+            f"## Delegated Task from {from_agent_name}\n\n{task_description}\n"
+        )
+        if context:
+            delegation_message += f"\n## Context\n{context}\n"
 
-        # Store the current agent and its state
-        original_agent = agent_manager.get_agent(from_agent_name)
+        delegation_message += (
+            "\n## Instructions\n"
+            "Complete the task above. Provide a thorough, complete response."
+        )
+
+        llm_manager = LLMServiceManager.get_instance()
+        provider = target_agent.llm.provider_name
+        fresh_llm = llm_manager.initialize_standalone_service(provider)
+        fresh_llm.model = target_agent.llm.model
+
+        clone = LocalAgent(
+            name=target_agent.name,
+            description=target_agent.description,
+            llm_service=fresh_llm,
+            services=target_agent.services,
+            tools=target_agent.tools,
+            temperature=target_agent.temperature,
+        )
+        clone.set_system_prompt(target_agent.system_prompt or "")
+        if target_agent.custom_system_prompt:
+            clone.set_custom_system_prompt(target_agent.custom_system_prompt)
+        clone.activate()
 
         try:
-            # Get the target agent
-            target_agent = agent_manager.get_local_agent(target_agent_name)
-            if not target_agent:
-                raise ValueError(
-                    f"Error: Could not retrieve local agent '{target_agent_name}'"
-                )
+            delegate_history = [
+                {
+                    "role": "user",
+                    "content": [{"type": "text", "text": delegation_message}],
+                }
+            ]
 
-            # Prepare context from current conversation
-            context_messages = []
-            if original_agent and original_agent.history:
-                # Get conversation context to share with the delegated agent
-                for msg in original_agent.history:
-                    if "content" in msg and msg.get("role") != "tool":
-                        content = ""
-                        processing_content = msg["content"]
-
-                        if isinstance(processing_content, str):
-                            content = msg.get("content", "")
-                        elif (
-                            isinstance(processing_content, list)
-                            and len(processing_content) > 0
-                        ):
-                            if processing_content[0].get("type") == "text":
-                                content = processing_content[0]["text"]
-
-                        if content.strip():
-                            role = (
-                                "User"
-                                if msg.get("role", "user") == "user"
-                                else original_agent.name
-                            )
-                            context_messages.append(f"**{role}**: {content}")
-
-            # Temporarily activate the target agent
-            original_target_active = target_agent.is_active
-            if not original_target_active:
-                target_agent.activate()
-
-            # Prepare the delegation message with context
-            delegation_message = f"<delegate_tool>## Delegated Task from {from_agent_name}:\n{task_description}\n\n"
-
-            if context_messages:
-                delegation_message += f"## Conversation Context:\n{'\\n'.join(context_messages)}\n\n"  # Last 10 messages for context
-
-            delegation_message += "## Instructions:\nComplete the above task using the provided context. Provide a complete response as if responding directly to the user.</delegate_tool>"
-
-            # Create the user message for the target agent
-            user_message = {"role": "user", "content": delegation_message}
-
-            # Convert message to target agent's format and set as target agent's history
-            delegate_history = [user_message]
-            # MessageTransformer.convert_messages(
-            #     [user_message], target_agent.get_provider()
-            # )
-
-            try:
-
-                async def _do_delegation():
-                    return await run_agent_loop(
-                        agent=target_agent,
-                        history=delegate_history,
-                        tool_filter=lambda t: t["name"] not in ["transfer", "delegate"],
-                    )
-
-                response = asyncio.run(_do_delegation())
-
-            except Exception as e:
-                raise ValueError(
-                    f"Error processing delegation with target agent '{target_agent_name}': {str(e)}"
-                )
-
-            # Deactivate the target agent if it wasn't originally active
-            if not original_target_active:
-                target_agent.deactivate()
-                if agent_manager.current_agent:
-                    agent_manager.current_agent.activate()
-
-            # Format the response
-            formatted_response = (
-                f"## Delegation Result from {target_agent_name}:\n\n{response}"
+            response = await run_agent_loop(
+                agent=clone,
+                history=delegate_history,
+                tool_filter=lambda t: t["name"] not in ["transfer", "delegate"],
             )
 
-            return formatted_response
+            return f"## Result from {target_agent_name}:\n\n{response}"
 
-        except Exception as e:
-            # Ensure target agent is deactivated in case of error
-            raise ValueError(f"Error during delegation: {str(e)}")
+        finally:
+            clone.deactivate()
+            await fresh_llm.close()
 
     return handler
 
@@ -214,13 +160,6 @@ def delegate_tool_prompt(agent_manager: AgentManager) -> str:
 
 
 def register(agent_manager, agent=None):
-    """
-    Register the delegate tool with all agents or a specific agent.
-
-    Args:
-        agent_manager: The agent manager instance
-        agent: Specific agent to register with (optional)
-    """
     from AgentCrew.modules.tools.registration import register_tool
 
     register_tool(

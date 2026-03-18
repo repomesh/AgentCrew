@@ -41,6 +41,7 @@ class ToolDisplayHandlers:
             "web_search": "🔍",
             "fetch_webpage": "🌐",
             "transfer": "↗️",
+            "delegate": "📋",
             "adapt": "🧠",
             "retrieve_memory": "💭",
             "forget_memory_topic": "🗑️",
@@ -48,6 +49,36 @@ class ToolDisplayHandlers:
             "get_file": "📄",
         }
         return tool_icons.get(tool_name, "🔧")
+
+    def display_delegate_started(self, tool_use: Dict):
+        """Display a compact 'working' line for a delegate tool call."""
+        params = tool_use.get("input") or tool_use.get("arguments", {})
+        target_agent = (
+            params.get("target_agent", "Unknown")
+            if isinstance(params, dict)
+            else "Unknown"
+        )
+        task = params.get("task_description", "") if isinstance(params, dict) else ""
+        task_preview = task[:60] + "..." if len(task) > 60 else task
+
+        line = Text("📋 Delegating → ", style=RICH_STYLE_YELLOW)
+        line.append(target_agent, style="bold yellow")
+        line.append(f": {task_preview}", style=RICH_STYLE_GRAY)
+        self.console.print(line)
+
+    def display_delegate_completed(self, tool_use: Dict):
+        """Display a compact 'done' line when a delegate tool finishes."""
+        params = tool_use.get("input") or tool_use.get("arguments", {})
+        target_agent = (
+            params.get("target_agent", "Unknown")
+            if isinstance(params, dict)
+            else "Unknown"
+        )
+
+        line = Text("✅ ", style=RICH_STYLE_GREEN)
+        line.append(target_agent, style="bold green")
+        line.append(" completed", style=RICH_STYLE_GREEN)
+        self.console.print(line)
 
     def display_tool_use(self, tool_use: Dict):
         """Display information about a tool being used."""

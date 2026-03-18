@@ -180,19 +180,35 @@ Apply matching behaviors from <Adaptive_Behaviors> immediately, overriding defau
 
             if (
                 agent.services.get("agent_manager")
-                and agent.services["agent_manager"].enforce_transfer
+                and agent.services["agent_manager"].agent_mode != "none"
             ):
-                adaptive_messages["content"].insert(
-                    0,
-                    {
-                        "type": "text",
-                        "text": """Before processing my request, quickly evaluate inside <agent_evaluation> tags:
+                from AgentCrew.modules.agents.manager import AgentMode
+
+                mode = agent.services["agent_manager"].agent_mode
+                if mode == AgentMode.TRANSFER:
+                    eval_text = """Before processing my request, quickly evaluate inside <agent_evaluation> tags:
 - What tools or context do I need, and what is my step-by-step plan?
 - Is another agent better suited? If yes, transfer immediately.
 Then execute your plan.
-Skip evaluation for: simple one-sentence answers, or when the request matches "when [condition], [action]" — call `learn_behavior` directly instead.""",
-                    },
-                )
+Skip evaluation for: simple one-sentence answers, or when the request matches "when [condition], [action]" — call `learn_behavior` directly instead."""
+                elif mode == AgentMode.DELEGATE:
+                    eval_text = """Before processing my request, quickly evaluate inside <agent_evaluation> tags:
+- What tools or context do I need, and what is my step-by-step plan?
+- Can any sub-tasks be delegated to specialist agents? If yes, delegate them.
+- Can multiple sub-tasks run in parallel? If yes, emit multiple delegate calls in one turn.
+Then execute your plan.
+Skip evaluation for: simple one-sentence answers, or when the request matches "when [condition], [action]" — call `learn_behavior` directly instead."""
+                else:
+                    eval_text = None
+
+                if eval_text:
+                    adaptive_messages["content"].insert(
+                        0,
+                        {
+                            "type": "text",
+                            "text": eval_text,
+                        },
+                    )
 
         if len(adaptive_messages["content"]) > 0:
             final_messages.insert(last_user_index, adaptive_messages)
