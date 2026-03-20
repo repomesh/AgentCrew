@@ -11,9 +11,10 @@ import xmltodict
 
 from .base_service import BaseMemoryService
 from AgentCrew.modules.prompts.constants import (
-    PRE_ANALYZE_WITH_CONTEXT_PROMPT,
-    SEMANTIC_EXTRACTING,
     PRE_ANALYZE_PROMPT,
+    MERGE_INSTRUCTIONS,
+    FIRST_TURN_INSTRUCTIONS,
+    SEMANTIC_EXTRACTING,
 )
 
 if TYPE_CHECKING:
@@ -248,14 +249,20 @@ class ChromaMemoryService(BaseMemoryService):
                     try:
                         # Process with LLM using asyncio.run to handle async call in worker thread
                         if self.current_conversation_context.get(session_id, ""):
-                            analyzed_prompt = PRE_ANALYZE_WITH_CONTEXT_PROMPT.replace(
+                            analyzed_prompt = PRE_ANALYZE_PROMPT.replace(
+                                "{context_instructions}",
+                                MERGE_INSTRUCTIONS,
+                            ).replace(
                                 "{conversation_context}",
                                 f"""<PREVIOUS_CONVERSATION_CONTEXT>
         {self.current_conversation_context[session_id]}
         </PREVIOUS_CONVERSATION_CONTEXT>""",
                             )
                         else:
-                            analyzed_prompt = PRE_ANALYZE_PROMPT
+                            analyzed_prompt = PRE_ANALYZE_PROMPT.replace(
+                                "{context_instructions}",
+                                FIRST_TURN_INSTRUCTIONS,
+                            ).replace("{conversation_context}", "")
                         analyzed_prompt = (
                             analyzed_prompt.replace(
                                 "{current_date}",
@@ -277,6 +284,7 @@ class ChromaMemoryService(BaseMemoryService):
                             .replace("'", "&apos;")
                             .replace('"', "&quot;")
                         )
+                        logger.debug(f"Memory data: {xml_content}")
                         memory_data = xmltodict.parse(xml_content)
                         break
                     except Exception as e:
