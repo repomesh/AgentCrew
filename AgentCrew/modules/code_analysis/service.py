@@ -314,14 +314,6 @@ Example response format:
 
 You MUST read these files using the get_file tool to understand project-specific rules and conventions before making any changes."""
 
-        truncated_result = analysis_result
-        max_chars = 30000
-        if len(analysis_result) > max_chars:
-            truncated_result = (
-                analysis_result[:max_chars]
-                + f"\n... (truncated, {len(analysis_result) - max_chars} chars omitted)"
-            )
-
         prompt = f"""You are analyzing a codebase structure to extract project notes and rules for a development assistant.
 
 Based on the following code structure analysis, extract:
@@ -334,7 +326,7 @@ Based on the following code structure analysis, extract:
 6. **Project-Specific Rules**: Any conventions that a developer MUST follow when working on this codebase (e.g., where to place new files, how modules are registered, import patterns)
 
 Code Structure Analysis:
-{truncated_result}
+{analysis_result}
 
 Return a concise, structured summary in plain text (NOT JSON). Use clear headings and bullet points.
 Focus only on actionable insights that help a developer understand how to work within this codebase.

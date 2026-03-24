@@ -35,6 +35,7 @@ class GrepTextService:
     # Default search parameters
     DEFAULT_MAX_RESULTS = 100
     DEFAULT_TIMEOUT = 30
+    DEFAULT_EXCLUDE_DIRS = [".agentcrew"]
 
     @classmethod
     def get_instance(cls):
@@ -268,7 +269,8 @@ class GrepTextService:
             "grep",
         ]
 
-        if os.path.isdir(path):
+        is_dir = os.path.isdir(path)
+        if is_dir:
             cmd_parts.append("-r")
 
         cmd_parts.extend(
@@ -281,6 +283,10 @@ class GrepTextService:
 
         if not case_sensitive:
             cmd_parts.append("-i")
+
+        if is_dir:
+            for exclude_dir in self.DEFAULT_EXCLUDE_DIRS:
+                cmd_parts.append(f"--exclude-dir='{exclude_dir}'")
 
         cmd_parts.append("--")
         cmd_parts.append(f"'{escaped_pattern}'")
@@ -308,6 +314,7 @@ class GrepTextService:
             str: Command string ready for execution
         """
         is_file = os.path.isfile(path)
+        escaped_file = None
 
         if self._is_windows:
             escaped_pattern = pattern.replace('"', '""')
@@ -336,6 +343,9 @@ class GrepTextService:
 
             if is_file:
                 cmd_parts.append(f'"{escaped_file}"')
+            else:
+                for exclude_dir in self.DEFAULT_EXCLUDE_DIRS:
+                    cmd_parts.append(f'":(exclude){exclude_dir}"')
 
             command = " ".join(cmd_parts)
         else:
@@ -365,6 +375,9 @@ class GrepTextService:
 
             if is_file:
                 cmd_parts.append(f"'{escaped_file}'")
+            else:
+                for exclude_dir in self.DEFAULT_EXCLUDE_DIRS:
+                    cmd_parts.append(f"':(exclude){exclude_dir}'")
 
             command = " ".join(cmd_parts)
 
@@ -400,6 +413,10 @@ class GrepTextService:
 
         if not case_sensitive:
             cmd_parts.append("--ignore-case")
+
+        if os.path.isdir(path):
+            for exclude_dir in self.DEFAULT_EXCLUDE_DIRS:
+                cmd_parts.append(f"--glob '!{exclude_dir}'")
 
         cmd_parts.append("--")
         cmd_parts.append(f"'{escaped_pattern}'")
@@ -438,8 +455,15 @@ class GrepTextService:
                 f'Select-String -Pattern "{escaped_pattern}"',
             ]
         else:
+            exclude_filter = " -and ".join(
+                [
+                    f'$_.DirectoryName -notlike "*\\{d}*"'
+                    for d in self.DEFAULT_EXCLUDE_DIRS
+                ]
+            )
             ps_parts = [
                 f'Get-ChildItem -Path "{escaped_path}" -Recurse -File',
+                f"| Where-Object {{ {exclude_filter} }}",
                 "|",
                 f'Select-String -Pattern "{escaped_pattern}"',
             ]
