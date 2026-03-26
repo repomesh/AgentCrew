@@ -1,3 +1,4 @@
+import asyncio
 import os
 import requests
 
@@ -21,7 +22,9 @@ def count_tokens(content: str, model: str = "claude-opus-4-5-20251101") -> dict:
     return response.json()
 
 
-if __name__ == "__main__":
+async def main():
+    import json
+
     llm_manager = ServiceManager.get_instance()
     code_analysis_llm = llm_manager.initialize_standalone_service("github_copilot")
     analyze = CodeAnalysisService(code_analysis_llm)
@@ -31,5 +34,9 @@ if __name__ == "__main__":
     )
     print(result)
 
-    token_count = count_tokens(result)
+    token_count = count_tokens(json.dumps(result))
     print(f"\nToken count: {token_count}")
+
+
+if __name__ == "__main__":
+    asyncio.run(main())
