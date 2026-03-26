@@ -185,7 +185,7 @@ requires-dist = [
     { name = "torchvision", marker = "sys_platform == 'darwin' and extra == 'cpu'", specifier = ">=0.23.0", index = "https://pypi.org/simple/", conflict = { package = "agentcrew-ai", extra = "cpu" } },
     { name = "torchvision", marker = "sys_platform != 'darwin' and extra == 'cpu'", specifier = ">=0.23.0", index = "https://download.pytorch.org/whl/cpu", conflict = { package = "agentcrew-ai", extra = "cpu" } },
     { name = "torchvision", marker = "extra == 'nvidia'", specifier = ">=0.23.0", index = "https://download.pytorch.org/whl/cu128", conflict = { package = "agentcrew-ai", extra = "nvidia" } },
-    { name = "tree-sitter-language-pack", specifier = ">=0.10.0" },
+    { name = "tree-sitter-language-pack", specifier = ">=0.10.0,<1.0.0" },
     { name = "voyageai", specifier = ">=0.3.2" },
     { name = "xmltodict", specifier = ">=0.14.2" },
 ]

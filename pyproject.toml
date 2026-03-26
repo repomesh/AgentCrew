@@ -32,7 +32,7 @@ dependencies = [
   "google-genai>=1.7.0",
   "pyside6>=6.8.3",
   "markdown>=3.7",
-  "tree-sitter-language-pack>=0.10.0",
+  "tree-sitter-language-pack>=0.10.0,<1.0.0",
   "nest-asyncio>=1.6.0",
   "voyageai>=0.3.2",
   "numpy>=1.24.4,<2; python_version < '3.13' and sys_platform == 'darwin'",
@@ -67,9 +67,7 @@ nvidia = [
   "torchaudio>=2.8.0",
   "docling>=2.26.0",
 ]
-redis = [
-  "redis>=5.0.0",
-]
+redis = ["redis>=5.0.0"]
 
 [tool.uv]
 conflicts = [[{ extra = "cpu" }, { extra = "nvidia" }]]
