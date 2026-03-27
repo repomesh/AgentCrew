@@ -4,10 +4,9 @@ from typing import TYPE_CHECKING
 from dataclasses import dataclass
 from pathlib import Path
 
-from tree_sitter_language_pack import get_parser
+from AgentCrew.modules.code_analysis.tree_sitter_runtime import TreeSitterRuntime
 
 if TYPE_CHECKING:
-    from tree_sitter_language_pack import SupportedLanguage
     from typing import List, Optional, Literal, Dict
 
 
@@ -36,60 +35,12 @@ class TreeSitterChecker:
     """
     Universal syntax checker using tree-sitter.
 
-    Supports 30+ languages including Python, JavaScript, TypeScript, Java, C/C++, Go, Rust, etc.
+    Uses the shared TreeSitterRuntime for lazy parser access and
+    consistent language support across the codebase.
     """
 
-    # Map file extensions to tree-sitter language names
-    EXTENSION_TO_LANGUAGE: Dict[str, SupportedLanguage] = {
-        ".py": "python",
-        ".js": "javascript",
-        ".jsx": "javascript",
-        ".ts": "typescript",
-        ".tsx": "tsx",
-        ".java": "java",
-        ".c": "c",
-        ".cpp": "cpp",
-        ".cc": "cpp",
-        ".cxx": "cpp",
-        ".h": "cpp",
-        ".hpp": "cpp",
-        # ".cs": "csharp",
-        ".go": "go",
-        ".rs": "rust",
-        ".rb": "ruby",
-        ".php": "php",
-        ".swift": "swift",
-        ".kt": "kotlin",
-        ".scala": "scala",
-        ".lua": "lua",
-        ".r": "r",
-        ".html": "html",
-        ".css": "css",
-        ".json": "json",
-        ".yaml": "yaml",
-        ".yml": "yaml",
-        ".toml": "toml",
-        ".sh": "bash",
-        ".bash": "bash",
-        ".vim": "vim",
-        ".el": "elisp",
-        ".clj": "clojure",
-    }
-
     def __init__(self):
-        """Initialize tree-sitter parsers."""
-        self._parsers = {}
-        self._load_parsers()
-
-    def _load_parsers(self):
-        """Load all available tree-sitter language parsers."""
-        for _, lang_name in self.EXTENSION_TO_LANGUAGE.items():
-            try:
-                parser = get_parser(lang_name)
-                self._parsers[lang_name] = parser
-            except Exception:
-                # Language not available, skip silently
-                pass
+        self._runtime = TreeSitterRuntime.get_instance()
 
     def check_syntax(self, file_path: str, content: str) -> SyntaxCheckResult:
         """
@@ -102,21 +53,25 @@ class TreeSitterChecker:
         Returns:
             SyntaxCheckResult with errors and validation status
         """
-        # Determine language from extension
-        ext = Path(file_path).suffix.lower()
-        language = self.EXTENSION_TO_LANGUAGE.get(ext)
+        language = self._runtime.detect_language_for_file(file_path)
 
         if not language:
             return SyntaxCheckResult(
                 is_valid=True, errors=[], language="unknown", parse_tree_available=False
             )
 
-        if language not in self._parsers:
+        if not self._runtime.is_in_manifest(language):
             return SyntaxCheckResult(
                 is_valid=True, errors=[], language=language, parse_tree_available=False
             )
 
-        parser = self._parsers[language]
+        try:
+            parser = self._runtime.get_parser(language)
+        except Exception:
+            return SyntaxCheckResult(
+                is_valid=True, errors=[], language=language, parse_tree_available=False
+            )
+
         tree = parser.parse(bytes(content, "utf8"))
 
         errors = self._extract_errors(tree, content)
@@ -140,7 +95,7 @@ class TreeSitterChecker:
         def visit_node(node):
             """Recursively visit tree nodes to find errors."""
             if node.is_error:
-                line = node.start_point[0] + 1  # tree-sitter uses 0-indexed lines
+                line = node.start_point[0] + 1
                 column = node.start_point[1]
 
                 error_text = content[node.start_byte : node.end_byte]
@@ -180,11 +135,11 @@ class TreeSitterChecker:
         return errors
 
     def get_supported_languages(self) -> List[str]:
-        """Return list of supported languages."""
-        return list(self._parsers.keys())
+        """Return list of languages available in the pack manifest."""
+        return self._runtime.get_manifest_languages()
 
     def is_language_supported(self, file_path: str) -> bool:
-        """Check if file type is supported."""
-        ext = Path(file_path).suffix.lower()
-        language = self.EXTENSION_TO_LANGUAGE.get(ext)
-        return language in self._parsers if language else False
+        """Check if file type is supported by tree-sitter."""
+        language = self._runtime.detect_language_for_file(file_path)
+        return self._runtime.is_in_manifest(language) if language else False
+

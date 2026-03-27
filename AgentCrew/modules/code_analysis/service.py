@@ -6,10 +6,8 @@ import base64
 from typing import Any, Dict, List, Optional, Tuple, Union, TYPE_CHECKING
 from loguru import logger
 
-from tree_sitter_language_pack import get_parser
-from tree_sitter import Parser
-
-from .parsers import get_parser_for_language, BaseLanguageParser
+from .tree_sitter_runtime import TreeSitterRuntime, EXTENSION_TO_LANGUAGE
+from .parsers import get_parser_for_language, BaseLanguageParser, LANGUAGE_PARSER_MAP
 import mimetypes
 
 IMAGE_MIME_TYPES = [
@@ -22,45 +20,19 @@ IMAGE_MIME_TYPES = [
 if TYPE_CHECKING:
     from AgentCrew.modules.llm.base import BaseLLMService
 
-MAX_ITEMS_OUT = 40
-MAX_FILES_TO_ANALYZE = 600
+MAX_ITEMS_OUT = 30
+MAX_FILES_TO_ANALYZE = 400
 
 
 class CodeAnalysisService:
     """Service for analyzing code structure using tree-sitter."""
 
-    LANGUAGE_MAP = {
-        ".py": "python",
-        ".js": "javascript",
-        ".jsx": "javascript",
-        ".mjs": "javascript",
-        ".cjs": "javascript",
-        ".ts": "typescript",
-        ".tsx": "typescript",
-        ".java": "java",
-        ".cpp": "cpp",
-        ".hpp": "cpp",
-        ".cc": "cpp",
-        ".hh": "cpp",
-        ".cxx": "cpp",
-        ".hxx": "cpp",
-        ".rb": "ruby",
-        ".sh": "bash",
-        ".rake": "ruby",
-        ".go": "go",
-        ".rs": "rust",
-        ".php": "php",
-        ".cs": "c-sharp",
-        ".kt": "kotlin",
-        ".kts": "kotlin",
-        ".json": "config",
-        ".toml": "config",
-        ".yaml": "config",
-        ".yml": "config",
-    }
+    LANGUAGE_MAP = EXTENSION_TO_LANGUAGE
+
+    CUSTOM_PARSER_LANGUAGES = set(LANGUAGE_PARSER_MAP.keys())
 
     def __init__(self, llm_service: Optional["BaseLLMService"] = None):
-        """Initialize the code analysis service with tree-sitter parsers.
+        """Initialize the code analysis service with tree-sitter.
 
         Args:
             llm_service: Optional LLM service for intelligent file selection when
@@ -86,58 +58,49 @@ class CodeAnalysisService:
             elif self.llm_service.provider_name == "together":
                 self.llm_service.model = "Qwen/Qwen3.5-9B"
 
-        try:
-            self._tree_sitter_parser_cache = {
-                "python": get_parser("python"),
-                "javascript": get_parser("javascript"),
-                "typescript": get_parser("typescript"),
-                "java": get_parser("java"),
-                "cpp": get_parser("cpp"),
-                "ruby": get_parser("ruby"),
-                "go": get_parser("go"),
-                "rust": get_parser("rust"),
-                "php": get_parser("php"),
-                "c-sharp": get_parser("csharp"),
-                "kotlin": get_parser("kotlin"),
-            }
-            self._language_parser_cache: Dict[str, BaseLanguageParser] = {}
+        self._runtime = TreeSitterRuntime.get_instance()
+        self._language_parser_cache: Dict[str, BaseLanguageParser] = {}
 
-            self.class_types = {
-                "class_definition",
-                "class_declaration",
-                "class_specifier",
-                "struct_specifier",
-                "struct_declaration",
-                "struct_item",
-                "interface_declaration",
-                "object_declaration",
-            }
+        self.class_types = {
+            "class_definition",
+            "class_declaration",
+            "class_specifier",
+            "struct_specifier",
+            "struct_declaration",
+            "struct_item",
+            "interface_declaration",
+            "object_declaration",
+        }
 
-            self.function_types = {
-                "function_definition",
-                "function_declaration",
-                "method_definition",
-                "method_declaration",
-                "constructor_declaration",
-                "arrow_function",
-                "fn_item",
-                "method",
-                "singleton_method",
-                "primary_constructor",
-            }
-        except Exception as e:
-            raise RuntimeError(f"Failed to initialize languages: {e}")
+        self.function_types = {
+            "function_definition",
+            "function_declaration",
+            "method_definition",
+            "method_declaration",
+            "constructor_declaration",
+            "arrow_function",
+            "fn_item",
+            "method",
+            "singleton_method",
+            "primary_constructor",
+        }
 
     def _detect_language(self, file_path: str) -> str:
         """Detect programming language based on file extension."""
-        ext = os.path.splitext(file_path)[1].lower()
-        return self.LANGUAGE_MAP.get(ext, "unknown")
+        lang = self._runtime.detect_language_for_file(file_path)
+        return lang if lang else "unknown"
 
-    def _get_tree_sitter_parser(self, language: str) -> Parser:
-        """Get the appropriate tree-sitter parser for a language."""
-        if language not in self._tree_sitter_parser_cache:
-            raise ValueError(f"Unsupported language: {language}")
-        return self._tree_sitter_parser_cache[language]
+    def _has_custom_parser(self, language: str) -> bool:
+        """Check if a custom rich parser exists for this language."""
+        resolved = self._runtime._resolve_name(language)
+        return (
+            resolved in self.CUSTOM_PARSER_LANGUAGES
+            or language in self.CUSTOM_PARSER_LANGUAGES
+        )
+
+    def _get_tree_sitter_parser(self, language: str):
+        """Get the appropriate tree-sitter parser for a language (lazy, cached)."""
+        return self._runtime.get_parser(language)
 
     def _get_language_parser(self, language: str) -> BaseLanguageParser:
         """Get the appropriate language parser for processing nodes."""
@@ -157,9 +120,12 @@ class CodeAnalysisService:
                     "error": f"Unsupported file type: {os.path.splitext(file_path)[1]}"
                 }
 
+            if not self._runtime.is_in_manifest(language):
+                return {
+                    "error": f"Language '{language}' not available in tree-sitter pack"
+                }
+
             tree_sitter_parser = self._get_tree_sitter_parser(language)
-            if isinstance(tree_sitter_parser, dict) and "error" in tree_sitter_parser:
-                return tree_sitter_parser
 
             tree = tree_sitter_parser.parse(source_code)
             root_node = tree.root_node

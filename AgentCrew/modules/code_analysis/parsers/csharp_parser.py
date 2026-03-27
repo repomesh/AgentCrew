@@ -12,7 +12,7 @@ class CSharpParser(BaseLanguageParser):
 
     @property
     def language_name(self) -> str:
-        return "c-sharp"
+        return "csharp"
 
     def process_node(
         self, node, source_code: bytes, process_children_callback

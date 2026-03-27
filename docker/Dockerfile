@@ -35,6 +35,10 @@ RUN uv venv /opt/venv && \
   . /opt/venv/bin/activate && \
   uv pip install .[cpu]
 
+# Pre-download all tree-sitter language parsers to avoid runtime download latency
+RUN . /opt/venv/bin/activate && \
+  python -c "from tree_sitter_language_pack import download_all; print(f'Pre-downloaded {download_all()} languages')"
+
 # Production stage
 FROM python:3.12-slim
 
@@ -96,9 +100,15 @@ RUN groupadd -r agentcrew && useradd -r -g agentcrew -m -d /home/agentcrew agent
 # Copy virtual environment from builder stage
 COPY --from=builder /opt/venv /opt/venv
 
+# Copy pre-downloaded tree-sitter language parser cache
+COPY --from=builder /root/.cache/tree-sitter-language-pack /home/agentcrew/.cache/tree-sitter-language-pack
+
+COPY --from=builder /root/.cache/tree-sitter-language-pack /root/.cache/tree-sitter-language-pack
+
 # Create AgentCrew config directory and Chrome user data directory
 RUN mkdir -p /home/agentcrew/.AgentCrew/{logs,memorydb,persistents,chrome_user_data} && \
-  chown -R agentcrew:agentcrew /home/agentcrew/.AgentCrew
+  chown -R agentcrew:agentcrew /home/agentcrew/.AgentCrew && \
+  chown -R agentcrew:agentcrew /home/agentcrew/.cache
 
 # Create a default agents.toml if it doesn't exist
 RUN if [ ! -f /home/agentcrew/.AgentCrew/agents.toml ]; then \

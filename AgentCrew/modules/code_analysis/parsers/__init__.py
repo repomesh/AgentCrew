@@ -22,13 +22,15 @@ LANGUAGE_PARSER_MAP = {
     "python": PythonParser,
     "javascript": JavaScriptParser,
     "typescript": JavaScriptParser,
+    "tsx": JavaScriptParser,
     "java": JavaParser,
     "cpp": CppParser,
     "ruby": RubyParser,
     "go": GoParser,
     "rust": RustParser,
     "php": PhpParser,
-    "c-sharp": CSharpParser,
+    "csharp": CSharpParser,
+    "c_sharp": CSharpParser,
     "kotlin": KotlinParser,
 }
 
