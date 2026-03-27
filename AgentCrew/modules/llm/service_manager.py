@@ -28,6 +28,7 @@ class ServiceManager:
         self.service_factories: Dict[str, Callable[[], BaseLLMService]] = {
             "claude": self._create_anthropic_service,
             "openai": self._create_openai_service,
+            "openai_codex": self._create_openai_codex_service,
             "google": self._create_google_service,
             "deepinfra": self._create_deepinfra_service,
             "github_copilot": self._create_github_copilot_service,
@@ -54,6 +55,12 @@ class ServiceManager:
 
             return OpenAIResponseService()
         raise RuntimeError("API key for OpenAI not found.")
+
+    def _create_openai_codex_service(self) -> BaseLLMService:
+        """Lazy import and create OpenAI Codex service using ChatGPT subscription OAuth."""
+        from AgentCrew.modules.openai_codex import OpenAICodexService
+
+        return OpenAICodexService()
 
     def _create_google_service(self) -> BaseLLMService:
         """Lazy import and create Google AI service."""

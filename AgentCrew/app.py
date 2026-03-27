@@ -451,3 +451,6 @@ class AgentCrewApplication:
 
     def login(self) -> bool:
         return self.setup.login()
+
+    def chatgpt_login(self) -> bool:
+        return self.setup.chatgpt_login()

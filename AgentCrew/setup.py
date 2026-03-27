@@ -31,6 +31,7 @@ from AgentCrew.modules.agents.example import (
 PROVIDER_LIST = [
     "claude",
     "openai",
+    "openai_codex",
     "google",
     "deepinfra",
     "github_copilot",
@@ -103,7 +104,14 @@ class ApplicationSetup:
                         "github_copilot": "GITHUB_COPILOT_API_KEY",
                         "copilot_response": "GITHUB_COPILOT_API_KEY",
                     }
-                    if os.getenv(api_key_map.get(last_provider, "")):
+                    if last_provider == "openai_codex":
+                        from AgentCrew.modules.openai_codex.oauth import (
+                            OpenAICodexOAuth,
+                        )
+
+                        if OpenAICodexOAuth().has_valid_tokens:
+                            return last_provider
+                    elif os.getenv(api_key_map.get(last_provider, "")):
                         return last_provider
                 else:
                     custom_providers = GlobalConfig().read_custom_llm_providers_config()
@@ -482,4 +490,29 @@ tools = ["memory", "browser", "web_search", "code_analysis"]
             return False
         except Exception as e:
             click.echo(f"\u274c Authentication failed: {str(e)}", err=True)
+            return False
+
+    def chatgpt_login(self) -> bool:
+        try:
+            click.echo("\U0001f510 Starting ChatGPT subscription authentication...")
+            click.echo(
+                "This will open your browser to sign in with your ChatGPT account."
+            )
+            click.echo("Your subscription (Plus/Pro) will be used for API access.\n")
+
+            from AgentCrew.modules.openai_codex.oauth import OpenAICodexOAuth
+
+            oauth = OpenAICodexOAuth()
+            if oauth.login():
+                click.echo("\u2705 ChatGPT authentication successful!")
+                click.echo(f"\U0001f4be OAuth tokens saved to {oauth.token_path}")
+                click.echo(
+                    "\U0001f680 You can now use ChatGPT with --provider openai_codex"
+                )
+                return True
+            else:
+                click.echo("\u274c ChatGPT authentication failed.", err=True)
+                return False
+        except Exception as e:
+            click.echo(f"\u274c ChatGPT authentication failed: {str(e)}", err=True)
             return False

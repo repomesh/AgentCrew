@@ -24,6 +24,7 @@ sys.unraisablehook = _custom_unraisable_hook
 PROVIDER_LIST = [
     "claude",
     "openai",
+    "openai_codex",
     "google",
     "deepinfra",
     "github_copilot",
@@ -429,6 +430,15 @@ def copilot_auth():
 
     app = AgentCrewApplication()
     app.login()
+
+
+@cli.command()
+def chatgpt_auth():
+    """Authenticate with ChatGPT subscription (Plus/Pro) for API access via Codex OAuth"""
+    from AgentCrew.app import AgentCrewApplication
+
+    app = AgentCrewApplication()
+    app.chatgpt_login()
 
 
 if __name__ == "__main__":

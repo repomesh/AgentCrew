@@ -191,6 +191,67 @@ _OPENAI_MODELS = [
     ),
 ]
 
+_OPENAI_CODEX_MODELS = [
+    Model(
+        id="gpt-5-codex",
+        provider="openai_codex",
+        name="GPT-5 Codex (ChatGPT)",
+        description="GPT-5-Codex via ChatGPT subscription OAuth",
+        capabilities=["tool_use", "vision", "thinking", "stream", "structured_output"],
+        input_token_price_1m=0.0,
+        output_token_price_1m=0.0,
+        default=True,
+    ),
+    Model(
+        id="gpt-5.1-codex",
+        provider="openai_codex",
+        name="GPT-5.1 Codex (ChatGPT)",
+        description="GPT-5.1-Codex via ChatGPT subscription OAuth",
+        capabilities=["tool_use", "vision", "thinking", "stream", "structured_output"],
+        input_token_price_1m=0.0,
+        output_token_price_1m=0.0,
+    ),
+    Model(
+        id="gpt-5.1-codex-mini",
+        provider="openai_codex",
+        name="GPT-5.1 Codex Mini (ChatGPT)",
+        description="GPT-5.1-Codex-Mini via ChatGPT subscription OAuth",
+        capabilities=["tool_use", "vision", "thinking", "stream", "structured_output"],
+        input_token_price_1m=0.0,
+        output_token_price_1m=0.0,
+    ),
+    Model(
+        id="gpt-5.2-codex",
+        provider="openai_codex",
+        name="GPT-5.2 Codex (ChatGPT)",
+        description="GPT-5.2-Codex via ChatGPT subscription OAuth",
+        capabilities=["tool_use", "vision", "stream", "structured_output"],
+        max_context_token=400_000,
+        input_token_price_1m=0.0,
+        output_token_price_1m=0.0,
+    ),
+    Model(
+        id="gpt-5.3-codex",
+        provider="openai_codex",
+        name="GPT-5.3 Codex (ChatGPT)",
+        description="GPT-5.3-Codex via ChatGPT subscription OAuth",
+        capabilities=["tool_use", "vision", "stream", "structured_output"],
+        max_context_token=400_000,
+        input_token_price_1m=0.0,
+        output_token_price_1m=0.0,
+    ),
+    Model(
+        id="gpt-5.4",
+        provider="openai_codex",
+        name="GPT-5.4 (ChatGPT)",
+        description="GPT-5.4 via ChatGPT subscription OAuth",
+        capabilities=["tool_use", "vision", "stream", "structured_output"],
+        max_context_token=400_000,
+        input_token_price_1m=0.0,
+        output_token_price_1m=0.0,
+    ),
+]
+
 _GOOGLE_MODELS = [
     Model(
         id="gemini-2.5-flash-lite",
@@ -700,6 +761,7 @@ _GITHUB_COPILOT_MODELS = [
 AVAILABLE_MODELS = (
     _ANTHROPIC_MODELS
     + _OPENAI_MODELS
+    + _OPENAI_CODEX_MODELS
     + _GOOGLE_MODELS
     + _DEEPINFRA_MODELS
     + _GITHUB_COPILOT_MODELS

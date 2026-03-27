@@ -79,6 +79,10 @@ class CodeAnalysisService:
                 self.llm_service.model = "google/gemma-3-27b-it"
             elif self.llm_service.provider_name == "github_copilot":
                 self.llm_service.model = "gpt-5-mini"
+            elif self.llm_service.provider_name == "copilot_response":
+                self.llm_service.model = "gpt-5.1-codex-mini"
+            elif self.llm_service.provider_name == "openai_codex":
+                self.llm_service.model = "gpt-5.1-codex-mini"
         try:
             self._tree_sitter_parser_cache = {
                 "python": get_parser("python"),

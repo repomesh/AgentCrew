@@ -63,6 +63,10 @@ class ChromaMemoryService(BaseMemoryService):
                 self.llm_service.model = "google/gemma-3-27b-it"
             elif self.llm_service.provider_name == "github_copilot":
                 self.llm_service.model = "gpt-5-mini"
+            elif self.llm_service.provider_name == "copilot_response":
+                self.llm_service.model = "gpt-5.1-codex-mini"
+            elif self.llm_service.provider_name == "openai_codex":
+                self.llm_service.model = "gpt-5.1-codex-mini"
 
         self._collection = None
         self.collection_name = collection_name

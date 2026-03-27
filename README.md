@@ -110,6 +110,7 @@ Key details:
 
 - Anthropic Claude (all models including Claude 3.5 Sonnet)
 - OpenAI GPT series with native and response modes
+- OpenAI Codex via ChatGPT subscription (Plus/Pro) with OAuth
 - Google Gemini with native API support
 - GitHub Copilot integration with OAuth flow
 - DeepInfra for alternative model hosting
@@ -222,6 +223,34 @@ docker run -it --rm \
 
 Configure API keys and agents through the Settings menu in the GUI, or edit
 configuration files in `~/.AgentCrew/`.
+
+### Authentication
+
+**GitHub Copilot:**
+
+```bash
+agentcrew copilot-auth
+agentcrew chat --provider github_copilot
+```
+
+**ChatGPT Subscription (Plus/Pro):**
+
+Use your existing ChatGPT Plus ($20/mo) or Pro ($200/mo) subscription for API
+access — no separate API credits needed. This uses OpenAI's official Codex OAuth
+flow.
+
+```bash
+agentcrew chatgpt-auth    # Opens browser to sign in with your ChatGPT account
+agentcrew chat --provider openai_codex
+```
+
+Tokens are stored in `~/.codex/auth.json` (compatible with the official Codex
+CLI) and refresh automatically. Models available include `gpt-5-codex`,
+`gpt-5.1-codex`, `gpt-5.1-codex-mini`, and others.
+
+> **Note:** ChatGPT subscription access is for personal development use. For
+> production or multi-user applications, use the OpenAI Platform API with
+> `--provider openai`.
 
 ## Usage Modes
 
