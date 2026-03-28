@@ -322,9 +322,7 @@ class OpenAIResponseService(BaseLLMService):
                     item_type = getattr(item, "type", None)
                     if item_type == "function_call":
                         idx = (
-                            output_index
-                            if output_index is not None
-                            else len(tool_uses)
+                            output_index if output_index is not None else len(tool_uses)
                         )
                         tool_use = self._get_or_create_tool_use(tool_uses, idx)
                         if not tool_use["id"]:
@@ -372,9 +370,7 @@ class OpenAIResponseService(BaseLLMService):
                 if not tool_use.get("_saw_args_delta") or not tool_use.get("input"):
                     tool_use["arguments"] = arguments
                     try:
-                        tool_use["input"] = (
-                            json.loads(arguments) if arguments else {}
-                        )
+                        tool_use["input"] = json.loads(arguments) if arguments else {}
                     except json.JSONDecodeError:
                         tool_use["input"] = {}
                         logger.warning(
@@ -387,9 +383,7 @@ class OpenAIResponseService(BaseLLMService):
                 if item:
                     item_type = getattr(item, "type", None)
                     if item_type == "function_call":
-                        tool_use = self._get_or_create_tool_use(
-                            tool_uses, output_index
-                        )
+                        tool_use = self._get_or_create_tool_use(tool_uses, output_index)
                         if not tool_use["id"]:
                             tool_use["id"] = getattr(item, "call_id", "")
                         if not tool_use["name"]:

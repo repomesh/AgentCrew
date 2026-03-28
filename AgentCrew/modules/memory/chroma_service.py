@@ -1,35 +1,22 @@
 from __future__ import annotations
 import os
 import uuid
-import queue
-import asyncio
 from typing import TYPE_CHECKING
 from datetime import datetime, timedelta
-from threading import Thread, Event
 from loguru import logger
-import xmltodict
 
 from .base_service import BaseMemoryService
-from AgentCrew.modules.prompts.constants import (
-    PRE_ANALYZE_PROMPT,
-    MERGE_INSTRUCTIONS,
-    FIRST_TURN_INSTRUCTIONS,
-    SEMANTIC_EXTRACTING,
-)
+from .memory_worker import MemoryWorker, RELEVANT_THRESHOLD
+from AgentCrew.modules.prompts.constants import SEMANTIC_EXTRACTING
 
 if TYPE_CHECKING:
     from typing import List, Dict, Any, Optional
     from chromadb import Collection
     from AgentCrew.modules.llm.base import BaseLLMService
 
-# Configuration constants
-DEFAULT_CHUNK_SIZE = 200  # words per chunk
-DEFAULT_CHUNK_OVERLAP = 40  # words overlap between chunks
-DEFAULT_QUEUE_TIMEOUT = 5.0  # seconds
-MAX_QUEUE_SIZE = 1000  # maximum pending operations
-WORKER_THREAD_NAME = "ChromaMemoryWorker"
+DEFAULT_CHUNK_SIZE = 200
+DEFAULT_CHUNK_OVERLAP = 40
 MEMORY_DB_PATH = "./memory_db"
-RELEVANT_THRESHOLD = 2
 
 
 class ChromaMemoryService(BaseMemoryService):
@@ -40,14 +27,6 @@ class ChromaMemoryService(BaseMemoryService):
         collection_name="conversation",
         llm_service: Optional[BaseLLMService] = None,
     ):
-        """
-        Initialize the memory service with ChromaDB.
-
-        Args:
-            collection_name: Name of the ChromaDB collection
-            persist_directory: Directory to persist the ChromaDB data
-        """
-        # Ensure the persist directory exists
         self.db_path = os.getenv("MEMORYDB_PATH", MEMORY_DB_PATH)
         os.makedirs(os.path.dirname(self.db_path), exist_ok=True)
 
@@ -72,24 +51,12 @@ class ChromaMemoryService(BaseMemoryService):
 
         self._collection = None
         self.collection_name = collection_name
-        # Configuration for chunking
         self.chunk_size = DEFAULT_CHUNK_SIZE
         self.chunk_overlap = DEFAULT_CHUNK_OVERLAP
         self.current_embedding_context = None
-
-        self.context_embedding = []
-        self.current_conversation_context: Dict[str, Any] = {}
-
-        # Memory queue infrastructure
-        self._conversation_queue = queue.Queue(maxsize=MAX_QUEUE_SIZE)
-        self._memory_thread = None
-        self._memory_stop_event = Event()
-
-        # Start worker thread
-        self._start_memory_worker()
+        self._worker: Optional[MemoryWorker] = None
 
     def _initialize_collection(self) -> Collection:
-        # Initialize ChromaDB client with persistence
         import chromadb
         import chromadb.utils.embedding_functions as embedding_functions
         from chromadb.config import Settings
@@ -128,19 +95,19 @@ class ChromaMemoryService(BaseMemoryService):
             name=self.collection_name,
             embedding_function=self.embedding_function,  # type:ignore
         )
+
+        if self._worker is None:
+            self._worker = MemoryWorker(
+                embedding_fn=self.embedding_function,
+                llm_service=self.llm_service,
+            )
+            self._worker.set_collection(self._collection)
+            self._worker.start()
+
         self.cleanup_old_memories(months=1)
         return self._collection
 
     def _create_chunks(self, text: str) -> List[str]:
-        """
-        Split text into chunks with overlap.
-
-        Args:
-            text: The text to split into chunks
-
-        Returns:
-            List of text chunks
-        """
         words = text.split()
         chunks = []
 
@@ -156,67 +123,12 @@ class ChromaMemoryService(BaseMemoryService):
 
         return chunks
 
-    def _memory_worker_thread(self):
-        """Worker thread for processing conversation storage operations."""
-        loop = asyncio.new_event_loop()
-        self._initialize_collection()
-        while not self._memory_stop_event.is_set():
-            try:
-                # Get operation from queue with timeout
-                operation_data = self._conversation_queue.get(
-                    timeout=DEFAULT_QUEUE_TIMEOUT
-                )
-
-                if operation_data.get("type") == "shutdown":
-                    break
-
-                # Process conversation storage
-                loop.run_until_complete(
-                    self._store_conversation_internal(operation_data)
-                )
-                self._conversation_queue.task_done()
-
-            except queue.Empty:
-                continue
-            except Exception as e:
-                logger.error(f"Memory worker error: {e}")
-        loop.close()
-
-    def _start_memory_worker(self):
-        """Start the memory worker thread."""
-        if self._memory_thread is None or not self._memory_thread.is_alive():
-            self._memory_stop_event.clear()
-            self._memory_thread = Thread(
-                target=self._memory_worker_thread, name=WORKER_THREAD_NAME, daemon=True
-            )
-            self._memory_thread.start()
-
-    def _stop_memory_worker(self):
-        """Stop the memory worker thread gracefully."""
-        if self._memory_thread and self._memory_thread.is_alive():
-            # Signal shutdown
-            try:
-                self._conversation_queue.put({"type": "shutdown"}, timeout=1.0)
-                self._memory_thread.join(timeout=10.0)
-            except queue.Full:
-                logger.warning("Could not send shutdown signal to memory worker")
-
     def store_conversation(
         self, user_message: str, assistant_response: str, agent_name: str = "None"
     ) -> List[str]:
-        """
-        Store a conversation exchange in memory.
+        self._initialize_collection()
 
-        Args:
-            user_message: The user's message
-            assistant_response: The assistant's response
-            agent_name: Name of the agent
-
-        Returns:
-            List with operation ID for tracking, or empty list if queue is full
-        """
         operation_id = str(uuid.uuid4())
-
         operation_data = {
             "type": "store_conversation",
             "operation_id": operation_id,
@@ -227,134 +139,9 @@ class ChromaMemoryService(BaseMemoryService):
             "timestamp": datetime.now().isoformat(),
         }
 
-        try:
-            self._conversation_queue.put(operation_data, timeout=1.0)
-            logger.debug(f"Queued conversation storage: {operation_id}")
+        if self._worker and self._worker.queue_store(operation_data):
             return [operation_id]
-        except queue.Full:
-            logger.warning("Memory queue full, dropping conversation storage")
-            return []
-
-    async def _store_conversation_internal(self, operation_data: Dict[str, Any]):
-        """Internal method to actually store conversation (runs in worker thread)."""
-        try:
-            collection = self._initialize_collection()
-            user_message = operation_data["user_message"]
-            assistant_response = operation_data["assistant_response"]
-            agent_name = operation_data["agent_name"]
-            session_id = operation_data["session_id"]
-
-            # Use the existing storage logic but make it synchronous
-            memory_data = None
-            retried = 0
-            if self.llm_service:
-                while retried < 3:
-                    analyzed_text = None
-                    xml_content = None
-                    try:
-                        if self.current_conversation_context.get(session_id, ""):
-                            analyzed_prompt = PRE_ANALYZE_PROMPT.replace(
-                                "{context_instructions}",
-                                MERGE_INSTRUCTIONS,
-                            ).replace(
-                                "{conversation_context}",
-                                f"""<PREVIOUS_CONVERSATION_CONTEXT>
-        {self.current_conversation_context[session_id]}
-        </PREVIOUS_CONVERSATION_CONTEXT>""",
-                            )
-                        else:
-                            analyzed_prompt = PRE_ANALYZE_PROMPT.replace(
-                                "{context_instructions}",
-                                FIRST_TURN_INSTRUCTIONS,
-                            ).replace("{conversation_context}", "")
-                        analyzed_prompt = (
-                            analyzed_prompt.replace(
-                                "{current_date}",
-                                datetime.today().strftime("%Y-%m-%d %H:%M:%S"),
-                            )
-                            .replace("{user_message}", user_message)
-                            .replace("{assistant_response}", assistant_response)
-                        )
-                        analyzed_text = await self.llm_service.process_message(
-                            analyzed_prompt
-                        )
-                        if (
-                            "<MEMORY>" not in analyzed_text
-                            or "</MEMORY>" not in analyzed_text
-                        ):
-                            raise ValueError(
-                                "LLM response missing <MEMORY>...</MEMORY> block"
-                            )
-                        start_xml = analyzed_text.index("<MEMORY>")
-                        end_xml = analyzed_text.index("</MEMORY>")
-                        xml_content = analyzed_text[
-                            start_xml : end_xml + len("</MEMORY>")
-                        ]
-                        xml_content = (
-                            xml_content.replace("&", "&amp;")
-                            .replace("'", "&apos;")
-                            .replace('"', "&quot;")
-                        )
-                        logger.debug(f"Memory data: {xml_content}")
-                        memory_data = xmltodict.parse(xml_content)
-                        break
-                    except Exception as e:
-                        analyzed_preview = None
-                        if isinstance(analyzed_text, str):
-                            analyzed_preview = analyzed_text[:500]
-                        logger.warning(
-                            f"Error processing conversation with LLM on retry {retried + 1}/3: {str(e)} | xml_content={xml_content} | analyzed_preview={analyzed_preview}",
-                        )
-                        retried += 1
-                        continue
-
-            if memory_data is None:
-                # Create the memory document by combining user message and response
-                memory_data = {
-                    "MEMORY": {
-                        "DATE": datetime.today().strftime("%Y-%m-%d"),
-                        "CONVERSATION_NOTES": {
-                            "NOTE": [user_message, assistant_response]
-                        },
-                    }
-                }
-
-            # Store in ChromaDB (existing logic)
-            timestamp = datetime.now().timestamp()
-
-            memory_header = memory_data["MEMORY"].get("HEAD", None)
-            conversation_document = xmltodict.unparse(
-                memory_data, pretty=True, full_document=False
-            )
-            self.current_conversation_context[session_id] = conversation_document
-
-            conversation_embedding = self.embedding_function([conversation_document])
-            self.context_embedding.append(conversation_embedding)
-            if len(self.context_embedding) > 5:
-                self.context_embedding.pop(0)
-
-            metadata = {
-                "date": timestamp,
-                "session_id": session_id,
-                "agent": agent_name,
-                "type": "conversation",
-            }
-            if memory_header:
-                metadata["header"] = memory_header
-
-            collection.upsert(
-                ids=[f"{session_id}_{agent_name}"],
-                documents=[conversation_document],
-                embeddings=conversation_embedding,
-                metadatas=[metadata],
-            )
-
-            logger.debug(f"Stored conversation: {operation_data['operation_id']}")
-
-        except Exception as e:
-            logger.error(
-                f"Failed to store conversation {operation_data['operation_id']}: {e}"
-            )
+        return []
 
     async def need_generate_user_context(self, user_input: str) -> bool:
         import numpy as np
@@ -365,10 +152,9 @@ class ChromaMemoryService(BaseMemoryService):
             return True
 
         self.current_embedding_context = self.embedding_function([keywords])
-        # Cannot Calculate similarity
-        if len(self.context_embedding) == 0:
+        if not self._worker or len(self._worker.context_embedding) == 0:
             return False
-        avg_conversation = np.mean(self.context_embedding, axis=0)
+        avg_conversation = np.mean(self._worker.context_embedding, axis=0)
 
         similarity = self._cosine_similarity(
             self.current_embedding_context, avg_conversation
@@ -377,8 +163,9 @@ class ChromaMemoryService(BaseMemoryService):
 
     def clear_conversation_context(self):
         self.current_embedding_context = None
-        self.current_conversation_context = {}
-        self.context_embedding = []
+        if self._worker:
+            self._worker.current_conversation_context = {}
+            self._worker.context_embedding = []
 
     def load_conversation_context(self, session_id: str, agent_name: str = "None"):
         collection = self._initialize_collection()
@@ -387,21 +174,12 @@ class ChromaMemoryService(BaseMemoryService):
                 "session_id": session_id,
             },
         )
-        if latest_memory["documents"]:
-            self.current_conversation_context[session_id] = latest_memory["documents"][
-                -1
-            ]
+        if latest_memory["documents"] and self._worker:
+            self._worker.current_conversation_context[session_id] = latest_memory[
+                "documents"
+            ][-1]
 
     def generate_user_context(self, user_input: str, agent_name: str = "None") -> str:
-        """
-        Generate context based on user input by retrieving relevant memories.
-
-        Args:
-            user_input: The current user message to generate context for
-
-        Returns:
-            Formatted string containing relevant context from past conversations
-        """
         return self.retrieve_memory(user_input, agent_name=agent_name)
 
     async def _semantic_extracting(self, input: str) -> str:
@@ -463,17 +241,6 @@ class ChromaMemoryService(BaseMemoryService):
         to_date: Optional[int] = None,
         agent_name: str = "",
     ) -> str:
-        """
-        Retrieve relevant memories based on keywords.
-
-        Args:
-            keywords: Keywords to search for
-            from_date: Optional start date (timestamp) to filter memories
-            to_date: Optional end date (timestamp) to filter memories
-
-        Returns:
-            Formatted string of relevant memories
-        """
         collection = self._initialize_collection()
 
         and_conditions: List[Dict[str, Any]] = []
@@ -516,17 +283,13 @@ class ChromaMemoryService(BaseMemoryService):
                 }
             )
 
-        # Sort conversations by relevance
         sorted_conversations = sorted(conversation_chunks, key=lambda x: x["relevance"])
 
-        # Format the output
         output = []
         for conv_data in sorted_conversations:
-            # Sort chunks by index
             conversation_text = conv_data["document"]
             if conv_data["relevance"] > RELEVANT_THRESHOLD:
                 continue
-            # Format timestamp
             timestamp = "Unknown time"
             if conv_data["timestamp"] != "unknown":
                 try:
@@ -547,12 +310,10 @@ class ChromaMemoryService(BaseMemoryService):
         return memories
 
     def _cosine_similarity(self, vec_a, vec_b):
-        """Calculate cosine similarity between vectors"""
         import numpy as np
 
         a = np.array(vec_a, dtype=np.float32)
         b = np.array(vec_b, dtype=np.float32)
-        # Flatten 2D arrays (e.g., shape (1,1536) -> (1536,))
         a = a.flatten() if a.ndim > 1 else a
         b = b.flatten() if b.ndim > 1 else b
         dot_product = np.dot(a, b)
@@ -563,27 +324,14 @@ class ChromaMemoryService(BaseMemoryService):
         return dot_product / (magnitude_a * magnitude_b)
 
     def cleanup_old_memories(self, months: int = 1) -> int:
-        """
-        Remove memories older than the specified number of months.
-
-        Args:
-            months: Number of months to keep
-
-        Returns:
-            Number of memories removed
-        """
         collection = self._initialize_collection()
-        # Calculate the cutoff date
         cutoff_date = datetime.now() - timedelta(days=30 * months)
 
-        # Get all memories
         all_memories = collection.get()
 
-        # Find IDs to remove
         ids_to_remove = []
         if all_memories["metadatas"]:
             for i, metadata in enumerate(all_memories["metadatas"]):
-                # Parse timestamp string to datetime object for proper comparison
                 timestamp_str = str(
                     metadata.get("timestamp", datetime.now().isoformat())
                 )
@@ -592,11 +340,8 @@ class ChromaMemoryService(BaseMemoryService):
                     if timestamp_dt < cutoff_date:
                         ids_to_remove.append(all_memories["ids"][i])
                 except ValueError:
-                    # If timestamp can't be parsed, consider it as old and remove it
-                    ids_to_remove.append(all_memories["ids"][i])
                     ids_to_remove.append(all_memories["ids"][i])
 
-        # Remove the old memories
         if ids_to_remove:
             collection.delete(ids=ids_to_remove)
 
@@ -609,18 +354,8 @@ class ChromaMemoryService(BaseMemoryService):
         to_date: Optional[int] = None,
         agent_name: str = "None",
     ) -> Dict[str, Any]:
-        """
-        Remove memories related to a specific topic based on keyword search.
-
-        Args:
-            topic: Keywords describing the topic to forget
-
-        Returns:
-            Dict with success status and information about the operation
-        """
         try:
             collection = self._initialize_collection()
-            # Query for memories related to the topic
             and_conditions: List[Dict[str, Any]] = []
 
             if agent_name.strip():
@@ -647,10 +382,8 @@ class ChromaMemoryService(BaseMemoryService):
                     "count": 0,
                 }
 
-            # Find IDs to remove
             ids_to_remove = results["ids"][0]
 
-            # Remove the memories
             if ids_to_remove:
                 collection.delete(ids=ids_to_remove)
 
@@ -678,15 +411,6 @@ class ChromaMemoryService(BaseMemoryService):
         }
 
     def delete_by_conversation_id(self, conversation_id: str) -> Dict[str, Any]:
-        """
-        Delete all memories associated with a specific conversation ID.
-
-        Args:
-            conversation_id: The conversation ID (session_id) to delete memories for
-
-        Returns:
-            Dict with success status and count of deleted memories
-        """
         try:
             collection = self._initialize_collection()
 
@@ -705,8 +429,11 @@ class ChromaMemoryService(BaseMemoryService):
             ids_to_remove = results["ids"]
             collection.delete(ids=ids_to_remove)
 
-            if conversation_id in self.current_conversation_context:
-                del self.current_conversation_context[conversation_id]
+            if (
+                self._worker
+                and conversation_id in self._worker.current_conversation_context
+            ):
+                del self._worker.current_conversation_context[conversation_id]
 
             logger.info(
                 f"Deleted {len(ids_to_remove)} memories for conversation {conversation_id}"
@@ -728,23 +455,21 @@ class ChromaMemoryService(BaseMemoryService):
             }
 
     def get_queue_status(self) -> Dict[str, Any]:
-        """Get current queue status for monitoring."""
+        if self._worker:
+            return self._worker.get_queue_status()
         return {
-            "queue_size": self._conversation_queue.qsize(),
-            "worker_alive": self._memory_thread.is_alive()
-            if self._memory_thread
-            else False,
-            "max_queue_size": MAX_QUEUE_SIZE,
+            "queue_size": 0,
+            "worker_alive": False,
+            "max_queue_size": 0,
         }
 
     def shutdown(self):
-        """Gracefully shutdown the memory service."""
         logger.info("Shutting down memory service...")
-        self._stop_memory_worker()
+        if self._worker:
+            self._worker.stop()
         logger.info("Memory service shutdown complete")
 
     def __del__(self):
-        """Ensure cleanup on object destruction."""
         try:
             self.shutdown()
         except Exception:

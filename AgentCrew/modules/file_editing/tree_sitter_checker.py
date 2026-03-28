@@ -2,12 +2,11 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 from dataclasses import dataclass
-from pathlib import Path
 
 from AgentCrew.modules.code_analysis.tree_sitter_runtime import TreeSitterRuntime
 
 if TYPE_CHECKING:
-    from typing import List, Optional, Literal, Dict
+    from typing import List, Optional, Literal
 
 
 @dataclass
@@ -142,4 +141,3 @@ class TreeSitterChecker:
         """Check if file type is supported by tree-sitter."""
         language = self._runtime.detect_language_for_file(file_path)
         return self._runtime.is_in_manifest(language) if language else False
-

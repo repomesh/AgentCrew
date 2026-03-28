@@ -109,6 +109,47 @@ Processing: Snippet C might be discarded (tangential). Snippet A is older; if B 
 **Primary Objective:** Distill `MEMORY_LIST` into a concise, relevant, and up-to-date set of information based on `INPUT_KEYWORDS`.
 """
 
+CONSOLIDATION_PROMPT = """
+You are a memory consolidation system for agent "{agent_name}".
+Current date: {current_date}
+
+A new memory was just stored:
+<CURRENT_MEMORY>
+{current_memory}
+</CURRENT_MEMORY>
+
+These existing memories were found to be semantically related:
+{existing_memories}
+
+Analyze the relationship between the current memory and each existing memory.
+For each existing memory, decide ONE action:
+
+- KEEP: Memory contains unique information not covered by the current memory. Leave it alone.
+- MERGE: Memory overlaps significantly with current memory. Produce a merged version.
+- DISCARD: Memory is fully superseded, outdated, or contradicted by the current memory.
+
+Rules:
+- When merging, combine insights, entities, notes from both into one clean <MEMORY> block
+- Convert any relative dates ("yesterday", "last week") to absolute dates
+- Drop conversation notes that are generic summaries with no actionable value
+- Preserve architecture decisions, user corrections, active workarounds, unresolved issues
+- If merging, the merged result replaces BOTH the current memory and the merged candidate
+- If multiple memories need merging, each successive MERGED_MEMORY must include information from ALL previously merged candidates (build cumulatively, not independently)
+- If nothing needs merging or discarding, mark all as KEEP
+
+Output format — output ONLY this XML, no other text:
+<CONSOLIDATION_RESULT>
+  <ACTION id="existing_memory_id_1" type="KEEP|MERGE|DISCARD"/>
+  <ACTION id="existing_memory_id_2" type="KEEP|MERGE|DISCARD"/>
+  ...
+  <MERGED_MEMORY for="existing_memory_id">
+    <MEMORY>
+      ...full merged XML...
+    </MEMORY>
+  </MERGED_MEMORY>
+</CONSOLIDATION_RESULT>
+"""
+
 SEMANTIC_EXTRACTING = """
 Extract the core information from the user's message and generate a short sentence or phrase summarizing the main idea or context with key entities. No explanations or additional text
 User input: {user_input}"""
