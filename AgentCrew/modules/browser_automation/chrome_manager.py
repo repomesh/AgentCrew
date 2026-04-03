@@ -221,12 +221,23 @@ class ChromeManager:
                 "--disable-new-avatar-menu",
                 "--remote-allow-origins='*'",
                 "--allow-file-access-from-files",
+                "--disable-blink-features=AutomationControlled",
+                "--disable-infobars",
+                "--disable-dev-shm-usage",
                 f"--user-data-dir={self._user_data_dir}",
                 f"--profile-directory={profile}",
                 "about:blank",
             ]
             if is_headless:
-                chrome_args.append("--headless")
+                chrome_args.extend(
+                    [
+                        "--headless=new",
+                        "--disable-gpu",
+                        "--window-size=1920,1080",
+                        "--start-maximized",
+                        "--user-agent=Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36",
+                    ]
+                )
             if is_docker:
                 chrome_args.append("--no-sandbox")
 

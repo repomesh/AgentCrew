@@ -43,7 +43,7 @@ class ChromaMemoryService(BaseMemoryService):
             elif self.llm_service.provider_name == "github_copilot":
                 self.llm_service.model = "gpt-5-mini"
             elif self.llm_service.provider_name == "copilot_response":
-                self.llm_service.model = "gpt-5.1-codex-mini"
+                self.llm_service.model = "gpt-5.4-mini"
             elif self.llm_service.provider_name == "openai_codex":
                 self.llm_service.model = "gpt-5.1-codex-mini"
             elif self.llm_service.provider_name == "together":
