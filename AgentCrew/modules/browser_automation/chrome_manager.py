@@ -12,6 +12,7 @@ import subprocess
 import threading
 import time
 import platform
+from pathlib import Path
 from typing import Optional
 
 from loguru import logger
@@ -41,6 +42,34 @@ class ChromeManager:
 
         # Register cleanup on exit
         atexit.register(self.cleanup)
+
+    def _remove_stale_profile_locks(self, profile: str) -> None:
+        lock_file_names = (
+            "SingletonLock",
+            "SingletonCookie",
+            "SingletonSocket",
+        )
+        candidate_dirs = [
+            Path(self._user_data_dir),
+            Path(self._user_data_dir) / profile,
+        ]
+
+        for directory in candidate_dirs:
+            if not directory.exists():
+                continue
+            for lock_name in lock_file_names:
+                lock_path = directory / lock_name
+                if not lock_path.exists() and not lock_path.is_symlink():
+                    continue
+                try:
+                    lock_path.unlink()
+                    logger.info(f"Removed stale Chromium profile lock: {lock_path}")
+                except FileNotFoundError:
+                    continue
+                except OSError as e:
+                    logger.warning(
+                        f"Failed to remove stale Chromium profile lock {lock_path}: {e}"
+                    )
 
     def _find_chrome_executable(self) -> str:
         """
@@ -175,6 +204,8 @@ class ChromeManager:
 
             if not os.path.exists(self._user_data_dir):
                 os.makedirs(self._user_data_dir, exist_ok=True)
+
+            self._remove_stale_profile_locks(profile)
 
             is_headless = os.getenv("AGENTCREW_DISABLE_GUI", "") == "true"
             is_docker = os.getenv("AGENTCREW_DOCKER", "") == "true"
