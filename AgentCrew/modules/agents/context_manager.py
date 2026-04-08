@@ -190,13 +190,13 @@ Apply matching behaviors from <Adaptive_Behaviors> immediately, overriding defau
                 mode = agent.services["agent_manager"].agent_mode
                 if mode == AgentMode.TRANSFER:
                     eval_text = """Before processing my request, quickly evaluate inside <agent_evaluation> tags:
-- What tools or context do I need, and what is my step-by-step plan?
+- Plan out the tool call strategy for this request: which tools to call, in what order, and what inputs each needs.
 - Is another agent better suited? If yes, transfer immediately.
 Then execute your plan.
 Skip evaluation for: simple one-sentence answers, or when the request matches "when [condition], [action]" — call `learn_behavior` directly instead."""
                 elif mode == AgentMode.DELEGATE:
                     eval_text = """Before processing my request, quickly evaluate inside <agent_evaluation> tags:
-- What tools or context do I need, and what is my step-by-step plan?
+- Plan out the tool call strategy for this request: which tools to call, in what order, and what inputs each needs.
 - Can any sub-tasks be delegated to specialist agents? If yes, delegate them.
 - Can multiple sub-tasks run in parallel? If yes, emit multiple delegate calls in one turn.
 Then execute your plan.
