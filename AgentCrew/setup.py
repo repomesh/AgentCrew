@@ -294,24 +294,29 @@ class ApplicationSetup:
         llm_service = services["llm"]
 
         if config_uri:
+            config_uri = os.path.expanduser(config_uri)
             os.environ["SW_AGENTS_CONFIG"] = config_uri
         else:
             config_uri = os.getenv("SW_AGENTS_CONFIG")
             if not config_uri:
                 config_uri = "./agents.toml"
+            config_uri = os.path.expanduser(config_uri)
             if not os.path.exists(config_uri):
                 click.echo(
                     f"Agent configuration not found at {config_uri}. Creating default configuration."
                 )
-                os.makedirs(os.path.dirname(config_uri), exist_ok=True)
+                config_dir = os.path.dirname(config_uri)
+                if config_dir:
+                    os.makedirs(config_dir, exist_ok=True)
 
-                default_config = f"""
+                escaped_default_prompt = DEFAULT_PROMPT.replace('"""', '\\\"\\\"\\\"')
+                default_config = f'''
 [[agents]]
 name = "{DEFAULT_NAME}"
 description = "{DEFAULT_DESCRIPTION}"
-system_prompt = '''{DEFAULT_PROMPT}'''
+system_prompt = """{escaped_default_prompt}"""
 tools = ["memory", "browser", "web_search", "code_analysis"]
-"""
+'''
 
                 with open(config_uri, "w+", encoding="utf-8") as f:
                     f.write(default_config)
