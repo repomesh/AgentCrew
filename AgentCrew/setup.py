@@ -166,6 +166,9 @@ class ApplicationSetup:
 
                 last_model_class = registry.get_model(last_model)
                 if should_restore and last_model_class:
+                    llm_manager.apply_model_defaults(
+                        llm_service, provider, last_model_class.id
+                    )
                     llm_service.model = last_model_class.id
         except Exception as e:
             click.echo(f"\u26a0\ufe0f  Could not restore last used model: {e}")
@@ -342,6 +345,9 @@ tools = ["memory", "browser", "web_search", "code_analysis"]
                         remoting_provider
                     )
                     if model_id:
+                        llm_manager.apply_model_defaults(
+                            llm_service, remoting_provider, model_id
+                        )
                         llm_service.model = model_id
                 agent = LocalAgent(
                     name=agent_def["name"],

@@ -272,11 +272,11 @@ class ServiceManager:
         service = self.get_service(provider)
         if hasattr(service, "model"):
             service.model = model_id
-            self._apply_model_defaults(service, provider, model_id)
+            self.apply_model_defaults(service, provider, model_id)
             return True
         return False
 
-    def _apply_model_defaults(
+    def apply_model_defaults(
         self, service: BaseLLMService, provider: str, model_id: str
     ) -> None:
         full_model_id = f"{provider}/{model_id}"
