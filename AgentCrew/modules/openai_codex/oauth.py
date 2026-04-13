@@ -5,6 +5,7 @@ import os
 import secrets
 import time
 import webbrowser
+from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from threading import Event, Thread
 from typing import Any, Dict, Optional
@@ -41,6 +42,29 @@ def _generate_pkce_pair():
 
 def _current_time_ms() -> int:
     return int(time.time() * 1000)
+
+
+def _current_time_rfc3339() -> str:
+    return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+
+
+def _normalize_refresh_time(value: Any) -> Optional[str]:
+    if isinstance(value, (int, float)) and value > 0:
+        return datetime.fromtimestamp(value / 1000, tz=timezone.utc).isoformat().replace(
+            "+00:00", "Z"
+        )
+
+    if isinstance(value, str):
+        stripped = value.strip()
+        if not stripped:
+            return None
+        try:
+            datetime.fromisoformat(stripped.replace("Z", "+00:00"))
+            return stripped.replace("+00:00", "Z")
+        except ValueError:
+            return None
+
+    return None
 
 
 def _decode_base64url_json(value: str) -> Optional[Dict[str, Any]]:
@@ -190,8 +214,9 @@ class OpenAICodexOAuth:
         if isinstance(auth_mode, str) and auth_mode:
             normalized["auth_mode"] = auth_mode
 
-        if isinstance(last_refresh, (int, float)) and last_refresh > 0:
-            normalized["last_refresh"] = int(last_refresh)
+        normalized_last_refresh = _normalize_refresh_time(last_refresh)
+        if normalized_last_refresh:
+            normalized["last_refresh"] = normalized_last_refresh
 
         return normalized
 
@@ -251,8 +276,8 @@ class OpenAICodexOAuth:
             except (json.JSONDecodeError, IOError):
                 existing = {}
 
-        current_time_ms = _current_time_ms()
-        self._tokens["last_refresh"] = current_time_ms
+        current_time_rfc3339 = _current_time_rfc3339()
+        self._tokens["last_refresh"] = current_time_rfc3339
         self._tokens["auth_mode"] = "chatgpt"
 
         top_level = {
@@ -262,7 +287,7 @@ class OpenAICodexOAuth:
             and key not in {"auth_mode", "last_refresh", "tokens"}
         }
         top_level["auth_mode"] = "chatgpt"
-        top_level["last_refresh"] = current_time_ms
+        top_level["last_refresh"] = current_time_rfc3339
 
         existing_tokens = existing.get("tokens")
         tokens_payload = (
@@ -323,7 +348,7 @@ class OpenAICodexOAuth:
             or (self._tokens or {}).get("refresh", ""),
             "expires": int((time.time() + expires_in) * 1000),
             "auth_mode": "chatgpt",
-            "last_refresh": _current_time_ms(),
+            "last_refresh": _current_time_rfc3339(),
         }
 
         id_token = data.get("id_token")
