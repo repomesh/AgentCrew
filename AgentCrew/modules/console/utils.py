@@ -1,7 +1,5 @@
+from AgentCrew.modules.chat.agent_evaluation import remove_agent_evaluation
+
+
 def agent_evaluation_remove(data: str) -> str:
-    if "<agent_evaluation>" in data and "</agent_evaluation>" in data:
-        data = (
-            data[: data.find("<agent_evaluation>")]
-            + data[data.find("</agent_evaluation>") + 19 :]
-        )
-    return data
+    return remove_agent_evaluation(data)

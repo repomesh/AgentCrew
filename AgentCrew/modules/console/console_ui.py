@@ -12,9 +12,8 @@ from typing import Any
 from rich.console import Console
 from rich.text import Text
 from AgentCrew.modules.chat.message_handler import Observer
+from AgentCrew.modules.chat.agent_evaluation import parse_agent_evaluation
 from loguru import logger
-
-from .utils import agent_evaluation_remove
 
 from .constants import (
     RICH_STYLE_GREEN,
@@ -97,24 +96,13 @@ class ConsoleUI(Observer):
             pass
         elif event == "response_chunk":
             _, assistant_response = data
-            if (
-                "<agent_evaluation>" in assistant_response
-                and "</agent_evaluation>" not in assistant_response
-            ):
-                # Skip incomplete evaluation tags
-                return
-            if "<agent_evaluation>" in assistant_response:
-                assistant_response = (
-                    assistant_response[: assistant_response.find("<agent_evaluation>")]
-                    + assistant_response[
-                        assistant_response.find("</agent_evaluation>") + 19 :
-                    ]
-                )
+            parsed = parse_agent_evaluation(assistant_response)
 
-            self.ui_effects.stop_loading_animation()  # Stop loading on first chunk
+            self.ui_effects.stop_loading_animation()
             self.ui_effects.update_live_display(
-                assistant_response
-            )  # data is the response chunk
+                parsed["visible_content"],
+                planning_content=parsed["planning_content"],
+            )
         elif event == "tool_use":
             self.ui_effects.stop_loading_animation()  # Stop loading on first chunk
             if data.get("name") == "delegate":
@@ -157,8 +145,11 @@ class ConsoleUI(Observer):
                 data
             )  # data is the tool use that was denied
         elif event == "response_completed" or event == "assistant_message_added":
-            data = agent_evaluation_remove(data)
-            self.ui_effects.finish_response(data)
+            parsed = parse_agent_evaluation(data)
+            self.ui_effects.finish_response(
+                parsed["visible_content"],
+                planning_content=parsed["planning_content"],
+            )
         elif event == "stream_cancel_requested":
             self.display_handlers.display_message(
                 Text("Stopping current stream...", style=RICH_STYLE_YELLOW)

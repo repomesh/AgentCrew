@@ -1,9 +1,7 @@
 from typing import Any
 
 from PySide6.QtWidgets import QApplication
-from AgentCrew.modules.gui.utils.strings import (
-    agent_evaluation_remove,
-)
+from AgentCrew.modules.chat.agent_evaluation import parse_agent_evaluation
 
 
 class MessageEventHandler:
@@ -39,24 +37,31 @@ class MessageEventHandler:
         elif event == "user_context_request":
             self.handle_user_context_request()
 
+    def _update_planning_widget(self, planning_content: str):
+        if not planning_content.strip():
+            return
+        if self.chat_window.current_planning_widget is None:
+            self.chat_window.current_planning_widget = (
+                self.chat_window.chat_components.add_planning_message(planning_content)
+            )
+        else:
+            self.chat_window.current_planning_widget.set_text(
+                f"🧭 Agent plan\n\n{planning_content}"
+            )
+        self.chat_window.current_planning_content = planning_content
+
     def handle_response_chunk(self, data):
         """Handle response chunks with smooth streaming."""
         _, full_response = data
+        parsed = parse_agent_evaluation(full_response)
 
-        if (
-            "<agent_evaluation>" in full_response
-            and "</agent_evaluation>" not in full_response
-        ):
-            # Skip incomplete evaluation tags
-            return
-        if "<agent_evaluation>" in full_response:
-            full_response = (
-                full_response[: full_response.find("<agent_evaluation>")]
-                + full_response[full_response.find("</agent_evaluation>") + 19 :]
-            )
+        visible_content = parsed["visible_content"]
+        planning_content = parsed["planning_content"]
 
-        if full_response.strip():
-            # Create bubble immediately if needed
+        if planning_content:
+            self._update_planning_widget(planning_content)
+
+        if visible_content.strip():
             if (
                 self.chat_window.expecting_response
                 and self.chat_window.current_response_bubble is None
@@ -65,10 +70,9 @@ class MessageEventHandler:
                     self.chat_window.chat_components.append_message("", False)
                 )
 
-        # Use the individual chunk for smooth streaming
         if self.chat_window.current_response_bubble:
             self.chat_window.current_response_bubble.update_streaming_text(
-                full_response
+                visible_content
             )
 
     def handle_user_message_created(self, data):
@@ -84,16 +88,26 @@ class MessageEventHandler:
 
     def handle_response_completed(self, data):
         """Handle response completion."""
+        parsed = parse_agent_evaluation(data)
+        visible_content = parsed["visible_content"]
+        planning_content = parsed["planning_content"]
 
-        data = agent_evaluation_remove(data)
+        if planning_content:
+            self._update_planning_widget(planning_content)
+
+        if visible_content.strip() and self.chat_window.current_response_bubble is None:
+            self.chat_window.current_response_bubble = (
+                self.chat_window.chat_components.append_message("", False)
+            )
+
         if self.chat_window.current_response_bubble:
-            # Finalize streaming and ensure full content is rendered
-            self.chat_window.current_response_bubble.raw_text_buffer = data
-            self.chat_window.current_response_bubble.raw_text = data
+            self.chat_window.current_response_bubble.raw_text_buffer = visible_content
+            self.chat_window.current_response_bubble.raw_text = visible_content
             self.chat_window.current_response_bubble._finalize_streaming()
             self.chat_window.current_response_bubble.message_index = (
                 len(self.chat_window.message_handler.streamline_messages) - 1
             )
+        self.chat_window.expecting_response = False
         QApplication.processEvents()
         self.chat_window.chat_scroll.repaint()
 
@@ -141,6 +155,8 @@ class MessageEventHandler:
         if self.chat_window.current_thinking_bubble:
             self.chat_window.current_thinking_bubble.stop_streaming()
             self.chat_window.current_thinking_bubble = None
+        self.chat_window.current_planning_widget = None
+        self.chat_window.current_planning_content = ""
         self.chat_window.display_status_message("Stream canceled.")
         self.chat_window.ui_state_manager.set_input_controls_enabled(True)
         QApplication.processEvents()
@@ -151,6 +167,8 @@ class MessageEventHandler:
         if self.chat_window.current_thinking_bubble:
             self.chat_window.current_thinking_bubble.stop_streaming()
             self.chat_window.current_thinking_bubble = None
+        self.chat_window.current_planning_widget = None
+        self.chat_window.current_planning_content = ""
         self.chat_window.display_status_message("Stream timed out before first chunk.")
         self.chat_window.ui_state_manager.set_input_controls_enabled(True)
         QApplication.processEvents()

@@ -84,6 +84,17 @@ class ChatComponents:
         if not self.chat_window.loading_conversation:
             QApplication.processEvents()
 
+        return system_widget
+
+    def add_planning_message(self, text):
+        planning_widget = SystemMessageWidget(f"🧭 Agent plan\n\n{text}")
+        self.chat_window.chat_layout.addWidget(planning_widget)
+
+        if not self.chat_window.loading_conversation:
+            QApplication.processEvents()
+
+        return planning_widget
+
     def add_diff_system_message(self, title: str, original: str, modified: str):
         """Add a compact side-by-side diff system message to the chat."""
         container = QWidget()
@@ -320,6 +331,8 @@ class ChatComponents:
         self.chat_window.current_response_bubble = None
         self.chat_window.current_response_container = None
         self.chat_window.current_thinking_bubble = None
+        self.chat_window.current_planning_widget = None
+        self.chat_window.current_planning_content = ""
         self.chat_window.thinking_content = ""
         self.chat_window.expecting_response = False
 

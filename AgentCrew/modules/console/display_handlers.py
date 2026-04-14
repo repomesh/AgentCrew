@@ -6,10 +6,10 @@ Handles rendering of various UI elements like messages, dividers, models, agents
 from __future__ import annotations
 
 import json
-import re
 from datetime import datetime
 from typing import Dict, Any, List
 from rich.console import Group
+from AgentCrew.modules.chat.agent_evaluation import parse_agent_evaluation
 from rich.box import HORIZONTALS, SIMPLE, SQUARE
 from rich.markdown import Markdown
 from rich.text import Text
@@ -89,6 +89,16 @@ class DisplayHandlers:
             border_style=RICH_STYLE_BLUE,
         )
         self.console.print(user_panel)
+
+    def display_planning_message(self, message: str):
+        planning_panel = Panel(
+            Markdown(message, code_theme=CODE_THEME),
+            title=Text("🧭 AGENT PLAN", style=RICH_STYLE_GRAY),
+            box=HORIZONTALS,
+            title_align="left",
+            border_style=RICH_STYLE_GRAY,
+        )
+        self.console.print(planning_panel)
 
     def display_assistant_message(self, agent_name: str, message: str):
         header = Text(
@@ -467,9 +477,13 @@ class DisplayHandlers:
             elif role == "assistant":
                 agent_name = msg.get("agent") or default_agent_name
                 content = self._extract_message_content(msg)
-                # Format as markdown for better display
-                if content.strip():
-                    self.display_assistant_message(agent_name, content)
+                parsed = parse_agent_evaluation(content)
+                if parsed["planning_content"]:
+                    self.display_planning_message(parsed["planning_content"])
+                if parsed["visible_content"].strip():
+                    self.display_assistant_message(
+                        agent_name, parsed["visible_content"]
+                    )
                 if "tool_calls" in msg:
                     for tool_call in msg["tool_calls"]:
                         self._ui.tool_display.display_tool_use(tool_call)
@@ -702,10 +716,4 @@ class DisplayHandlers:
                     # Handle other content types if needed
             return "\n".join(result)
 
-        content = re.sub(
-            r"(?:```(?:json)?)?\s*<agent_evaluation>.*?</agent_evaluation>\s*(?:```)?",
-            "",
-            str(content),
-            flags=re.DOTALL | re.IGNORECASE,
-        )
         return str(content)

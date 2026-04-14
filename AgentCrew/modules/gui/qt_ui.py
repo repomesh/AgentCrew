@@ -191,6 +191,8 @@ class ChatWindow(QMainWindow, Observer):
         self.current_user_bubble = None
         self.current_response_container = None
         self.current_thinking_bubble = None
+        self.current_planning_widget = None
+        self.current_planning_content = ""
         self.current_file_bubble = None
         self.thinking_content = ""
         self.expecting_response = False
@@ -609,6 +611,8 @@ class ChatWindow(QMainWindow, Observer):
         self.expecting_response = True
         self.current_response_bubble = None
         self.current_response_container = None
+        self.current_planning_widget = None
+        self.current_planning_content = ""
 
     def _handle_theme_changed(self, theme_name):
         """

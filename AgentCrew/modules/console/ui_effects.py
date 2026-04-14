@@ -11,6 +11,7 @@ import itertools
 import random
 from rich.live import Live
 from rich.box import HORIZONTALS
+from rich.console import Group
 from rich.markdown import Markdown
 from rich.panel import Panel
 from rich.text import Text
@@ -103,6 +104,7 @@ class UIEffects:
         self.message_handler = console_ui.message_handler
         self.spinner = itertools.cycle(["⣾", "⣽", "⣻", "⢿", "⡿", "⣟", "⣯", "⣷"])
         self.updated_text = ""
+        self.updated_planning_text = ""
         # Delegate animation state
         # key: tool_use_id, value: (agent_name, start_time)
         self._delegate_agents: dict[str, tuple[str, float]] = {}
@@ -325,6 +327,61 @@ class UIEffects:
         )
         self.live.start()
 
+    def _build_planning_panel(self, planning_content: str):
+        return Panel(
+            Markdown(planning_content.replace("\n", "  \n"), code_theme=CODE_THEME),
+            title=Text("🧭 AGENT PLAN", style=RICH_STYLE_GRAY),
+            box=HORIZONTALS,
+            title_align="left",
+            border_style=RICH_STYLE_GRAY,
+        )
+
+    def _build_response_renderable(
+        self,
+        response: str,
+        planning_content: str = "",
+        is_thinking: bool = False,
+        subtitle: Text | None = None,
+        height_limit: int | None = None,
+    ):
+        from .constants import RICH_STYLE_GREEN_BOLD
+
+        renderables = []
+        if planning_content.strip() and not is_thinking:
+            renderables.append(self._build_planning_panel(planning_content.strip()))
+
+        if response.strip() or is_thinking:
+            agent_name = self.message_handler.agent.name
+            header = Text(
+                f"💭 {agent_name.upper()}'s thinking:"
+                if is_thinking
+                else f"🤖 {agent_name.upper()}:",
+                style=RICH_STYLE_GRAY if is_thinking else RICH_STYLE_GREEN_BOLD,
+            )
+            panel_kwargs = {
+                "title": header,
+                "box": HORIZONTALS,
+                "title_align": "left",
+                "border_style": RICH_STYLE_GRAY if is_thinking else RICH_STYLE_GREEN,
+            }
+            if subtitle is not None:
+                panel_kwargs["subtitle"] = subtitle
+            if height_limit is not None:
+                panel_kwargs["height"] = max(1, height_limit)
+                panel_kwargs["expand"] = False
+            renderables.append(
+                Panel(
+                    Markdown(response.replace("\n", "  \n"), code_theme=CODE_THEME),
+                    **panel_kwargs,
+                )
+            )
+
+        if not renderables:
+            return Text("")
+        if len(renderables) == 1:
+            return renderables[0]
+        return Group(*renderables)
+
     def scroll_live_display(self, direction: str):
         speed = 10
         if self._visible_buffer == -1:
@@ -334,17 +391,23 @@ class UIEffects:
         elif direction == "down":
             self._visible_buffer += speed
         if self.live:
-            self.update_live_display(self.updated_text)
+            self.update_live_display(self.updated_text, self.updated_planning_text)
 
-    def update_live_display(self, chunk: str, is_thinking: bool = False):
+    def update_live_display(
+        self,
+        chunk: str,
+        planning_content: str = "",
+        is_thinking: bool = False,
+    ):
         """Update the live display with a new chunk of the response."""
         if not self.live:
             self.start_streaming_response(self.message_handler.agent.name, is_thinking)
 
         if chunk != self.updated_text:
             self.updated_text = self.updated_text + chunk if is_thinking else chunk
+        if not is_thinking:
+            self.updated_planning_text = planning_content
 
-        # Only show the last part that fits in the console
         lines = self.updated_text.split("\n")
         height_limit = int(self.console.size.height * 0.9)
         if len(lines) > height_limit:
@@ -361,79 +424,56 @@ class UIEffects:
                 ]
 
         if self.live:
-            from .constants import RICH_STYLE_GREEN_BOLD
-            from rich.text import Text
-
-            agent_name = self.message_handler.agent.name
-
-            header = Text(
-                f"💭 {agent_name.upper()}'s thinking:"
-                if is_thinking
-                else f"🤖 {agent_name.upper()}:",
-                style=RICH_STYLE_GRAY if is_thinking else RICH_STYLE_GREEN_BOLD,
-            )
             subtitle = Text(
                 "(Use Ctrl+U/Ctrl+D to scroll)",
                 style=RICH_STYLE_GRAY,
             )
-            live_panel = Panel(
-                Markdown("\n".join(lines), code_theme=CODE_THEME),
-                title=header,
-                box=HORIZONTALS,
+            live_renderable = self._build_response_renderable(
+                "\n".join(lines),
+                planning_content=self.updated_planning_text,
+                is_thinking=is_thinking,
                 subtitle=subtitle if not is_thinking else None,
-                title_align="left",
-                expand=False,
-                height=min(height_limit, len(lines)),
-                border_style=RICH_STYLE_GRAY if is_thinking else RICH_STYLE_GREEN,
+                height_limit=min(height_limit, len(lines)),
             )
-            self.live.update(live_panel, refresh=True)
+            self.live.update(live_renderable, refresh=True)
 
     def finish_live_update(self):
         """Stop the live update display."""
         self._visible_buffer = -1
         self._tracking_buffer = 0
         self.updated_text = ""
+        self.updated_planning_text = ""
         if self.live:
             self.console.print(self.live.get_renderable())
             self.live.update("")
             self.live.stop()
             self.live = None
 
-    def finish_response(self, response: str, is_thinking: bool = False):
+    def finish_response(
+        self,
+        response: str,
+        planning_content: str = "",
+        is_thinking: bool = False,
+    ):
         """Finalize and display the complete response."""
-        from .constants import RICH_STYLE_GREEN_BOLD
-
         self._visible_buffer = -1
         self._tracking_buffer = 0
         self.updated_text = ""
+        self.updated_planning_text = ""
 
         if self.live:
             self.live.update(Text("", end=""))
             self.live.stop()
             self.live = None
 
-        # Replace \n with two spaces followed by \n for proper Markdown line breaks
-        markdown_formatted_response = response.replace("\n", "  \n")
-
-        if not markdown_formatted_response.strip():
+        renderable = self._build_response_renderable(
+            response,
+            planning_content=planning_content,
+            is_thinking=is_thinking,
+        )
+        if isinstance(renderable, Text) and not renderable.plain.strip():
             return
-
-        agent_name = self.message_handler.agent.name
-
-        header = Text(
-            f"💭 {agent_name.upper()}'s thinking:"
-            if is_thinking
-            else f"🤖 {agent_name.upper()}:",
-            style=RICH_STYLE_GRAY if is_thinking else RICH_STYLE_GREEN_BOLD,
-        )
-        assistant_panel = Panel(
-            Markdown(markdown_formatted_response, code_theme=CODE_THEME),
-            title=header,
-            box=HORIZONTALS,
-            title_align="left",
-            border_style=RICH_STYLE_GRAY if is_thinking else RICH_STYLE_GREEN,
-        )
-        self.console.print(assistant_panel)
+        self.console.print(renderable)
 
     def cleanup(self):
         """Clean up all running effects."""

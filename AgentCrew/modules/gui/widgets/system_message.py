@@ -147,6 +147,13 @@ class SystemMessageWidget(QWidget):
             )  # Set to PlainText for fallback
             self.message_label.setText(self.full_text)  # Fallback to full plain text
 
+    def set_text(self, text):
+        self.full_text = text
+        if self.is_expanded:
+            self.set_expanded_text()
+        else:
+            self.set_collapsed_text()
+
     def toggle_expansion(self):
         """Toggle between expanded and collapsed states."""
         self.is_expanded = not self.is_expanded

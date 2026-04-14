@@ -1,12 +1,9 @@
 from typing import Any, Dict
 from PySide6.QtCore import Slot
 from PySide6.QtWidgets import QMessageBox, QApplication
+from AgentCrew.modules.chat.agent_evaluation import parse_agent_evaluation
 from AgentCrew.modules.gui.widgets import ConversationLoader
-from AgentCrew.modules.gui.utils.strings import (
-    agent_evaluation_remove,
-    need_print_check,
-    tag_action_strip,
-)
+from AgentCrew.modules.gui.utils.strings import need_print_check, tag_action_strip
 
 
 class ConversationComponents:
@@ -98,14 +95,27 @@ class ConversationComponents:
                     )
                     self.chat_window.chat_components.append_file(file_path, True)
                 elif message_content.strip() and need_print_check(message_content):
-                    message_content = agent_evaluation_remove(message_content)
                     message_content = tag_action_strip(message_content)
-                    self.chat_window.chat_components.append_message(
-                        message_content,
-                        is_user,
-                        msg_idx,
-                        msg.get("agent", None),
-                    )
+                    if is_user:
+                        self.chat_window.chat_components.append_message(
+                            message_content,
+                            is_user,
+                            msg_idx,
+                            msg.get("agent", None),
+                        )
+                    else:
+                        parsed = parse_agent_evaluation(message_content)
+                        if parsed["planning_content"]:
+                            self.chat_window.chat_components.add_planning_message(
+                                parsed["planning_content"]
+                            )
+                        if parsed["visible_content"].strip():
+                            self.chat_window.chat_components.append_message(
+                                parsed["visible_content"],
+                                is_user,
+                                msg_idx,
+                                msg.get("agent", None),
+                            )
                 # Add handling for other potential content formats if necessary
                 if "tool_calls" in msg:
                     for tool_call in msg["tool_calls"]:
