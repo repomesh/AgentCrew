@@ -38,7 +38,7 @@ class ChromaMemoryService(BaseMemoryService):
             elif self.llm_service.provider_name == "openai":
                 self.llm_service.model = "gpt-4.1-nano"
             elif self.llm_service.provider_name == "deepinfra":
-                self.llm_service.model = "Qwen/Qwen3.5-9B"
+                self.llm_service.model = "google/gemma-4-31B-it"
             elif self.llm_service.provider_name == "github_copilot":
                 self.llm_service.model = "gpt-5-mini"
             elif self.llm_service.provider_name == "copilot_response":
