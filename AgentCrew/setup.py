@@ -113,7 +113,7 @@ class ApplicationSetup:
                             OpenAICodexOAuth,
                         )
 
-                        if OpenAICodexOAuth().has_valid_tokens():
+                        if OpenAICodexOAuth().has_valid_tokens:
                             return last_provider
                     elif os.getenv(api_key_map.get(last_provider, "")):
                         return last_provider
