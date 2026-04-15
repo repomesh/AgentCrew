@@ -709,6 +709,18 @@ _GITHUB_COPILOT_MODELS = [
         output_token_price_1m=0.0,
     ),
     Model(
+        id="goldeneye-free-auto",
+        provider="copilot_response",
+        name="Goldeneye",
+        description="",
+        capabilities=["tool_use", "vision", "stream", "structured_output"],
+        max_context_token=400_000,
+        default=False,
+        input_token_price_1m=0.0,
+        output_token_price_1m=0.0,
+        endpoint="response",
+    ),
+    Model(
         id="gpt-5.2-codex",
         provider="copilot_response",
         name="GPT 5 Codex",
