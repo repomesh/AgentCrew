@@ -52,6 +52,7 @@ class MessageHandler(Observable):
         memory_service: Optional[BaseMemoryService] = None,
         context_persistent_service: Optional[ContextPersistenceService] = None,
         with_voice: bool = False,
+        voice_service=None,
     ):
         """
         Initializes the MessageHandler.
@@ -94,24 +95,7 @@ class MessageHandler(Observable):
         self.conversation_manager.start_new_conversation()  # Initialize first conversation
         self._yolo_mode_check()
 
-        # Voice integration
-        self.voice_service = None
-        # Check if voice service is available
-        from AgentCrew.modules.voice import AUDIO_AVAILABLE
-
-        if AUDIO_AVAILABLE and with_voice:
-            if os.getenv("ELEVENLABS_API_KEY"):
-                from AgentCrew.modules.voice.elevenlabs_service import (
-                    ElevenLabsVoiceService,
-                )
-
-                self.voice_service = ElevenLabsVoiceService()
-            elif os.getenv("DEEPINFRA_API_KEY"):
-                from AgentCrew.modules.voice.deepinfra_service import (
-                    DeepInfraVoiceService,
-                )
-
-                self.voice_service = DeepInfraVoiceService()
+        self.voice_service = voice_service if with_voice else None
 
     def _yolo_mode_check(self):
         from AgentCrew.modules.config.global_config import GlobalConfig
@@ -381,9 +365,6 @@ class MessageHandler(Observable):
         start_thinking = False
         end_thinking = False
         has_stop_interupted = False
-        voice_mode = self._is_voice_enabled()
-        voice_sentence = "" if voice_mode != "disabled" else None
-        voice_id = self._get_configured_voice_id() if self.voice_service else None
 
         if len(self.agent.history) == 0:
             return None, 0, 0
@@ -481,44 +462,6 @@ class MessageHandler(Observable):
                         # Delays it a bit when using without stream
                         await asyncio.sleep(0.3)
                     self._notify("response_chunk", (chunk_text, assistant_response))
-                    if voice_sentence is not None:
-                        if (
-                            "<agent_evaluation>" in assistant_response
-                            and "</agent_evaluation>" in assistant_response
-                        ) or (
-                            # First token of agent evaluation
-                            "<agent" not in assistant_response
-                            and "</agent_evaluation>" not in assistant_response
-                        ):
-                            voice_sentence += chunk_text
-
-                    if (
-                        voice_sentence
-                        and "\n" in voice_sentence.lstrip("\n ").strip("<>_-")
-                        and self.voice_service
-                        and voice_id
-                    ):
-                        voice_sentence = (
-                            voice_sentence.replace("<agent_evaluation>", "")
-                            .replace("</agent_evaluation>", "")
-                            .replace("<agent", "")
-                            .replace("evaluation>", "")
-                            .lstrip("\n ")
-                            .strip("<>_-")
-                        )
-                        if len(voice_sentence.split("\n")) > 1:
-                            self.voice_service.text_to_speech_stream(
-                                voice_sentence.strip().partition("\n")[0],
-                                voice_id=voice_id,
-                            )
-                            if voice_mode == "partial":
-                                voice_sentence = None
-                            else:
-                                voice_sentence = (
-                                    voice_sentence.strip()
-                                    .partition("\n")[-1]
-                                    .lstrip("\n")
-                                )
 
             if not session.finished.is_set():
                 session.finalize("completed")
@@ -529,10 +472,6 @@ class MessageHandler(Observable):
                 self._notify("thinking_completed", thinking_content)
                 end_thinking = True
 
-            if voice_sentence and voice_sentence.strip() and self.voice_service:
-                self.voice_service.text_to_speech_stream(
-                    voice_sentence.strip().partition("\n")[0], voice_id=voice_id
-                )
             # Handle tool use if needed
             if not has_stop_interupted and tool_uses and len(tool_uses) > 0:
                 # Add thinking content as a separate message if available
@@ -747,12 +686,11 @@ class MessageHandler(Observable):
     def _is_voice_enabled(self) -> bool:
         """Check if voice is enabled in current agent settings."""
         try:
-            # Check if voice service is available first
             if self.voice_service is None:
                 return False
 
             if hasattr(self.agent, "voice_enabled"):
-                return getattr(self.agent, "voice_enabled")
+                return getattr(self.agent, "voice_enabled") == "enabled"
 
             return False
         except Exception as e:

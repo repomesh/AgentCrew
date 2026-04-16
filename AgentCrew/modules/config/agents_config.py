@@ -3,6 +3,7 @@ import os
 from typing import Any, Dict, List
 
 from loguru import logger
+from pydantic import config
 from tomli_w import dump as toml_dump
 
 
@@ -56,16 +57,18 @@ class AgentsConfig:
                     )
                 except Exception as e:
                     logger.error(str(e))
-                finally:
                     continue
+
             existing_agent = agent_manager.get_local_agent(agent_cfg["name"])
             system_prompt = agent_cfg.get("system_prompt", "")
             if existing_agent:
                 existing_agent.tools = agent_cfg.get("tools", [])
                 existing_agent.set_system_prompt(system_prompt)
                 existing_agent.temperature = agent_cfg.get("temperature", 0.4)
-                existing_agent.voice_enabled = agent_cfg.get(
-                    "voice_enabled", "disabled"
+                existing_agent.voice_enabled = (
+                    "enabled"
+                    if agent_cfg.get("voice_enabled", "disabled") == "enabled"
+                    else "disabled"
                 )
                 existing_agent.voice_id = agent_cfg.get("voice_id", None)
             else:
@@ -77,7 +80,11 @@ class AgentsConfig:
                         if isinstance(agent, LocalAgent)
                     ][0]
 
-                voice_enabled = agent_cfg.get("voice_enabled", "disabled")
+                voice_enabled = (
+                    "enabled"
+                    if agent_cfg.get("voice_enabled", "disabled") == "enabled"
+                    else "disabled"
+                )
                 voice_id = agent_cfg.get("voice_id", None)
 
                 new_agent = LocalAgent(

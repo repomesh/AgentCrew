@@ -94,7 +94,10 @@ class AgentCrewApplication:
             self.setup.restore_last_agent()
 
             message_handler = MessageHandler(
-                services["memory"], services["context_persistent"], with_voice
+                services["memory"],
+                services["context_persistent"],
+                with_voice,
+                services.get("voice"),
             )
             global_config = GlobalConfig().read()
 
@@ -145,7 +148,10 @@ class AgentCrewApplication:
             self.setup.restore_last_agent()
 
             message_handler = MessageHandler(
-                services["memory"], services["context_persistent"], with_voice
+                services["memory"],
+                services["context_persistent"],
+                with_voice,
+                services.get("voice"),
             )
 
             QCoreApplication.setAttribute(Qt.ApplicationAttribute.AA_UseOpenGLES)

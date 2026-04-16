@@ -1,7 +1,7 @@
 """Voice module for AgentCrew with multiple voice service integrations.
 
 This module provides speech-to-text and text-to-speech capabilities
-using various APIs including ElevenLabs and DeepInfra (STT only),
+using various APIs including ElevenLabs and DeepInfra,
 built on a flexible abstract base class architecture.
 """
 

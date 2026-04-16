@@ -252,6 +252,27 @@ class ApplicationSetup:
             click.echo(f"\u26a0\ufe0f Skills service not available: {str(e)}")
             skills_service = None
 
+        try:
+            from AgentCrew.modules.voice import AUDIO_AVAILABLE
+
+            if AUDIO_AVAILABLE and os.getenv("ELEVENLABS_API_KEY"):
+                from AgentCrew.modules.voice.elevenlabs_service import (
+                    ElevenLabsVoiceService,
+                )
+
+                voice_service = ElevenLabsVoiceService()
+            elif AUDIO_AVAILABLE and os.getenv("DEEPINFRA_API_KEY"):
+                from AgentCrew.modules.voice.deepinfra_service import (
+                    DeepInfraVoiceService,
+                )
+
+                voice_service = DeepInfraVoiceService()
+            else:
+                voice_service = None
+        except Exception as e:
+            click.echo(f"\u26a0\ufe0f Voice service not available: {str(e)}")
+            voice_service = None
+
         self.services = {
             "llm": llm_service,
             "memory": memory_service,
@@ -264,6 +285,7 @@ class ApplicationSetup:
             "file_editing": file_editing_service,
             "command_execution": command_execution_service,
             "skills": skills_service,
+            "voice": voice_service,
         }
         return self.services
 
@@ -365,7 +387,12 @@ tools = ["memory", "browser", "web_search", "code_analysis"]
                     services=services,
                     tools=agent_def["tools"],
                     temperature=agent_def.get("temperature", None),
-                    voice_enabled=agent_def.get("voice_enabled", "disabled"),
+                    voice_enabled=(
+                        "enabled"
+                        if agent_def.get("voice_enabled", "disabled")
+                        in (True, "enabled", "full", "partial")
+                        else "disabled"
+                    ),
                     voice_id=agent_def.get("voice_id", None),
                 )
                 agent.set_system_prompt(agent_def["system_prompt"])

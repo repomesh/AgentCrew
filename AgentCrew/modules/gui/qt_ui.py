@@ -547,7 +547,9 @@ class ChatWindow(QMainWindow, Observer):
             self.loading_conversation = False
             self.ui_state_manager.set_input_controls_enabled(True)
             if self.bubble_state.current_file_bubble:
-                self.chat_components.remove_messages_after(self.bubble_state.current_file_bubble)
+                self.chat_components.remove_messages_after(
+                    self.bubble_state.current_file_bubble
+                )
                 self.bubble_state.current_file_bubble = None
             self.display_error(data)
         elif event == "consolidation_completed":
@@ -625,7 +627,9 @@ class ChatWindow(QMainWindow, Observer):
         )  # True = user message
 
         # Set flag to expect a response (for chunking)
-        self.reset_bubble_state(current_user_bubble=self.bubble_state.current_user_bubble)
+        self.reset_bubble_state(
+            current_user_bubble=self.bubble_state.current_user_bubble
+        )
         self.reset_stream_state(expecting_response=True)
 
     def _handle_theme_changed(self, theme_name):

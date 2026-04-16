@@ -41,6 +41,16 @@ class AgentToolRegistrar:
 
             register_skills(skills_service, agent)
 
+        voice_service = agent.services.get("voice")
+        if voice_service and getattr(agent, "voice_enabled", "disabled") != "disabled":
+            from AgentCrew.modules.voice.tool import (
+                register as register_speak,
+                speak_tool_prompt,
+            )
+
+            register_speak(voice_service, agent)
+            agent.tool_prompts.append(speak_tool_prompt())
+
         if agent.services.get("agent_manager") and not agent.is_remoting_mode:
             from AgentCrew.modules.agents.manager import AgentMode
 

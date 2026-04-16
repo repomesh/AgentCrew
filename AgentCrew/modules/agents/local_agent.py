@@ -4,14 +4,20 @@ import asyncio
 from datetime import datetime
 import os
 import copy
-from typing import List, TYPE_CHECKING
+from typing import List, TYPE_CHECKING, Literal
 
 from .base import BaseAgent, MessageType
 from loguru import logger
 
 if TYPE_CHECKING:
     from AgentCrew.modules.llm import BaseLLMService
-    from typing import Dict, Any, Optional, Callable, Literal, Union
+    from typing import Dict, Any, Optional, Callable, Union
+
+
+def normalize_voice_enabled(value) -> Literal["enabled", "disabled"]:
+    if value in (True, "enabled", "full", "partial"):
+        return "enabled"
+    return "disabled"
 
 
 class LocalAgent(BaseAgent):
@@ -26,7 +32,7 @@ class LocalAgent(BaseAgent):
         tools: List[str],
         temperature: Optional[float] = None,
         is_remoting_mode: bool = False,
-        voice_enabled: Literal["full", "partial", "disabled"] = "disabled",
+        voice_enabled: Literal["enabled", "disabled"] = "disabled",
         voice_id: Optional[str] = None,
     ):
         """
@@ -51,7 +57,9 @@ class LocalAgent(BaseAgent):
         self.is_remoting_mode: bool = is_remoting_mode
         self.input_tokens_usage = 0
         self.output_tokens_usage = 0
-        self.voice_enabled: Literal["full", "partial", "disabled"] = voice_enabled
+        self.voice_enabled: Literal["enabled", "disabled"] = normalize_voice_enabled(
+            voice_enabled
+        )
         self.voice_id: Optional[str] = voice_id
 
         self.tool_definitions = {}  # {tool_name: (definition_func, handler_factory, service_instance)}

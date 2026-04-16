@@ -356,7 +356,9 @@ class ContextPersistenceService:
 
     def _extract_text_preview(self, content: Any, max_length: int = 50) -> str:
         if isinstance(content, str) and content:
-            return (content[:max_length] + "...") if len(content) > max_length else content
+            return (
+                (content[:max_length] + "...") if len(content) > max_length else content
+            )
         if isinstance(content, list):
             first_text_block = next(
                 (
@@ -375,7 +377,9 @@ class ContextPersistenceService:
             return "[Image/Tool Data]"
         return "[Non-text Content]"
 
-    def _resolve_conversation_title(self, metadata: Dict[str, Any], preview: str) -> str:
+    def _resolve_conversation_title(
+        self, metadata: Dict[str, Any], preview: str
+    ) -> str:
         return metadata.get("fork_title") or preview
 
     def _is_previewable_user_preview(self, preview: str) -> bool:
@@ -415,7 +419,11 @@ class ContextPersistenceService:
         self, history: List[Dict[str, Any]], metadata: Dict[str, Any]
     ) -> Optional[str]:
         fork_point = metadata.get("fork_point")
-        if not isinstance(history, list) or not isinstance(fork_point, int) or fork_point < 0:
+        if (
+            not isinstance(history, list)
+            or not isinstance(fork_point, int)
+            or fork_point < 0
+        ):
             return None
 
         for msg in history[fork_point:]:

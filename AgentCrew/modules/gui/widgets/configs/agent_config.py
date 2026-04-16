@@ -194,16 +194,10 @@ class AgentsConfigTab(QWidget):
         voice_layout = QFormLayout()
 
         self.voice_enabled_checkbox = QCheckBox("Voice Enabled")
-        self.voice_enabled_checkbox.setTristate(True)
-        # Apply enhanced styling for tristate checkbox
         style_provider = StyleProvider()
         self.voice_enabled_checkbox.setStyleSheet(style_provider.get_checkbox_style())
-        # Add tooltip explaining the three states
         self.voice_enabled_checkbox.setToolTip(
-            "Voice Features:\n"
-            "• Square (green): Full voice mode - TTS for full conversation\n"
-            "• Circle (amber): Partial voice mode - TTS for first sentence only\n"
-            "• Unchecked: Voice disabled"
+            "Enable or disable voice features for this agent."
         )
         voice_layout.addRow("", self.voice_enabled_checkbox)
 
@@ -478,14 +472,7 @@ class AgentsConfigTab(QWidget):
 
             # Load voice settings
             voice_state = agent_data.get("voice_enabled", "disabled")
-            if voice_state == "full":
-                self.voice_enabled_checkbox.setCheckState(Qt.CheckState.Checked)
-            elif voice_state == "partial":
-                self.voice_enabled_checkbox.setCheckState(
-                    Qt.CheckState.PartiallyChecked
-                )
-            else:
-                self.voice_enabled_checkbox.setCheckState(Qt.CheckState.Unchecked)
+            self.voice_enabled_checkbox.setChecked(voice_state == "enabled")
 
             self.voice_id_input.setText(agent_data.get("voice_id", ""))
 
@@ -802,14 +789,9 @@ class AgentsConfigTab(QWidget):
 
             tools = [t for t, cb in self.tool_checkboxes.items() if cb.isChecked()]
 
-            voice_state = "disabled"
-            if self.voice_enabled_checkbox.checkState() == Qt.CheckState.Checked:
-                voice_state = "full"
-            elif (
-                self.voice_enabled_checkbox.checkState()
-                == Qt.CheckState.PartiallyChecked
-            ):
-                voice_state = "partial"
+            voice_state = (
+                "enabled" if self.voice_enabled_checkbox.isChecked() else "disabled"
+            )
 
             updated_agent_data = {
                 "name": name,
