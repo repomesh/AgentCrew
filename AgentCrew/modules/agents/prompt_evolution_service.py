@@ -87,9 +87,13 @@ Return ONLY valid JSON:
 5. PRESERVE any XML-like structural tags (e.g., <Agent_Instructions>, <Available_Agents_List>)
 6. INTEGRATE the approved improvements naturally into existing sections where they fit best
 7. If no existing section fits, add a concise new section near the end (before any closing tags)
-8. DO NOT add project-specific context, temporary instructions, or example-heavy elaborations
-9. DO NOT rewrite sections that don't need changes — surgical integration only
-10. Keep additions concise — each improvement should be 1-2 sentences in the prompt
+8. CONSOLIDATE overlapping instructions instead of appending near-duplicates
+9. REMOVE duplicated rules, repeated sections, and redundant wording in the final revised prompt
+10. If the approved improvements overlap with existing instructions, merge them into the strongest single instruction rather than restating them
+11. DO NOT add project-specific context, temporary instructions, or example-heavy elaborations
+12. DO NOT rewrite sections that don't need changes — surgical integration only
+13. Keep additions concise — each improvement should be 1-2 sentences in the prompt
+14. The final output must read as one clean, coherent system prompt with no repeated guidance, no duplicate headings, and no conflicting or redundant instructions
 
 ## Current System Prompt
 <current_system_prompt>
@@ -100,6 +104,8 @@ Return ONLY valid JSON:
 <approved_summary>
 {approved_summary}
 </approved_summary>
+
+Before finalizing, deduplicate and consolidate the full prompt so the output is clean and dense rather than repetitive.
 
 Output ONLY the complete revised system prompt. No commentary, no explanation, no markdown wrapping, no current_system_prompt tags warning."""
 
