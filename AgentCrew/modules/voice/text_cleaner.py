@@ -6,6 +6,14 @@ from .base import BaseTextCleaner
 class TextCleaner(BaseTextCleaner):
     """Clean text for natural speech synthesis."""
 
+    @staticmethod
+    def _speakable_dotted_token(match: re.Match) -> str:
+        return match.group(0).replace(".", " dot ")
+
+    @staticmethod
+    def _speakable_colon_token(match: re.Match) -> str:
+        return match.group(0).replace(":", " colon ")
+
     def __init__(self):
         """Initialize text cleaner with patterns."""
         # Patterns to remove completely
@@ -35,7 +43,8 @@ class TextCleaner(BaseTextCleaner):
             (r"€", " euros "),  # Euro sign
             (r"£", " pounds "),  # Pound sign
             (r"@", " at "),  # At symbol
-            (r"#", " number "),  # Hash
+            (r"#", " hash "),  # Hash
+            (r"_", " underscore "),  # Underscore
             (r"/", " slash "),  # Forward slash
             (r"\\", " backslash "),  # Backslash
         ]
@@ -79,6 +88,18 @@ class TextCleaner(BaseTextCleaner):
                 text = re.sub(pattern, r"\1", text, flags=re.MULTILINE)
             else:
                 text = re.sub(pattern, "", text, flags=re.MULTILINE)
+
+        text = re.sub(
+            r"\b[A-Za-z0-9_-]+(?:\.[A-Za-z0-9_-]+)+\b",
+            self._speakable_dotted_token,
+            text,
+        )
+        text = re.sub(
+            r"\b[A-Za-z0-9_-]+(?::[A-Za-z0-9_-]+)+\b",
+            self._speakable_colon_token,
+            text,
+        )
+        text = re.sub(r"(?<=\w)-(?=\w)", " dash ", text)
 
         # Apply replacements
         for pattern, replacement in self.replacements:

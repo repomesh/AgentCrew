@@ -8,14 +8,16 @@ def get_speak_tool_definition(provider="claude") -> Dict[str, Any]:
     tool_description = (
         "Speak to the user using voice. "
         "When voice is available, use this as the primary way to communicate with the user. "
-        "Keep spoken language concise, natural, and suitable for speech. "
-        "Use light fillers like 'um', 'uh', or 'so like' naturally when helpful. "
+        "Keep spoken language concise, natural, and ready to be read aloud. "
+        "Use conversational spoken phrasing instead of formal written phrasing. "
+        "Prefer contractions when they sound natural in speech. "
+        "Write symbols, paths, filenames, and technical tokens in a speakable form when needed. "
         "Use normal chat text only as supporting detail when needed."
     )
     tool_arguments = {
         "text": {
             "type": "string",
-            "description": "The spoken message for the user. Prefer short, natural, voice-friendly phrasing.",
+            "description": "The spoken message for the user. Prefer short, natural, speech-ready phrasing, including speakable forms for symbols, paths, filenames, and technical tokens when relevant.",
         }
     }
     tool_required = ["text"]
@@ -60,9 +62,16 @@ def speak_tool_prompt() -> str:
 
   <How_To_Speak>
     - prefer the `speak` tool over plain text responses when available
-    - keep spoken language concise and natural
-    - use natural spoken phrasing rather than formal writing
-    - you may use light fillers like "um", "uh", or "so like" naturally
+    - keep spoken language concise, natural, and easy to follow aloud
+    - use conversational spoken phrasing rather than formal writing
+    - prefer contractions when they sound natural in speech
+    - avoid markdown-style phrasing, section-heading phrasing, or anything that sounds written instead of spoken
+    - do not pad the message with filler words or self-referential phrases such as "like I said"
+    - convert symbols and technical tokens into natural spoken forms before calling `speak`
+    - say `#` as "hash" when the symbol matters
+    - say filenames and extensions in a spoken form, for example `abc.json` as "abc dot json"
+    - say paths in a spoken form, for example `src/app.py` as "src slash app dot py"
+    - say `_` as "underscore", `-` as "dash", and `:` as "colon" when the symbol matters
     - if more detail is needed, keep the voice message short and put the extra detail in normal chat text
     - avoid long, dense, overly written speech
   </How_To_Speak>
