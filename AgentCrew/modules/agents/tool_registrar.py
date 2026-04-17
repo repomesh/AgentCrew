@@ -86,7 +86,7 @@ class AgentToolRegistrar:
             if agent.services and tool_name in agent.services:
                 service = agent.services[tool_name]
                 if service:
-                    if tool_name == "memory" and not agent.is_remoting_mode:
+                    if tool_name == "memory":
                         from AgentCrew.modules.memory.tool import (
                             register as register_memory,
                             adaptive_instruction_prompt,
