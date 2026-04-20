@@ -131,7 +131,7 @@ class DeepInfraVoiceService(BaseVoiceService):
                     )
 
     def clean_text_for_speech(self, text: str) -> str:
-        return self.text_cleaner.clean_for_speech(text)
+        return self.text_cleaner.clean_for_speech(text) if self.text_cleaner else text
 
     def _start_tts_thread(self):
         with self.tts_lock:
@@ -193,17 +193,44 @@ class DeepInfraVoiceService(BaseVoiceService):
     def _synthesize_tts_chunk_to_pcm_bytes(
         self, text: str, voice_id: Optional[str], model_id: Optional[str]
     ) -> bytes:
-        with self._create_tts_stream(
+        request_kwargs = self._build_tts_request_kwargs(
             text=text,
             voice_id=voice_id,
             model_id=model_id,
             response_format="pcm",
-        ) as response:
-            pcm_bytes = response.read()
+        )
+        started_at = time.perf_counter()
+        preview = request_kwargs["input"][:80].replace("\n", " ")
+        logger.info(
+            f"DeepInfra TTS API request started model={request_kwargs['model']} voice={request_kwargs['voice']} chars={len(request_kwargs['input'])} preview={preview!r}"
+        )
 
+        try:
+            with self.client.audio.speech.with_streaming_response.create(
+                **request_kwargs
+            ) as response:
+                stream_open_elapsed = time.perf_counter() - started_at
+                logger.info(
+                    f"DeepInfra TTS API stream opened after {stream_open_elapsed:.3f}s model={request_kwargs['model']} voice={request_kwargs['voice']}"
+                )
+                pcm_bytes = response.read()
+        except Exception as e:
+            failed_after = time.perf_counter() - started_at
+            logger.error(
+                f"DeepInfra TTS API request failed after {failed_after:.3f}s model={request_kwargs['model']} voice={request_kwargs['voice']}: {str(e)}"
+            )
+            raise
+
+        total_elapsed = time.perf_counter() - started_at
         if not pcm_bytes:
+            logger.warning(
+                f"DeepInfra TTS API returned empty audio after {total_elapsed:.3f}s model={request_kwargs['model']} voice={request_kwargs['voice']}"
+            )
             raise ValueError("DeepInfra PCM TTS returned empty audio")
 
+        logger.info(
+            f"DeepInfra TTS API request completed in {total_elapsed:.3f}s model={request_kwargs['model']} voice={request_kwargs['voice']} bytes={len(pcm_bytes)}"
+        )
         return pcm_bytes
 
     def _play_pcm_bytes(self, pcm_bytes: bytes) -> None:

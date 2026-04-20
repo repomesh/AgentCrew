@@ -315,7 +315,7 @@ class ChatWindow(QMainWindow, Observer):
         self._update_cost_info(input_tokens, output_tokens)
 
         voice_service = self.message_handler.voice_service
-        if voice_service and hasattr(voice_service, 'audio_handler'):
+        if voice_service and hasattr(voice_service, "audio_handler"):
             voice_service.audio_handler.is_processing = False
 
         self.ui_state_manager.set_input_controls_enabled(True)

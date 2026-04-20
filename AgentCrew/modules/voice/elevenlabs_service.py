@@ -200,7 +200,9 @@ class ElevenLabsVoiceService(BaseVoiceService):
             voice_settings=self.voice_settings,
         )
 
-        audio_chunks = [chunk for chunk in response if isinstance(chunk, bytes) and chunk]
+        audio_chunks = [
+            chunk for chunk in response if isinstance(chunk, bytes) and chunk
+        ]
         if not audio_chunks:
             raise ValueError("ElevenLabs TTS returned empty audio")
 

@@ -505,7 +505,7 @@ Available in both GUI and console interfaces:
 - `/think <level>` - Enable reasoning mode (low/medium/high)
 - `/agent_mode <mode>` - Switch agent interaction mode (transfer/delegate/none)
 - `/voice` - Start voice recording
-- `/end_voice` - Stop recording and transcribe
+- `/end_voice` - Stop voice recording
 - `/export <agents> <file>` - Export agent configurations
 - `/import <file>` - Import agent configurations
 - `exit` or `quit` - Close AgentCrew
