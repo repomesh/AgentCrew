@@ -20,10 +20,8 @@ class AudioHandler(BaseAudioHandler):
 
     def __init__(self):
         """Initialize audio handler."""
-        # Initialize parent class
         super().__init__()
 
-        # Override parent attributes and add specific implementations
         self.recording = False
         self.is_host_playing = False
         self.is_processing = False
@@ -33,9 +31,25 @@ class AudioHandler(BaseAudioHandler):
         self.silero_vad_model = None
         self._is_start_voice_activity = False
         self._is_still_speaking = False
-        self.silero_vad_model = None
         self._silent_chunk_count = 0
         self._vad_chunk_count = 0
+
+    def _drain_audio_queue(self) -> list[Any]:
+        frames = []
+        while not self.audio_queue.empty():
+            try:
+                frames.append(self.audio_queue.get_nowait())
+            except queue.Empty:
+                break
+        return frames
+
+    def _reset_voice_activity_state(self, clear_audio_queue: bool = False) -> None:
+        self._is_start_voice_activity = False
+        self._is_still_speaking = False
+        self._silent_chunk_count = 0
+        self._vad_chunk_count = 0
+        if clear_audio_queue:
+            self._drain_audio_queue()
 
     def start_recording(
         self, sample_rate: int = 44100, voice_completed_cb: Optional[Callable] = None
@@ -64,7 +78,7 @@ class AudioHandler(BaseAudioHandler):
 
         self.recording = True
         self.current_sample_rate = sample_rate
-        self.audio_queue.queue.clear()  # Clear any previous data
+        self._reset_voice_activity_state(clear_audio_queue=True)
 
         self.recording_thread = threading.Thread(
             target=self._recording_worker,
@@ -91,13 +105,8 @@ class AudioHandler(BaseAudioHandler):
         if self.recording_thread:
             self.recording_thread.join(timeout=1.0)
 
-        # Collect all recorded frames
-        frames = []
-        while not self.audio_queue.empty():
-            try:
-                frames.append(self.audio_queue.get_nowait())
-            except queue.Empty:
-                break
+        frames = self._drain_audio_queue()
+        self._reset_voice_activity_state()
 
         if frames:
             audio_data = np.concatenate(frames, axis=0).flatten()
@@ -200,32 +209,27 @@ class AudioHandler(BaseAudioHandler):
                             self._is_still_speaking = False
                             if self._is_start_voice_activity:
                                 self._silent_chunk_count += 1
-                        if (
-                            self._silent_chunk_count > SILENT_COUNT_THRESHOLD
-                            and self._vad_chunk_count > VAD_COUNT_THRESHOLD
-                        ):
-                            self._is_start_voice_activity = False
-                            self._silent_chunk_count = 0
-                            self._vad_chunk_count = 0
-                            # Collect all recorded frames
-                            frames = []
-                            while not self.audio_queue.empty():
-                                try:
-                                    frames.append(self.audio_queue.get_nowait())
-                                except queue.Empty:
-                                    break
+                        if self._silent_chunk_count > SILENT_COUNT_THRESHOLD:
+                            if self._vad_chunk_count > VAD_COUNT_THRESHOLD:
+                                frames = self._drain_audio_queue()
+                                self._reset_voice_activity_state()
 
-                            if frames:
-                                audio_data = np.concatenate(frames, axis=0).flatten()
-                                logger.info(
-                                    f"Recording stopped. Captured {len(audio_data) / self.current_sample_rate:.2f} seconds"
-                                )
-                                if voice_completed_cb:
-                                    asyncio.run(
-                                        voice_completed_cb(
-                                            audio_data, self.current_sample_rate
-                                        )
+                                if frames:
+                                    audio_data = np.concatenate(frames, axis=0).flatten()
+                                    logger.info(
+                                        f"Recording stopped. Captured {len(audio_data) / self.current_sample_rate:.2f} seconds"
                                     )
+                                    if voice_completed_cb:
+                                        asyncio.run(
+                                            voice_completed_cb(
+                                                audio_data, self.current_sample_rate
+                                            )
+                                        )
+                            elif self._is_start_voice_activity:
+                                logger.info(
+                                    "Discarding incomplete buffered audio after prolonged silence"
+                                )
+                                self._reset_voice_activity_state(clear_audio_queue=True)
                     except Exception as e:
                         logger.error(f"VAD processing error: {e}")
 

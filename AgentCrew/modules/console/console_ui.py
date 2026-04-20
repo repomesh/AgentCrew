@@ -76,7 +76,7 @@ class ConsoleUI(Observer):
         if voice_service and hasattr(voice_service, "audio_handler"):
             voice_service.audio_handler.is_processing = is_processing
             if is_processing:
-                voice_service.audio_handler.audio_queue.queue.clear()
+                voice_service.audio_handler._drain_audio_queue()
 
     def _clear_pending_input_queue(self):
         while True:
@@ -192,12 +192,14 @@ class ConsoleUI(Observer):
                 data
             )  # data is the tool use that was denied
         elif event == "response_completed" or event == "assistant_message_added":
-            self._set_voice_processing_state(False)
             parsed = parse_agent_evaluation(data)
             self.ui_effects.finish_response(
                 parsed["visible_content"],
                 planning_content=parsed["planning_content"],
             )
+            if event == "response_completed":
+                self._set_voice_processing_state(False)
+
         elif event == "stream_cancel_requested":
             self.display_handlers.display_message(
                 Text("Stopping current stream...", style=RICH_STYLE_YELLOW)
