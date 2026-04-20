@@ -314,12 +314,19 @@ class ChatWindow(QMainWindow, Observer):
         """Handle the full response from the LLM worker"""
         self._update_cost_info(input_tokens, output_tokens)
 
-        # # Reset response expectation
-        # self.expecting_response = False
-        #
-        # # Re-enable input controls
+        voice_service = self.message_handler.voice_service
+        if voice_service and hasattr(voice_service, 'audio_handler'):
+            voice_service.audio_handler.is_processing = False
+
         self.ui_state_manager.set_input_controls_enabled(True)
-        QApplication.processEvents()  # Ensure UI updates immediately
+        QApplication.processEvents()
+
+    def _set_voice_processing_state(self, is_processing: bool):
+        voice_service = self.message_handler.voice_service
+        if voice_service and hasattr(voice_service, "audio_handler"):
+            voice_service.audio_handler.is_processing = is_processing
+            if is_processing:
+                voice_service.audio_handler.audio_queue.queue.clear()
 
     @Slot(str)
     def display_error(self, error):
@@ -602,24 +609,24 @@ class ChatWindow(QMainWindow, Observer):
             self.ui_state_manager.set_input_controls_enabled(False)
             self.ui_state_manager.is_voice_activated = True
             self.message_input.setPlaceholderText(
-                "🎤 Recording... Click voice button or press Enter to stop"
+                "🎤 Recording... Click voice button to stop"
             )
             # Update voice button to show recording state
             self.input_components.update_voice_button_state(True)
         elif event == "voice_activate":
+            self._set_voice_processing_state(True)
             if data:
                 self._add_user_message_bubble(data)
             self.llm_worker.process_request.emit(data)
             self.ui_state_manager._set_send_button_state(True)
-        # elif event == "voice_recording_completed":
-        #     self.ui_state_manager.is_voice_activated = False
-        #     # Restore normal UI state
-        #     self.message_input.setPlaceholderText("Type a message...")
-        #     # Update voice button to show normal state
-        #     self.input_components.update_voice_button_state(False)
-        #     self.ui_state_manager.set_input_controls_enabled(
-        #         self.ui_state_manager._last_enabled_state
-        #     )
+        elif event == "voice_recording_completed":
+            self.ui_state_manager.is_voice_activated = False
+            self._set_voice_processing_state(False)
+            self.message_input.setPlaceholderText("Type a message...")
+            self.input_components.update_voice_button_state(False)
+            self.ui_state_manager.set_input_controls_enabled(
+                self.ui_state_manager._last_enabled_state
+            )
 
     def _add_user_message_bubble(self, data):
         self.chat_components.append_message(

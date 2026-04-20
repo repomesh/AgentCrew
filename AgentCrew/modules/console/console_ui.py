@@ -5,6 +5,8 @@ Refactored to use separate modules for different responsibilities.
 
 from __future__ import annotations
 import asyncio
+import queue
+import threading
 import time
 import sys
 import signal
@@ -52,7 +54,6 @@ class ConsoleUI(Observer):
         from .command_handlers import CommandHandlers
 
         self.message_handler = message_handler
-        self.voice_recording = False
         self.message_handler.attach(self)
 
         self._is_resizing = False
@@ -69,6 +70,52 @@ class ConsoleUI(Observer):
         self.confirmation_handler = ConfirmationHandler(self)
         self.conversation_handler = ConversationHandler(self)
         self.command_handlers = CommandHandlers(self)
+
+    def _set_voice_processing_state(self, is_processing: bool):
+        voice_service = self.message_handler.voice_service
+        if voice_service and hasattr(voice_service, "audio_handler"):
+            voice_service.audio_handler.is_processing = is_processing
+            if is_processing:
+                voice_service.audio_handler.audio_queue.queue.clear()
+
+    def _clear_pending_input_queue(self):
+        while True:
+            try:
+                self.input_handler._input_queue.get_nowait()
+            except queue.Empty:
+                break
+
+    def _process_voice_activation(self, transcript: str):
+        assistant_response = None
+        input_tokens = 0
+        output_tokens = 0
+
+        try:
+            self.input_handler.is_message_processing = True
+            should_exit, was_cleared = asyncio.run(
+                self.message_handler.process_user_input(transcript)
+            )
+
+            if should_exit or was_cleared or not self.message_handler.agent.history:
+                return
+
+            assistant_response, input_tokens, output_tokens = asyncio.run(
+                self.message_handler.get_assistant_response()
+            )
+        except Exception as e:
+            self.message_handler._notify("error", f"Voice activation failed: {str(e)}")
+        finally:
+            self.input_handler.is_message_processing = False
+            self.input_handler.voice_recording_active = False
+            self._clear_pending_input_queue()
+            self._set_voice_processing_state(False)
+
+        total_cost = self._calculate_token_usage(input_tokens, output_tokens)
+
+        if assistant_response:
+            self.display_token_usage(
+                input_tokens, output_tokens, total_cost, self.session_cost
+            )
 
     def listen(self, event: str, data: Any = None):
         """
@@ -145,6 +192,7 @@ class ConsoleUI(Observer):
                 data
             )  # data is the tool use that was denied
         elif event == "response_completed" or event == "assistant_message_added":
+            self._set_voice_processing_state(False)
             parsed = parse_agent_evaluation(data)
             self.ui_effects.finish_response(
                 parsed["visible_content"],
@@ -313,36 +361,26 @@ class ConsoleUI(Observer):
         elif event == "update_token_usage":
             self._calculate_token_usage(data["input_tokens"], data["output_tokens"])
         elif event == "voice_recording_started":
+            self.input_handler.voice_recording_active = True
             self.display_handlers.display_message(
-                Text("Start recording press Enter to stop...", style="bold yellow")
+                Text("Start recording. Press Enter to stop...", style="bold yellow")
             )
         elif event == "voice_activate":
             if data:
-                asyncio.run(self.message_handler.process_user_input(data))
-                self.input_handler.is_message_processing = True
-                # Get assistant response
-                assistant_response, input_tokens, output_tokens = asyncio.run(
-                    self.message_handler.get_assistant_response()
-                )
-                self.input_handler.is_message_processing = False
-
-                total_cost = self._calculate_token_usage(input_tokens, output_tokens)
-
-                if assistant_response:
-                    # Calculate and display token usage
-                    self.display_token_usage(
-                        input_tokens, output_tokens, total_cost, self.session_cost
-                    )
+                self._set_voice_processing_state(True)
+                threading.Thread(
+                    target=self._process_voice_activation,
+                    args=(data,),
+                    daemon=True,
+                ).start()
 
         elif event == "voice_recording_stopping":
             self.display_handlers.display_message(
                 Text("⏹️  Stopping recording...", style="bold yellow")
             )
+            self.input_handler.voice_recording_active = False
         elif event == "voice_recording_completed":
-            self.voice_recording = False
-            # Re-enable normal input
-            if hasattr(self, "input_handler"):
-                self.input_handler._start_input_thread()
+            self.input_handler.voice_recording_active = False
 
     def copy_to_clipboard(self, text: str):
         """Copy text to clipboard and show confirmation."""
@@ -718,11 +756,8 @@ class ConsoleUI(Observer):
                             )
                         continue
 
-                    elif user_input.startswith("/voice"):
-                        self.input_handler._stop_input_thread()
-                        self.voice_recording = True
                     # Start loading animation while waiting for response
-                    elif (
+                    if (
                         not user_input.startswith("/")
                         or user_input.startswith("/file ")
                         or user_input.startswith("/consolidate ")
@@ -737,12 +772,6 @@ class ConsoleUI(Observer):
                         self.message_handler.process_user_input(user_input)
                     )
 
-                    if self.voice_recording:
-                        input()
-                        should_exit, was_cleared = asyncio.run(
-                            self.message_handler.process_user_input("/end_voice")
-                        )
-                    # Exit if requested
                     if should_exit:
                         break
 

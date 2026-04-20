@@ -12,7 +12,7 @@ from .base import BaseAudioHandler
 INT16_MAX_ABS_VALUE = 32768.0
 SILERO_VAD_SAMPLE_RATE = 16000
 SILENT_COUNT_THRESHOLD = 25
-VAD_COUNT_THRESHOLD = 5
+VAD_COUNT_THRESHOLD = 3
 
 
 class AudioHandler(BaseAudioHandler):
@@ -26,6 +26,7 @@ class AudioHandler(BaseAudioHandler):
         # Override parent attributes and add specific implementations
         self.recording = False
         self.is_host_playing = False
+        self.is_processing = False
         self.recording_thread = None
         self.audio_queue = queue.Queue()
         self.current_sample_rate = 44100
@@ -127,7 +128,11 @@ class AudioHandler(BaseAudioHandler):
             def callback(indata, frames, time, status):
                 if status:
                     logger.warning(f"Recording status: {status}")
-                if self.recording and not self.is_host_playing:
+                if (
+                    self.recording
+                    and not self.is_host_playing
+                    and not self.is_processing
+                ):
                     self.audio_queue.put(indata.copy())
 
                     # Process audio for VAD
@@ -180,17 +185,15 @@ class AudioHandler(BaseAudioHandler):
                         vad_prob = self.silero_vad_model(
                             audio_tensor, SILERO_VAD_SAMPLE_RATE
                         ).item()
-                        is_silero_speech_active = vad_prob > (1 - 0.3)
-                        logger.info(
-                            f"VAD prob: {vad_prob:.3f}, Speech: {is_silero_speech_active}, Samples: {len(audio_chunk_16k)}"
-                        )
+                        is_silero_speech_active = vad_prob > (1 - 0.4)
+                        if is_silero_speech_active:
+                            logger.info(
+                                f"VAD prob: {vad_prob:.3f}, Speech: {is_silero_speech_active}, Samples: {len(audio_chunk_16k)}"
+                            )
                         if is_silero_speech_active:
                             self._silent_chunk_count = 0
-                            if not self._is_still_speaking:
-                                self._vad_chunk_count = 0
                             self._is_still_speaking = True
-                            if self._is_still_speaking:
-                                self._vad_chunk_count += 1
+                            self._vad_chunk_count += 1
                             if not self._is_start_voice_activity:
                                 self._is_start_voice_activity = True
                         else:

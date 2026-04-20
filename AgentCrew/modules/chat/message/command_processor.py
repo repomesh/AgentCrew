@@ -744,7 +744,7 @@ class CommandProcessor:
             if self.message_handler.voice_service is None:
                 self.message_handler._notify(
                     "error",
-                    "Voice service not available. Set ELEVENLABS_API_KEY or DEEPINFRA_API_KEY environment variable.",
+                    "Voice service not available. Start AgentCrew with --with-voice and set ELEVENLABS_API_KEY or DEEPINFRA_API_KEY.",
                 )
                 return CommandResult(handled=True, clear_flag=True)
 

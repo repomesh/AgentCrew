@@ -56,8 +56,8 @@ class InputHandler:
         self.is_message_processing = False
         self.swap_enter = swap_enter
         self._jumped_user_message = ""
+        self.voice_recording_active = False
 
-        # Set up key bindings
         self.kb = self._setup_key_bindings()
 
     def _setup_key_bindings(self):
@@ -66,12 +66,20 @@ class InputHandler:
         submit_keys = ("enter",) if self.swap_enter else ("escape", "enter")
         newline_keys = ("escape", "enter") if self.swap_enter else ("enter",)
 
+        def _stop_voice_recording(event):
+            if not self.voice_recording_active:
+                return False
+            event.app.exit(result="/end_voice")
+            self.voice_recording_active = False
+            return True
+
         @kb.add(Keys.ControlS)
         @kb.add(*submit_keys)
         def _(event):
             """Submit on Ctrl+S."""
+            if _stop_voice_recording(event):
+                return
             if event.current_buffer.text.strip():
-                # Allow exit commands to be submitted anytime
                 if (
                     event.current_buffer.text == "/exit"
                     or event.current_buffer.text == "/quit"
@@ -82,6 +90,8 @@ class InputHandler:
         @kb.add(*newline_keys)
         def _(event):
             """Insert newline on Enter."""
+            if _stop_voice_recording(event):
+                return
             event.current_buffer.insert_text(f"\n{PROMPT_CHAR}")
 
         @kb.add("escape", "c")  # Alt+C
@@ -136,6 +146,8 @@ class InputHandler:
 
         @kb.add(Keys.Escape)
         def _(event):
+            if _stop_voice_recording(event):
+                return
             if self.message_handler.has_active_stream():
                 try:
                     self.message_handler.request_stop_stream()
@@ -187,10 +199,13 @@ class InputHandler:
         def _(event):
             if not event.current_buffer.text:
                 prompt = Text(
-                    PROMPT_CHAR if not self.is_message_processing else "",
+                    PROMPT_CHAR
+                    if not self.is_message_processing
+                    and not self.voice_recording_active
+                    else "",
                     style=RICH_STYLE_BLUE,
                 )
-                if not self.is_message_processing:
+                if not self.is_message_processing and not self.voice_recording_active:
                     import sys
 
                     sys.stdout.write("\x1b[1A")  # cursor up one line
@@ -325,10 +340,13 @@ class InputHandler:
                 )
                 self._current_prompt_session = session
 
-                if not self.is_message_processing:
+                if not self.is_message_processing and not self.voice_recording_active:
                     self.display_handlers.print_divider("👤 YOU: ", with_time=True)
                 prompt_text = (
-                    HTML(PROMPT_CHAR) if not self.is_message_processing else ""
+                    HTML(PROMPT_CHAR)
+                    if not self.is_message_processing
+                    and not self.voice_recording_active
+                    else ""
                 )
                 user_input = session.prompt(prompt_text)
 
@@ -409,11 +427,12 @@ class InputHandler:
             )
             self._start_input_thread()
         else:
-            self.display_handlers.print_prompt_prefix(
-                self.message_handler.agent.name,
-                self.message_handler.agent.get_model(),
-                self.message_handler.tool_manager.get_effective_yolo_mode(),
-            )
+            if not self.voice_recording_active:
+                self.display_handlers.print_prompt_prefix(
+                    self.message_handler.agent.name,
+                    self.message_handler.agent.get_model(),
+                    self.message_handler.tool_manager.get_effective_yolo_mode(),
+                )
             self.clear_buffer()
 
         # Wait for input while allowing events to be processed
@@ -425,6 +444,9 @@ class InputHandler:
                 # Add None check here
                 if user_input is None:
                     continue
+
+                if user_input == "/voice":
+                    self.voice_recording_active = True
 
                 if user_input == "__EXIT__":
                     self.console.print(
