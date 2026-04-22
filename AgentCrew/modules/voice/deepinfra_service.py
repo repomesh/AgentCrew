@@ -164,12 +164,11 @@ class DeepInfraVoiceService(BaseVoiceService):
         model_id: Optional[str],
         response_format: Optional[str] = None,
     ) -> Dict[str, Any]:
-        cleaned_text = self.clean_text_for_speech(text)
-        if not cleaned_text.strip():
+        if not text.strip():
             raise ValueError("No speakable text after cleaning")
 
         return {
-            "input": cleaned_text,
+            "input": text,
             "model": model_id or self.default_model,
             "voice": voice_id or self.default_voice_id,
             "response_format": response_format or DEEPINFRA_TTS_RESPONSE_FORMAT,

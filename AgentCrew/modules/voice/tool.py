@@ -91,7 +91,7 @@ def get_speak_tool_handler(voice_service, agent=None) -> Callable:
 
         voice_id = getattr(agent, "voice_id", None) if agent is not None else None
         voice_service.text_to_speech_stream(text, voice_id=voice_id)
-        return "[Done]"
+        return "Speak completed successfully"
 
     return handle_speak
 
