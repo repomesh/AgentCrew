@@ -104,10 +104,10 @@ class RedisTaskStore(TaskStore):
         self, task_id: str
     ) -> List[Union[TaskStatusUpdateEvent, TaskArtifactUpdateEvent]]:
         r = await self._get_redis()
-        data = await r.get(self._key("events", task_id))
-        if data is None:
-            return []
-        raw_events = json.loads(data)
+        raw_events = [
+            json.loads(item)
+            for item in await r.lrange(self._key("events", task_id), 0, -1)
+        ]
         return self.deserialize_events(raw_events)
 
     async def append_task_events(
@@ -121,13 +121,13 @@ class RedisTaskStore(TaskStore):
             return
         r = await self._get_redis()
         key = self._key("events", task_id)
-        data = await r.get(key)
-        events = json.loads(data) if data else []
-        events.extend(
-            json.loads(event.model_dump_json(exclude_none=True))
-            for event in events_to_append
-        )
-        await r.set(key, json.dumps(events), ex=self.ttl)
+        payloads = [
+            event.model_dump_json(exclude_none=True) for event in events_to_append
+        ]
+        async with r.pipeline(transaction=True) as pipe:
+            await pipe.rpush(key, *payloads)
+            await pipe.expire(key, self.ttl)
+            await pipe.execute()
 
     async def append_task_event(
         self,

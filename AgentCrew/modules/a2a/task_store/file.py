@@ -30,7 +30,7 @@ class FileTaskStore(TaskStore):
         return self.base_dir / "history" / f"{context_id}.json"
 
     def _events_path(self, task_id: str) -> Path:
-        return self.base_dir / "events" / f"{task_id}.json"
+        return self.base_dir / "events" / f"{task_id}.jsonl"
 
     def _pending_path(self, task_id: str) -> Path:
         return self.base_dir / "tasks" / f"{task_id}_pending.json"
@@ -97,7 +97,11 @@ class FileTaskStore(TaskStore):
             path = self._events_path(self._safe_filename(task_id))
             if not path.exists():
                 return []
-            raw_events = json.loads(path.read_text())
+            raw_events = [
+                json.loads(line)
+                for line in path.read_text().splitlines()
+                if line.strip()
+            ]
             return self.deserialize_events(raw_events)
 
     async def append_task_events(
@@ -112,14 +116,10 @@ class FileTaskStore(TaskStore):
 
         async with self.lock:
             path = self._events_path(self._safe_filename(task_id))
-            events = []
-            if path.exists():
-                events = json.loads(path.read_text())
-            events.extend(
-                json.loads(event.model_dump_json(exclude_none=True))
-                for event in events_to_append
-            )
-            path.write_text(json.dumps(events))
+            with path.open("a", encoding="utf-8") as f:
+                for event in events_to_append:
+                    f.write(event.model_dump_json(exclude_none=True))
+                    f.write("\n")
 
     async def append_task_event(
         self,

@@ -63,6 +63,30 @@ class TaskExecutionEngine:
             assistant_messages.append(normalized_current_response)
         return assistant_messages
 
+    def _extract_last_user_message_for_memory(self, task_history: list[dict]) -> str:
+        for message in reversed(task_history):
+            if not isinstance(message, dict) or message.get("role") != "user":
+                continue
+            content = message.get("content", [])
+            if isinstance(content, str):
+                normalized = content.strip()
+                if normalized:
+                    return normalized
+                continue
+            text_parts: list[str] = []
+            for part in content:
+                if isinstance(part, str):
+                    normalized = part.strip()
+                    if normalized:
+                        text_parts.append(normalized)
+                elif isinstance(part, dict) and part.get("type") == "text":
+                    normalized = str(part.get("text", "")).strip()
+                    if normalized:
+                        text_parts.append(normalized)
+            if text_parts:
+                return " ".join(text_parts)
+        return ""
+
     def __init__(
         self,
         store: TaskStore,
@@ -139,7 +163,7 @@ class TaskExecutionEngine:
                 await self.streaming.signal_end(task.id)
         finally:
             self.cancellation.cleanup(task.id)
-            self.streaming.cleanup(task.id)
+            await self.streaming.cleanup(task.id)
             self.interaction.cleanup(task.id)
 
     async def _process_task(
@@ -458,7 +482,7 @@ class TaskExecutionEngine:
                     task.context_id, assistant_message
                 )
             if self.memory_service:
-                user_message = task_history[0].get("content", [{}])[0].get("text", "")
+                user_message = self._extract_last_user_message_for_memory(task_history)
                 assistant_messages = self._extract_assistant_messages_for_memory(
                     task_history, current_response
                 )

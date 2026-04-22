@@ -28,8 +28,8 @@ class TaskStreamingManager:
         ] = defaultdict(list)
         self.flush_tasks: Dict[str, asyncio.Task] = {}
         self.flush_locks: Dict[str, asyncio.Lock] = {}
-        self.flush_interval_seconds = 1.15
-        self.max_buffered_events_per_task = 50
+        self.flush_interval_seconds = 0.75
+        self.max_buffered_events_per_task = 25
 
     def enable_streaming(self, task_id: str) -> asyncio.Queue:
         self.streaming_enabled_tasks.add(task_id)
@@ -124,11 +124,8 @@ class TaskStreamingManager:
             status=canceled_status,
             final=True,
         )
-        for key in list(self.streaming_tasks.keys()):
-            if key.startswith(task_id):
-                queue = self.streaming_tasks[key]
-                await queue.put(cancel_event)
-                await queue.put(None)
+        await self.record_and_emit_event(task_id, cancel_event)
+        await self.signal_end(task_id)
 
     def drain_nowait(self, task_id: str) -> None:
         for key in list(self.streaming_tasks.keys()):
@@ -149,7 +146,8 @@ class TaskStreamingManager:
     def remove_subscriber(self, key: str) -> None:
         self.streaming_tasks.pop(key, None)
 
-    def cleanup(self, task_id: str) -> None:
+    async def cleanup(self, task_id: str) -> None:
+        await self.flush_task_events(task_id)
         self.streaming_enabled_tasks.discard(task_id)
         self.streaming_tasks.pop(task_id, None)
         self._cancel_flush_task(task_id)

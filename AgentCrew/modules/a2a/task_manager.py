@@ -406,7 +406,7 @@ class AgentTaskManager(TaskManager):
             if task and self._is_terminal_state(task.status.state):
                 if self._is_expired(task.status.timestamp or "", retention):
                     await self.store.cleanup_task(task_id)
-                    self.streaming.cleanup(task_id)
+                    await self.streaming.cleanup(task_id)
 
     async def on_send_task_subscribe(
         self, request: SendStreamingMessageRequest
