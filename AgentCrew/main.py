@@ -441,6 +441,53 @@ def chatgpt_auth():
     app.chatgpt_login()
 
 
+@cli.command("create-agent")
+@common_options
+@click.option(
+    "--name",
+    "-n",
+    default=None,
+    help="Name for the new agent (will prompt interactively if omitted)",
+)
+@click.option(
+    "--description",
+    "-d",
+    default=None,
+    help="Description of what the agent should do (will prompt interactively if omitted)",
+)
+def create_agent_command(
+    provider, agent_config, mcp_config, memory_llm, memory_path, name, description
+):
+    """Create a new agent interactively using the same flow as onboarding"""
+    from AgentCrew.setup import ApplicationSetup
+    from AgentCrew.modules.onboarding import OnboardingService
+    from AgentCrew.modules.config import ConfigManagement
+
+    if memory_path:
+        os.environ["MEMORYDB_PATH"] = memory_path
+    if agent_config:
+        os.environ["SW_AGENTS_CONFIG"] = agent_config
+
+    setup = ApplicationSetup(ConfigManagement())
+    setup.load_api_keys_from_config()
+
+    detected_provider = provider or setup.detect_provider()
+    if not detected_provider:
+        click.echo(
+            "No LLM provider configured. Please set an API key or use --provider.",
+            err=True,
+        )
+        raise SystemExit(1)
+
+    services = setup.setup_services(
+        detected_provider, memory_llm=memory_llm, need_memory=False, with_voice=False
+    )
+    onboarding = OnboardingService(services["llm"])
+    success = onboarding.create_agent(name=name, description=description)
+    if not success:
+        raise SystemExit(1)
+
+
 if __name__ == "__main__":
     """Check for updates and update AgentCrew if a new version is available"""
     cli()
