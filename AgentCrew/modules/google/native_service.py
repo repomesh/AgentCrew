@@ -65,15 +65,17 @@ class GoogleAINativeService(BaseLLMService):
     This service connects to Google's Gemini models using the official Google GenAI SDK.
     """
 
-    def __init__(self):
+    def __init__(self, api_key=None, base_url=None):
         """Initialize the Google GenAI service."""
         load_dotenv()
-        api_key = os.getenv("GEMINI_API_KEY")
+        api_key = api_key or os.getenv("GEMINI_API_KEY")
+        base_url = base_url or os.getenv("GEMINI_BASE_URL")
         if not api_key:
             raise ValueError("GEMINI_API_KEY not found in environment variables")
 
         # Initialize the Google GenAI client
-        self.client = genai.Client(api_key=api_key)
+        http_options = types.HttpOptions(base_url=base_url) if base_url else None
+        self.client = genai.Client(api_key=api_key, http_options=http_options)
 
         # Default model
         self.model = "gemini-2.5-flash-preview-05-20"

@@ -15,10 +15,10 @@ class OpenAIResponseService(BaseLLMService):
     def __init__(self, api_key=None, base_url=None):
         load_dotenv()
         self.api_key = api_key or os.getenv("OPENAI_API_KEY")
-        self.base_url = base_url
+        self.base_url = base_url or os.getenv("OPENAI_BASE_URL")
         if not self.api_key:
             raise ValueError("OPENAI_API_KEY not found in environment variables")
-        self.client = AsyncOpenAI(api_key=self.api_key, base_url=base_url)
+        self.client = AsyncOpenAI(api_key=self.api_key, base_url=self.base_url)
 
         # Set default model
         self.model = "gpt-4.1"

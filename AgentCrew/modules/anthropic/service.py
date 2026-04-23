@@ -13,12 +13,13 @@ from loguru import logger
 class AnthropicService(BaseLLMService):
     """Anthropic-specific implementation of the LLM service."""
 
-    def __init__(self):
+    def __init__(self, api_key=None, base_url=None):
         load_dotenv()
-        api_key = os.getenv("ANTHROPIC_API_KEY")
+        api_key = api_key or os.getenv("ANTHROPIC_API_KEY")
+        base_url = base_url or os.getenv("ANTHROPIC_BASE_URL")
         if not api_key:
             raise ValueError("ANTHROPIC_API_KEY not found in environment variables")
-        self.client = AsyncAnthropic(api_key=api_key)
+        self.client = AsyncAnthropic(api_key=api_key, base_url=base_url)
         self.model = "claude-3-7-sonnet-latest"
         # self.model = "claude-3-5-haiku-latest"
         self.tools = []  # Initialize empty tools list
