@@ -13,7 +13,7 @@ from loguru import logger
 class AnthropicService(BaseLLMService):
     """Anthropic-specific implementation of the LLM service."""
 
-    def __init__(self, api_key=None, base_url=None):
+    def __init__(self, api_key=None, base_url=None, provider_name="claude"):
         load_dotenv()
         api_key = api_key or os.getenv("ANTHROPIC_API_KEY")
         base_url = base_url or os.getenv("ANTHROPIC_BASE_URL")
@@ -27,8 +27,8 @@ class AnthropicService(BaseLLMService):
         self.thinking_enabled = False
         self.thinking_budget = 0
         self.caching_blocks = 0
-        self._provider_name = "claude"
-        self.system_prompt = ""
+        self._provider_name = provider_name
+        self.system_prompt = "You are a helful assistant"
         logger.info("Initialized Anthropic Service")
 
     async def close(self):

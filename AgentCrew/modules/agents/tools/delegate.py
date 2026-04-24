@@ -115,8 +115,14 @@ def get_delegate_tool_handler(agent_manager: AgentManager) -> Callable:
         )
 
         llm_manager = LLMServiceManager.get_instance()
-        provider = target_agent.llm.provider_name
-        fresh_llm = llm_manager.initialize_standalone_service(provider)
+        from AgentCrew.modules.llm.model_registry import ModelRegistry
+
+        registry = ModelRegistry.get_instance()
+        model = registry.get_model(target_agent.get_model())
+        service_name = (
+            model.resolved_service_name() if model else target_agent.llm.provider_name
+        )
+        fresh_llm = llm_manager.initialize_standalone_service(service_name)
         fresh_llm.model = target_agent.llm.model
 
         clone = LocalAgent(

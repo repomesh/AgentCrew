@@ -1,8 +1,12 @@
-from typing import Dict, Optional, Callable
+from __future__ import annotations
+from typing import Dict, Optional, Callable, TYPE_CHECKING
 from AgentCrew.modules.llm.base import BaseLLMService
 from AgentCrew.modules.llm.model_registry import ModelRegistry
 from loguru import logger
 import os
+
+if TYPE_CHECKING:
+    from AgentCrew.modules.llm.types import Model
 
 
 class ServiceManager:
@@ -26,15 +30,18 @@ class ServiceManager:
 
         self.services: Dict[str, BaseLLMService] = {}
 
-        # Lazy import factories - only import when called
+        # Lazy import factories keyed by service implementation name.
+        # A single vendor (e.g. openai) may expose multiple service families.
         self.service_factories: Dict[str, Callable[[], BaseLLMService]] = {
             "claude": self._create_anthropic_service,
             "openai": self._create_openai_service,
+            "openai_response": self._create_openai_response_service,
             "openai_codex": self._create_openai_codex_service,
             "google": self._create_google_service,
             "deepinfra": self._create_deepinfra_service,
             "together": self._create_together_service,
             "opencode_go": self._create_opencode_go_service,
+            "opencode_anthropic": self._create_opencode_anthropic_service,
             "github_copilot": self._create_github_copilot_service,
             "copilot_response": self._create_copilot_response_service,
         }
@@ -52,8 +59,29 @@ class ServiceManager:
             return AnthropicService()
         raise RuntimeError("API key for Anthropic not found.")
 
+    def _create_opencode_anthropic_service(self) -> BaseLLMService:
+        if os.getenv("OPENCODE_API_KEY"):
+            from AgentCrew.modules.anthropic import AnthropicService
+
+            llm = AnthropicService(
+                os.getenv("OPENCODE_API_KEY"),
+                "https://opencode.ai/zen/go",
+                provider_name="opencode_go",
+            )
+            llm.model = "minimax-m2.7"
+            return llm
+        raise RuntimeError("API key for Anthropic not found.")
+
     def _create_openai_service(self) -> BaseLLMService:
-        """Lazy import and create OpenAI service."""
+        """Lazy import and create OpenAI Chat Completions service."""
+        if os.getenv("OPENAI_API_KEY"):
+            from AgentCrew.modules.openai.service import OpenAIService
+
+            return OpenAIService()
+        raise RuntimeError("API key for OpenAI not found.")
+
+    def _create_openai_response_service(self) -> BaseLLMService:
+        """Lazy import and create OpenAI Response API service."""
         if os.getenv("OPENAI_API_KEY"):
             from AgentCrew.modules.openai import OpenAIResponseService
 
@@ -94,11 +122,13 @@ class ServiceManager:
         """Lazy import and create OpenCode Go service."""
         api_key = os.getenv("OPENCODE_API_KEY")
         if api_key:
-            return self._create_custom_llm_service(
+            llm = self._create_custom_llm_service(
                 base_url="https://opencode.ai/zen/go/v1",
                 api_key=api_key,
                 provider_name="opencode_go",
             )
+            llm.model = "glm-5.1"
+            return llm
         raise RuntimeError("API key for OpenCode Go not found.")
 
     def _create_github_copilot_service(
@@ -112,7 +142,7 @@ class ServiceManager:
         raise RuntimeError("API key for GitHub Copilot not found.")
 
     def _create_copilot_response_service(
-        self, api_key: Optional[str] = None, provider_name: str = "copilot_response"
+        self, api_key: Optional[str] = None, provider_name: str = "github_copilot"
     ) -> BaseLLMService:
         """Lazy import and create Copilot Response service."""
         if os.getenv("GITHUB_COPILOT_API_KEY"):
@@ -168,19 +198,19 @@ class ServiceManager:
                 f"Error loading custom LLM provider configurations for services: {e}"
             )
 
-    def initialize_standalone_service(self, provider: str) -> BaseLLMService:
+    def initialize_standalone_service(self, service_name: str) -> BaseLLMService:
         """
-        Initializes and returns a new service instance for the specified provider.
+        Initializes and returns a new service instance for the specified service name.
         This does not cache the service instance in self.services.
         """
-        if provider in self.custom_provider_details:
-            details = self.custom_provider_details[provider]
+        if service_name in self.custom_provider_details:
+            details = self.custom_provider_details[service_name]
             api_key = details.get("api_key", "")
             extra_headers = details.get("extra_headers", None)
 
             if not details.get("api_base_url"):
                 raise ValueError(
-                    f"Missing api_base_url for custom provider: {provider}"
+                    f"Missing api_base_url for custom provider: {service_name}"
                 )
 
             if (
@@ -190,49 +220,55 @@ class ServiceManager:
             ):
                 # Special case for GitHub Copilot compatible providers
                 return self._create_github_copilot_service(
-                    api_key=api_key, provider_name=provider
+                    api_key=api_key, provider_name=service_name
                 )
             else:
                 return self._create_custom_llm_service(
                     base_url=details["api_base_url"],
                     api_key=api_key,
-                    provider_name=provider,
+                    provider_name=service_name,
                     extra_headers=extra_headers,
                 )
-        elif provider in self.service_factories:
-            return self.service_factories[provider]()
+        elif service_name in self.service_factories:
+            return self.service_factories[service_name]()
         else:
-            known_providers = list(self.service_factories.keys()) + list(
+            known = list(self.service_factories.keys()) + list(
                 self.custom_provider_details.keys()
             )
             raise ValueError(
-                f"Unknown provider: {provider}. Available providers: {', '.join(sorted(list(set(known_providers))))}"
+                f"Unknown service: {service_name}. Available services: {', '.join(sorted(list(set(known))))}"
             )
 
-    def get_service(self, provider: str) -> BaseLLMService:
+    def initialize_standalone_service_for_model(self, model: "Model") -> BaseLLMService:
+        """Initialize a standalone service for the given model."""
+        return self.initialize_standalone_service(model.resolved_service_name())
+
+    def get_service(
+        self, service_name: str, provider_name: Optional[str] = None
+    ) -> BaseLLMService:
         """
-        Get or create a service instance for the specified provider.
+        Get or create a service instance for the specified service name.
         Caches the instance for subsequent calls.
 
         Args:
-            provider: The provider name
+            service_name: The service implementation name (e.g. "openai", "openai_response")
 
         Returns:
             An instance of the appropriate LLM service
         """
-        if provider in self.services:
-            return self.services[provider]
+        if service_name in self.services:
+            return self.services[service_name]
 
         service_instance: Optional[BaseLLMService] = None
 
-        if provider in self.custom_provider_details:
-            details = self.custom_provider_details[provider]
+        if service_name in self.custom_provider_details:
+            details = self.custom_provider_details[service_name]
             api_key = details.get("api_key", "")
             extra_headers = details.get("extra_headers", None)
 
             if not details.get("api_base_url"):
                 raise RuntimeError(
-                    f"Configuration error: Missing api_base_url for custom provider {provider}"
+                    f"Configuration error: Missing api_base_url for custom provider {service_name}"
                 )
 
             try:
@@ -243,54 +279,84 @@ class ServiceManager:
                 ):
                     # Special case for GitHub Copilot compatible providers
                     service_instance = self._create_github_copilot_service(
-                        api_key=api_key, provider_name=provider
+                        api_key=api_key, provider_name=service_name
                     )
                 else:
                     service_instance = self._create_custom_llm_service(
                         base_url=details["api_base_url"],
                         api_key=api_key,
-                        provider_name=provider,
+                        provider_name=provider_name or service_name,
                         extra_headers=extra_headers,
                     )
             except Exception as e:
                 raise RuntimeError(
-                    f"Failed to initialize custom provider service '{provider}': {str(e)}"
+                    f"Failed to initialize custom provider service '{service_name}': {str(e)}"
                 )
 
-        elif provider in self.service_factories:
+        elif service_name in self.service_factories:
             try:
-                service_instance = self.service_factories[provider]()
+                service_instance = self.service_factories[service_name]()
             except Exception as e:
                 raise RuntimeError(
-                    f"Failed to initialize built-in '{provider}' service: {str(e)}"
+                    f"Failed to initialize built-in '{service_name}' service: {str(e)}"
                 )
 
         if service_instance:
-            self.services[provider] = service_instance
+            self.services[service_name] = service_instance
             return service_instance
         else:
-            known_providers = list(self.service_factories.keys()) + list(
+            known = list(self.service_factories.keys()) + list(
                 self.custom_provider_details.keys()
             )
             raise ValueError(
-                f"Unknown provider: {provider}. Available providers: {', '.join(sorted(list(set(known_providers))))}"
+                f"Unknown service: {service_name}. Available services: {', '.join(sorted(list(set(known))))}"
             )
 
-    def set_model(self, provider: str, model_id: str) -> bool:
+    def get_service_for_model(self, model: Model) -> BaseLLMService:
         """
-        Set the model for a specific provider.
+        Get or create a service instance for the given model,
+        using the model's declared service_name.
+        """
+        return self.get_service(model.resolved_service_name(), model.provider)
+
+    def get_service_for_provider(self, provider: str) -> BaseLLMService:
+        """
+        Get or create a service instance for the given provider name,
+        by resolving the provider's default model and using its service_name.
+        This preserves backward compatibility when only a provider string is known.
+        """
+        registry = ModelRegistry.get_instance()
+        models = registry.get_models_by_provider(provider)
+        if models:
+            default_model = next((m for m in models if m.default), models[0])
+            return self.get_service_for_model(default_model)
+        # Fallback: treat provider as a direct service name
+        return self.get_service(provider)
+
+    def set_model(self, service_name: str, model_id: str) -> bool:
+        """
+        Set the model for a specific service.
 
         Args:
-            provider: The provider name
+            service_name: The service implementation name
             model_id: The model ID to use
 
         Returns:
             True if successful, False otherwise
         """
-        service = self.get_service(provider)
+        service = self.get_service(service_name)
         if hasattr(service, "model"):
             service.model = model_id
-            self.apply_model_defaults(service, provider, model_id)
+            self.apply_model_defaults(service, service_name, model_id)
+            return True
+        return False
+
+    def set_model_for_model(self, model: "Model") -> bool:
+        """Set the model on the service instance declared by the given model."""
+        service = self.get_service_for_model(model)
+        if hasattr(service, "model"):
+            service.model = model.id
+            self.apply_model_defaults(service, model.provider, model.id)
             return True
         return False
 

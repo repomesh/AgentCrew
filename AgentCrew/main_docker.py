@@ -80,7 +80,8 @@ def get_current_version():
 
 @cli.command()
 @common_options
-def chat(provider, agent_config, mcp_config, memory_llm, memory_path):
+@click.option("--model-id", default=None, help="Model ID from provider")
+def chat(provider, agent_config, mcp_config, memory_llm, memory_path, model_id):
     """Start an interactive chat session with LLM"""
     from AgentCrew.app import AgentCrewApplication
 
@@ -88,7 +89,7 @@ def chat(provider, agent_config, mcp_config, memory_llm, memory_path):
         os.environ["MEMORYDB_PATH"] = memory_path
 
     app = AgentCrewApplication()
-    app.run_console(provider, agent_config, mcp_config, memory_llm)
+    app.run_console(provider, agent_config, mcp_config, memory_llm, model_id=model_id)
 
 
 @cli.command()

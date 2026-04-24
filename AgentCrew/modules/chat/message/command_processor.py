@@ -536,9 +536,9 @@ class CommandProcessor:
         if registry.set_current_model(model_id):
             model = registry.get_current_model()
             if model:
-                manager.set_model(model.provider, model.id)
+                manager.set_model_for_model(model)
 
-                new_llm_service = manager.get_service(model.provider)
+                new_llm_service = manager.get_service_for_model(model)
 
                 self.message_handler.agent_manager.update_llm_service(new_llm_service)
 

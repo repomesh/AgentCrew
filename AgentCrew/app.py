@@ -82,6 +82,7 @@ class AgentCrewApplication:
         mcp_config: Optional[str] = None,
         memory_llm: Optional[str] = None,
         with_voice: bool = False,
+        model_id: Optional[str] = None,
     ) -> None:
         from AgentCrew.modules.console import ConsoleUI
         from AgentCrew.modules.chat import MessageHandler
@@ -96,7 +97,7 @@ class AgentCrewApplication:
                     )
 
             services = self.setup.setup_services(
-                provider, memory_llm, with_voice=with_voice
+                provider, memory_llm, with_voice=with_voice, model_id=model_id
             )
 
             if mcp_config:
@@ -131,6 +132,7 @@ class AgentCrewApplication:
         mcp_config: Optional[str] = None,
         memory_llm: Optional[str] = None,
         with_voice: bool = False,
+        model_id: Optional[str] = None,
     ) -> None:
         from PySide6.QtCore import QCoreApplication
         from PySide6.QtCore import Qt
@@ -152,7 +154,7 @@ class AgentCrewApplication:
                     sys.exit(app.exec())
 
             services = self.setup.setup_services(
-                provider, memory_llm, with_voice=with_voice
+                provider, memory_llm, with_voice=with_voice, model_id=model_id
             )
 
             if mcp_config:
@@ -210,7 +212,7 @@ class AgentCrewApplication:
 
             need_memory = bool(memory_path)
             services = self.setup.setup_services(
-                provider, memory_llm, need_memory=need_memory
+                provider, memory_llm, need_memory=need_memory, model_id=model_id
             )
 
             if mcp_config:
@@ -337,6 +339,7 @@ class AgentCrewApplication:
                 provider,
                 memory_llm,
                 need_memory=False,
+                model_id=model_id,
             )
 
             if mcp_config:
@@ -347,10 +350,21 @@ class AgentCrewApplication:
             self.setup.setup_agents(services, agent_config)
 
             llm_manager = ServiceManager.get_instance()
+            registry = ModelRegistry.get_instance()
 
-            llm_service = llm_manager.get_service(provider)
             if model_id:
-                llm_service.model = model_id
+                model = registry.get_model(model_id)
+                if model:
+                    llm_service = llm_manager.get_service_for_model(model)
+                    llm_manager.apply_model_defaults(
+                        llm_service, model.provider, model.id
+                    )
+                    llm_service.model = model.id
+                else:
+                    llm_service = llm_manager.get_service_for_provider(provider)
+                    llm_service.model = model_id
+            else:
+                llm_service = llm_manager.get_service_for_provider(provider)
 
             if self.agent_manager is None:
                 raise ValueError("Agent manager is not initialized")

@@ -285,8 +285,16 @@ def run_update_command():
     default=False,
     help="Enable voice input/output (if supported by the agent)",
 )
+@click.option("--model-id", default=None, help="Model ID from provider")
 def chat(
-    provider, agent_config, mcp_config, memory_llm, memory_path, console, with_voice
+    provider,
+    agent_config,
+    mcp_config,
+    memory_llm,
+    memory_path,
+    console,
+    with_voice,
+    model_id,
 ):
     """Start an interactive chat session with LLM"""
     check_and_update()
@@ -298,9 +306,13 @@ def chat(
     app = AgentCrewApplication()
 
     if console:
-        app.run_console(provider, agent_config, mcp_config, memory_llm, with_voice)
+        app.run_console(
+            provider, agent_config, mcp_config, memory_llm, with_voice, model_id
+        )
     else:
-        app.run_gui(provider, agent_config, mcp_config, memory_llm, with_voice)
+        app.run_gui(
+            provider, agent_config, mcp_config, memory_llm, with_voice, model_id
+        )
 
 
 @cli.command()

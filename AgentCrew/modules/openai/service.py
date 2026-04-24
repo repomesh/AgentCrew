@@ -24,7 +24,7 @@ class OpenAIService(BaseLLMService):
         self.tools = []  # Initialize empty tools list
         self.tool_handlers = {}  # Map tool names to handler functions
         self._provider_name = "openai"
-        self.system_prompt = ""
+        self.system_prompt = "You are a helpful assistant"
         self.reasoning_effort = None
         logger.info("Initialized OpenAI Service")
 

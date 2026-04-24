@@ -82,6 +82,7 @@ _OPENAI_MODELS = [
     Model(
         id="gpt-5",
         provider="openai",
+        service_name="openai_response",
         name="GPT-5",
         description="GPT-5 is our flagship model for coding, reasoning, and agentic tasks across domains",
         capabilities=["tool_use", "vision", "thinking", "stream", "structured_output"],
@@ -92,6 +93,7 @@ _OPENAI_MODELS = [
     Model(
         id="gpt-5-codex",
         provider="openai",
+        service_name="openai_response",
         name="GPT-5 Codex",
         description="GPT-5-Codex is a version of GPT-5 optimized for agentic coding tasks in Codex or similar environments",
         capabilities=["tool_use", "vision", "thinking", "stream", "structured_output"],
@@ -101,6 +103,7 @@ _OPENAI_MODELS = [
     Model(
         id="gpt-5.1",
         provider="openai",
+        service_name="openai_response",
         name="GPT-5.1",
         description="GPT-5 is our flagship model for coding, reasoning, and agentic tasks across domains",
         capabilities=["tool_use", "vision", "thinking", "stream", "structured_output"],
@@ -111,6 +114,7 @@ _OPENAI_MODELS = [
     Model(
         id="gpt-5.2",
         provider="openai",
+        service_name="openai_response",
         name="GPT-5.2",
         description="GPT-5 is our flagship model for coding, reasoning, and agentic tasks across domains",
         capabilities=["tool_use", "vision", "thinking", "stream", "structured_output"],
@@ -121,6 +125,7 @@ _OPENAI_MODELS = [
     Model(
         id="gpt-5.4",
         provider="openai",
+        service_name="openai_response",
         name="GPT-5.4",
         default_reasoning="high",
         description="GPT-5 is our flagship model for coding, reasoning, and agentic tasks across domains",
@@ -132,6 +137,7 @@ _OPENAI_MODELS = [
     Model(
         id="gpt-5.1-codex",
         provider="openai",
+        service_name="openai_response",
         name="GPT-5.1 Codex",
         description="GPT-5-Codex is a version of GPT-5 optimized for agentic coding tasks in Codex or similar environments",
         capabilities=["tool_use", "vision", "thinking", "stream", "structured_output"],
@@ -141,6 +147,7 @@ _OPENAI_MODELS = [
     Model(
         id="gpt-5.1-codex-mini",
         provider="openai",
+        service_name="openai_response",
         name="GPT-5.1 Codex Mini",
         description="GPT-5-Codex is a version of GPT-5 optimized for agentic coding tasks in Codex or similar environments",
         capabilities=["tool_use", "vision", "thinking", "stream", "structured_output"],
@@ -150,6 +157,7 @@ _OPENAI_MODELS = [
     Model(
         id="gpt-5.1-codex-max",
         provider="openai",
+        service_name="openai_response",
         name="GPT-5.1 Codex Max",
         description="GPT‑5.1-Codex-Max is purpose-built for agentic coding",
         capabilities=["tool_use", "vision", "thinking", "stream", "structured_output"],
@@ -159,6 +167,7 @@ _OPENAI_MODELS = [
     Model(
         id="gpt-4.1-mini",
         provider="openai",
+        service_name="openai_response",
         name="GPT-4.1 Mini",
         description="small, quick GPT model",
         capabilities=["tool_use", "vision", "stream", "structured_output"],
@@ -168,6 +177,7 @@ _OPENAI_MODELS = [
     Model(
         id="gpt-4.1",
         provider="openai",
+        service_name="openai_response",
         name="GPT-4.1",
         description="Flagship model for complex tasks. It is well suited for problem solving across domains",
         capabilities=["tool_use", "vision", "stream", "structured_output"],
@@ -177,6 +187,7 @@ _OPENAI_MODELS = [
     Model(
         id="o3-mini",
         provider="openai",
+        service_name="openai_response",
         name="GPT o3 mini",
         description="Fast, flexible, intelligent reasoning model",
         capabilities=["thinking", "stream", "structured_output"],
@@ -186,6 +197,7 @@ _OPENAI_MODELS = [
     Model(
         id="o4-mini",
         provider="openai",
+        service_name="openai_response",
         name="GPT o4 mini",
         description="o4-mini is our latest small o-series model. It's optimized for fast, effective reasoning with exceptionally efficient performance in coding and visual tasks.",
         capabilities=["thinking", "tool_use", "vision", "stream", "structured_output"],
@@ -195,6 +207,7 @@ _OPENAI_MODELS = [
     Model(
         id="o3",
         provider="openai",
+        service_name="openai_response",
         name="GPT o3",
         description="a well-rounded and powerful model across domains. It sets a new standard for math, science, coding, and visual reasoning tasks. ",
         capabilities=["thinking", "tool_use", "vision", "stream", "structured_output"],
@@ -490,6 +503,16 @@ _DEEPINFRA_MODELS = [
         output_token_price_1m=2.0,
     ),
     Model(
+        id="moonshotai/Kimi-K2.6",
+        provider="deepinfra",
+        name="Kimi K2.6",
+        description="Kimi K2.6 is an open-source, native multimodal agentic model built through continual pretraining on approximately 15 trillion mixed visual and text tokens atop Kimi-K2-Base",
+        capabilities=["tool_use", "stream", "structured_output", "vision"],
+        force_sample_params=SampleParam(temperature=0.6),
+        input_token_price_1m=0.75,
+        output_token_price_1m=3.5,
+    ),
+    Model(
         id="MiniMaxAI/MiniMax-M2.5",
         provider="deepinfra",
         name="MiniMax-M2.5",
@@ -694,12 +717,37 @@ _OPENCODE_GO_MODELS = [
         input_token_price_1m=0.0,
         output_token_price_1m=0.0,
     ),
+    Model(
+        id="minimax-m2.7",
+        provider="opencode_go",
+        service_name="opencode_anthropic",
+        name="MiniMax M2.7",
+        description="OpenCode Go curated MiniMax M2.7 Plus model over the chat completions endpoint",
+        capabilities=["tool_use", "thinking", "structured_output", "stream"],
+        max_context_token=265_000,
+        default=False,
+        input_token_price_1m=0.0,
+        output_token_price_1m=0.0,
+    ),
+    Model(
+        id="minimax-m2.5",
+        provider="opencode_go",
+        service_name="opencode_anthropic",
+        name="MiniMax M2.5",
+        description="OpenCode Go curated MiniMax M2.5 Plus model over the chat completions endpoint",
+        capabilities=["tool_use", "thinking", "structured_output", "stream"],
+        max_context_token=265_000,
+        default=False,
+        input_token_price_1m=0.0,
+        output_token_price_1m=0.0,
+    ),
 ]
 
 _GITHUB_COPILOT_MODELS = [
     Model(
         id="claude-haiku-4.5",
         provider="github_copilot",
+        service_name="github_copilot",
         name="Claude 4.5 Haiku",
         description="",
         capabilities=["tool_use", "vision", "stream"],
@@ -711,6 +759,7 @@ _GITHUB_COPILOT_MODELS = [
     Model(
         id="gemini-2.5-pro",
         provider="github_copilot",
+        service_name="github_copilot",
         name="Gemini 2.5 Pro",
         description="",
         capabilities=["tool_use", "vision", "stream"],
@@ -721,6 +770,7 @@ _GITHUB_COPILOT_MODELS = [
     Model(
         id="gemini-3-pro-preview",
         provider="github_copilot",
+        service_name="github_copilot",
         name="Gemini 3 Pro",
         description="",
         capabilities=["tool_use", "vision", "stream"],
@@ -732,6 +782,7 @@ _GITHUB_COPILOT_MODELS = [
     Model(
         id="gemini-3.1-pro-preview",
         provider="github_copilot",
+        service_name="github_copilot",
         name="Gemini 3.1 Pro",
         description="",
         capabilities=["tool_use", "vision", "stream"],
@@ -743,6 +794,7 @@ _GITHUB_COPILOT_MODELS = [
     Model(
         id="gemini-3-flash-preview",
         provider="github_copilot",
+        service_name="github_copilot",
         name="Gemini 3 Flash Preview",
         description="",
         capabilities=["tool_use", "vision", "stream"],
@@ -754,6 +806,7 @@ _GITHUB_COPILOT_MODELS = [
     Model(
         id="gpt-4.1",
         provider="github_copilot",
+        service_name="github_copilot",
         name="GPT 4.1",
         description="",
         capabilities=["tool_use", "vision", "stream", "structured_output"],
@@ -764,6 +817,7 @@ _GITHUB_COPILOT_MODELS = [
     Model(
         id="grok-code-fast-1",
         provider="github_copilot",
+        service_name="github_copilot",
         name="Grok Code Fast 1",
         description="",
         capabilities=["tool_use", "vision", "stream", "structured_output"],
@@ -774,6 +828,7 @@ _GITHUB_COPILOT_MODELS = [
     Model(
         id="gpt-4o",
         provider="github_copilot",
+        service_name="github_copilot",
         name="GPT 4o",
         description="",
         capabilities=["tool_use", "vision", "stream"],
@@ -784,6 +839,7 @@ _GITHUB_COPILOT_MODELS = [
     Model(
         id="gpt-5",
         provider="github_copilot",
+        service_name="github_copilot",
         name="GPT 5",
         description="",
         capabilities=["tool_use", "thinking", "vision", "stream", "structured_output"],
@@ -794,7 +850,8 @@ _GITHUB_COPILOT_MODELS = [
     ),
     Model(
         id="gpt-5-codex",
-        provider="copilot_response",
+        provider="github_copilot",
+        service_name="copilot_response",
         name="GPT 5 Codex",
         description="",
         capabilities=["tool_use", "thinking", "vision", "stream", "structured_output"],
@@ -802,11 +859,11 @@ _GITHUB_COPILOT_MODELS = [
         max_context_token=400_000,
         input_token_price_1m=0.0,
         output_token_price_1m=0.0,
-        endpoint="response",
     ),
     Model(
         id="gpt-5.1-codex-max",
-        provider="copilot_response",
+        provider="github_copilot",
+        service_name="copilot_response",
         name="GPT 5.1 Codex Max",
         description="",
         capabilities=["tool_use", "thinking", "vision", "stream", "structured_output"],
@@ -814,11 +871,11 @@ _GITHUB_COPILOT_MODELS = [
         max_context_token=400_000,
         input_token_price_1m=0.0,
         output_token_price_1m=0.0,
-        endpoint="response",
     ),
     Model(
         id="gpt-5-mini",
         provider="github_copilot",
+        service_name="github_copilot",
         name="GPT 5 mini",
         description="",
         capabilities=["tool_use", "vision", "stream", "thinking", "structured_output"],
@@ -830,6 +887,7 @@ _GITHUB_COPILOT_MODELS = [
     Model(
         id="gpt-5.1",
         provider="github_copilot",
+        service_name="github_copilot",
         name="GPT 5.1",
         description="",
         capabilities=["tool_use", "vision", "stream", "structured_output"],
@@ -840,7 +898,8 @@ _GITHUB_COPILOT_MODELS = [
     ),
     Model(
         id="goldeneye-free-auto",
-        provider="copilot_response",
+        provider="github_copilot",
+        service_name="copilot_response",
         name="Goldeneye",
         description="",
         capabilities=["tool_use", "vision", "stream", "structured_output"],
@@ -848,11 +907,11 @@ _GITHUB_COPILOT_MODELS = [
         default=False,
         input_token_price_1m=0.0,
         output_token_price_1m=0.0,
-        endpoint="response",
     ),
     Model(
         id="gpt-5.2-codex",
-        provider="copilot_response",
+        provider="github_copilot",
+        service_name="copilot_response",
         name="GPT 5 Codex",
         description="",
         capabilities=["tool_use", "vision", "stream", "structured_output"],
@@ -860,11 +919,11 @@ _GITHUB_COPILOT_MODELS = [
         default=False,
         input_token_price_1m=0.0,
         output_token_price_1m=0.0,
-        endpoint="response",
     ),
     Model(
         id="gpt-5.3-codex",
-        provider="copilot_response",
+        provider="github_copilot",
+        service_name="copilot_response",
         name="GPT 5 Codex",
         description="",
         capabilities=["tool_use", "vision", "stream", "structured_output"],
@@ -872,11 +931,11 @@ _GITHUB_COPILOT_MODELS = [
         default=False,
         input_token_price_1m=0.0,
         output_token_price_1m=0.0,
-        endpoint="response",
     ),
     Model(
         id="gpt-5.4-mini",
-        provider="copilot_response",
+        provider="github_copilot",
+        service_name="copilot_response",
         name="GPT 5.4",
         description="",
         capabilities=["tool_use", "vision", "stream", "structured_output"],
@@ -884,11 +943,11 @@ _GITHUB_COPILOT_MODELS = [
         default=False,
         input_token_price_1m=0.0,
         output_token_price_1m=0.0,
-        endpoint="response",
     ),
     Model(
         id="gpt-5.4",
-        provider="copilot_response",
+        provider="github_copilot",
+        service_name="copilot_response",
         name="GPT 5.4",
         description="",
         capabilities=["tool_use", "vision", "stream", "structured_output"],
@@ -897,11 +956,11 @@ _GITHUB_COPILOT_MODELS = [
         default=False,
         input_token_price_1m=0.0,
         output_token_price_1m=0.0,
-        endpoint="response",
     ),
     Model(
         id="gpt-5.1-codex",
-        provider="copilot_response",
+        provider="github_copilot",
+        service_name="copilot_response",
         name="GPT 5 Codex",
         description="",
         capabilities=["tool_use", "vision", "stream", "structured_output"],
@@ -909,11 +968,11 @@ _GITHUB_COPILOT_MODELS = [
         default=False,
         input_token_price_1m=0.0,
         output_token_price_1m=0.0,
-        endpoint="response",
     ),
     Model(
         id="gpt-5.1-codex-mini",
-        provider="copilot_response",
+        provider="github_copilot",
+        service_name="copilot_response",
         name="GPT 5 mini",
         description="",
         capabilities=["tool_use", "vision", "stream", "thinking", "structured_output"],
@@ -921,11 +980,11 @@ _GITHUB_COPILOT_MODELS = [
         max_context_token=400_000,
         input_token_price_1m=0.0,
         output_token_price_1m=0.0,
-        endpoint="response",
     ),
     Model(
         id="gpt-5.1-codex-max",
-        provider="copilot_response",
+        provider="github_copilot",
+        service_name="copilot_response",
         name="GPT 5 mini",
         description="",
         capabilities=["tool_use", "vision", "stream", "thinking", "structured_output"],
@@ -933,11 +992,11 @@ _GITHUB_COPILOT_MODELS = [
         max_context_token=400_000,
         input_token_price_1m=0.0,
         output_token_price_1m=0.0,
-        endpoint="response",
     ),
     Model(
         id="raptor-mini-tertiary",
         provider="github_copilot",
+        service_name="github_copilot",
         name="Raptor mini",
         max_context_token=264_000,
         description="",
@@ -949,6 +1008,7 @@ _GITHUB_COPILOT_MODELS = [
     Model(
         id="claude-sonnet-4",
         provider="github_copilot",
+        service_name="github_copilot",
         name="Claude Sonnet 4",
         description="",
         capabilities=["tool_use", "vision", "stream", "thinking"],
@@ -959,6 +1019,7 @@ _GITHUB_COPILOT_MODELS = [
     Model(
         id="claude-sonnet-4.5",
         provider="github_copilot",
+        service_name="github_copilot",
         name="Claude Sonnet 4.5",
         description="",
         capabilities=["tool_use", "vision", "stream", "thinking"],
@@ -969,6 +1030,7 @@ _GITHUB_COPILOT_MODELS = [
     Model(
         id="claude-sonnet-4.6",
         provider="github_copilot",
+        service_name="github_copilot",
         name="Claude Sonnet 4.6",
         description="",
         capabilities=["tool_use", "vision", "stream", "thinking"],
@@ -979,6 +1041,7 @@ _GITHUB_COPILOT_MODELS = [
     Model(
         id="claude-opus-4.5",
         provider="github_copilot",
+        service_name="github_copilot",
         name="Claude Opus 4.5 (Preview)",
         description="",
         capabilities=["tool_use", "vision", "stream", "thinking"],
@@ -990,6 +1053,7 @@ _GITHUB_COPILOT_MODELS = [
     Model(
         id="claude-opus-4.6",
         provider="github_copilot",
+        service_name="github_copilot",
         name="Claude Opus 4.6",
         description="",
         capabilities=["tool_use", "vision", "stream", "thinking", "structured_output"],
@@ -1001,6 +1065,7 @@ _GITHUB_COPILOT_MODELS = [
     Model(
         id="claude-opus-4.7",
         provider="github_copilot",
+        service_name="github_copilot",
         name="Claude Opus 4.7",
         description="",
         capabilities=["tool_use", "vision", "stream", "thinking", "structured_output"],

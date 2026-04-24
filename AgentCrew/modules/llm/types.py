@@ -36,4 +36,8 @@ class Model(BaseModel):
     max_context_token: int = 128_000
     input_token_price_1m: float = 0.0
     output_token_price_1m: float = 0.0
-    endpoint: Literal["completions", "response"] = "completions"
+    service_name: Optional[str] = None
+
+    def resolved_service_name(self) -> str:
+        """Return the service name to use for this model, falling back to provider."""
+        return self.service_name or self.provider

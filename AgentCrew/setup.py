@@ -37,7 +37,6 @@ PROVIDER_LIST = [
     "together",
     "opencode_go",
     "github_copilot",
-    "copilot_response",
 ]
 
 
@@ -154,6 +153,7 @@ class ApplicationSetup:
         memory_llm: Optional[str] = None,
         need_memory: bool = True,
         with_voice: bool = False,
+        model_id: Optional[str] = None,
     ) -> Dict[str, Any]:
         registry = ModelRegistry.get_instance()
         llm_manager = ServiceManager.get_instance()
@@ -163,7 +163,19 @@ class ApplicationSetup:
             default_model = next((m for m in models if m.default), models[0])
             registry.set_current_model(f"{default_model.provider}/{default_model.id}")
 
-        llm_service = llm_manager.get_service(provider)
+        models = registry.get_models_by_provider(provider)
+        if models:
+            default_model = next((m for m in models if m.default), models[0])
+            llm_service = llm_manager.get_service_for_model(default_model)
+        else:
+            llm_service = llm_manager.get_service_for_provider(provider)
+
+        if model_id:
+            model = registry.get_model(model_id)
+            if model:
+                llm_manager.set_model_for_model(model)
+            else:
+                llm_service.model = model_id
 
         try:
             last_model = GlobalConfig().get_last_used_model()
@@ -177,7 +189,7 @@ class ApplicationSetup:
                 last_model_class = registry.get_model(last_model)
                 if should_restore and last_model_class:
                     llm_manager.apply_model_defaults(
-                        llm_service, provider, last_model_class.id
+                        llm_service, last_model_class.provider, last_model_class.id
                     )
                     llm_service.model = last_model_class.id
         except Exception as e:
@@ -188,9 +200,8 @@ class ApplicationSetup:
         context_service = None
         if need_memory:
             memory_provider = memory_llm or provider
-            memory_service = ChromaMemoryService(
-                llm_service=llm_manager.initialize_standalone_service(memory_provider)
-            )
+            memory_llm_svc = llm_manager.initialize_standalone_service(memory_provider)
+            memory_service = ChromaMemoryService(llm_service=memory_llm_svc)
 
             context_service = ContextPersistenceService()
         clipboard_service = ClipboardService()
@@ -288,6 +299,7 @@ class ApplicationSetup:
     ) -> AgentManager:
         self.agent_manager = AgentManager.get_instance()
         llm_manager = ServiceManager.get_instance()
+        registry = ModelRegistry.get_instance()
 
         services["agent_manager"] = self.agent_manager
 
@@ -376,14 +388,27 @@ tools = ["memory", "browser", "web_search", "code_analysis"]
                     continue
             else:
                 if remoting_provider:
-                    llm_service = llm_manager.initialize_standalone_service(
-                        remoting_provider
-                    )
                     if model_id:
-                        llm_manager.apply_model_defaults(
-                            llm_service, remoting_provider, model_id
+                        model = registry.get_model(model_id)
+                        if model:
+                            llm_service = (
+                                llm_manager.initialize_standalone_service_for_model(
+                                    model
+                                )
+                            )
+                            llm_manager.apply_model_defaults(
+                                llm_service, model.provider, model.id
+                            )
+                            llm_service.model = model.id
+                        else:
+                            llm_service = llm_manager.initialize_standalone_service(
+                                remoting_provider
+                            )
+                            llm_service.model = model_id
+                    else:
+                        llm_service = llm_manager.initialize_standalone_service(
+                            remoting_provider
                         )
-                        llm_service.model = model_id
                 agent = LocalAgent(
                     name=agent_def["name"],
                     description=agent_def["description"],
