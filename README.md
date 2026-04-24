@@ -57,11 +57,7 @@ powershell -ExecutionPolicy ByPass -c "irm https://agentcrew.dev/install.ps1 | i
 pip install agentcrew-ai
 ```
 
-**Docker**
 
-```bash
-docker pull daltonnyx/agentcrew:latest
-```
 
 ### 2. Add an API key
 

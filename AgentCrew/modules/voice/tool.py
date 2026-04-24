@@ -4,7 +4,7 @@ from typing import Dict, Any, Callable
 SPEAK_MAX_LENGTH = 280
 
 
-def get_speak_tool_definition(provider="claude") -> Dict[str, Any]:
+def get_speak_tool_definition() -> Dict[str, Any]:
     tool_description = (
         "Speak to the user using voice. "
         "When voice is available, use this as the primary way to communicate with the user. "
@@ -22,16 +22,6 @@ def get_speak_tool_definition(provider="claude") -> Dict[str, Any]:
     }
     tool_required = ["text"]
 
-    if provider == "claude":
-        return {
-            "name": "speak",
-            "description": tool_description,
-            "input_schema": {
-                "type": "object",
-                "properties": tool_arguments,
-                "required": tool_required,
-            },
-        }
     return {
         "type": "function",
         "function": {

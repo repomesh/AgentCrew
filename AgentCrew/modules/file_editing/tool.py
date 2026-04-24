@@ -28,7 +28,7 @@ def is_full_content_mode(blocks: List[Dict[str, str]]) -> bool:
     return False
 
 
-def get_file_write_or_edit_tool_definition(provider="claude") -> Dict[str, Any]:
+def get_file_write_or_edit_tool_definition() -> Dict[str, Any]:
     tool_description = """Write/edit files via search/replace blocks.
 
 FORMAT: Array of {"search": "...", "replace": "..."} objects
@@ -74,29 +74,18 @@ Auto syntax check (30+ langs) with rollback on error
         "text_or_search_replace_blocks",
     ]
 
-    if provider == "claude":
-        return {
+    return {
+        "type": "function",
+        "function": {
             "name": "write_or_edit_file",
             "description": tool_description,
-            "input_schema": {
+            "parameters": {
                 "type": "object",
                 "properties": tool_arguments,
                 "required": tool_required,
             },
-        }
-    else:
-        return {
-            "type": "function",
-            "function": {
-                "name": "write_or_edit_file",
-                "description": tool_description,
-                "parameters": {
-                    "type": "object",
-                    "properties": tool_arguments,
-                    "required": tool_required,
-                },
-            },
-        }
+        },
+    }
 
 
 def get_file_write_or_edit_tool_handler(

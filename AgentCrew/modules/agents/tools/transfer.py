@@ -7,7 +7,7 @@ def _should_defer_post_action(post_action: str) -> bool:
     return "transfer" in post_action.casefold()
 
 
-def get_transfer_tool_definition(provider="claude") -> Dict[str, Any]:
+def get_transfer_tool_definition() -> Dict[str, Any]:
     """
     Get the definition for the transfer tool.
 
@@ -35,29 +35,18 @@ def get_transfer_tool_definition(provider="claude") -> Dict[str, Any]:
     }
 
     tool_required = ["target_agent", "task_description"]
-    if provider == "claude":
-        return {
+    return {
+        "type": "function",
+        "function": {
             "name": "transfer",
             "description": tool_description,
-            "input_schema": {
+            "parameters": {
                 "type": "object",
                 "properties": tool_arguments,
                 "required": tool_required,
             },
-        }
-    else:
-        return {
-            "type": "function",
-            "function": {
-                "name": "transfer",
-                "description": tool_description,
-                "parameters": {
-                    "type": "object",
-                    "properties": tool_arguments,
-                    "required": tool_required,
-                },
-            },
-        }
+        },
+    }
 
 
 def transfer_tool_prompt(agent_manager: AgentManager) -> str:

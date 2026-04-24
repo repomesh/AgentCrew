@@ -13,7 +13,7 @@ from .grep_service import GrepTextService
 # ============================================================================
 
 
-def get_code_analysis_tool_definition(provider="claude") -> Dict[str, Any]:
+def get_code_analysis_tool_definition() -> Dict[str, Any]:
     """
     Return the tool definition for code analysis based on provider.
 
@@ -42,29 +42,18 @@ def get_code_analysis_tool_definition(provider="claude") -> Dict[str, Any]:
     }
     tool_required = ["path"]
 
-    if provider == "claude":
-        return {
+    return {
+        "type": "function",
+        "function": {
             "name": "read_repo",
             "description": description,
-            "input_schema": {
+            "parameters": {
                 "type": "object",
                 "properties": tool_arguments,
                 "required": tool_required,
             },
-        }
-    else:  # provider == "openai"
-        return {
-            "type": "function",
-            "function": {
-                "name": "read_repo",
-                "description": description,
-                "parameters": {
-                    "type": "object",
-                    "properties": tool_arguments,
-                    "required": tool_required,
-                },
-            },
-        }
+        },
+    }
 
 
 def get_code_analysis_tool_handler(
@@ -108,7 +97,7 @@ def get_code_analysis_tool_handler(
 # ============================================================================
 
 
-def get_file_content_tool_definition(provider="claude"):
+def get_file_content_tool_definition():
     """
     Return the tool definition for retrieving file content based on provider.
 
@@ -136,29 +125,18 @@ def get_file_content_tool_definition(provider="claude"):
     }
     tool_required = ["file_path"]
 
-    if provider == "claude":
-        return {
+    return {
+        "type": "function",
+        "function": {
             "name": "get_file",
             "description": tool_description,
-            "input_schema": {
+            "parameters": {
                 "type": "object",
                 "properties": tool_arguments,
                 "required": tool_required,
             },
-        }
-    else:  # provider == "openai"
-        return {
-            "type": "function",
-            "function": {
-                "name": "get_file",
-                "description": tool_description,
-                "parameters": {
-                    "type": "object",
-                    "properties": tool_arguments,
-                    "required": tool_required,
-                },
-            },
-        }
+        },
+    }
 
 
 def get_file_content_tool_handler(
@@ -197,7 +175,7 @@ def get_file_content_tool_handler(
 # ============================================================================
 
 
-def get_find_files_tool_definition(provider="claude") -> Dict[str, Any]:
+def get_find_files_tool_definition() -> Dict[str, Any]:
     """
     Return the tool definition for file search based on provider.
 
@@ -265,29 +243,18 @@ def get_find_files_tool_definition(provider="claude") -> Dict[str, Any]:
     }
     tool_required = ["pattern"]
 
-    if provider == "claude":
-        return {
+    return {
+        "type": "function",
+        "function": {
             "name": "find_files",
             "description": description,
-            "input_schema": {
+            "parameters": {
                 "type": "object",
                 "properties": tool_arguments,
                 "required": tool_required,
             },
-        }
-    else:  # OpenAI-compatible provider format
-        return {
-            "type": "function",
-            "function": {
-                "name": "find_files",
-                "description": description,
-                "parameters": {
-                    "type": "object",
-                    "properties": tool_arguments,
-                    "required": tool_required,
-                },
-            },
-        }
+        },
+    }
 
 
 def get_find_files_tool_handler(service_instance: FileSearchService) -> Callable:
@@ -393,7 +360,7 @@ def get_find_files_tool_handler(service_instance: FileSearchService) -> Callable
 # ============================================================================
 
 
-def get_grep_text_tool_definition(provider="claude") -> Dict[str, Any]:
+def get_grep_text_tool_definition() -> Dict[str, Any]:
     """
     Return the tool definition for grep text search based on provider.
 
@@ -442,29 +409,18 @@ def get_grep_text_tool_definition(provider="claude") -> Dict[str, Any]:
     }
     tool_required = ["pattern"]
 
-    if provider == "claude":
-        return {
+    return {
+        "type": "function",
+        "function": {
             "name": "grep_text",
             "description": description,
-            "input_schema": {
+            "parameters": {
                 "type": "object",
                 "properties": tool_arguments,
                 "required": tool_required,
             },
-        }
-    else:  # OpenAI-compatible provider format
-        return {
-            "type": "function",
-            "function": {
-                "name": "grep_text",
-                "description": description,
-                "parameters": {
-                    "type": "object",
-                    "properties": tool_arguments,
-                    "required": tool_required,
-                },
-            },
-        }
+        },
+    }
 
 
 def get_grep_text_tool_handler(service_instance: GrepTextService) -> Callable:

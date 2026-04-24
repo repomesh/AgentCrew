@@ -4,7 +4,7 @@ from AgentCrew.modules.agents import AgentManager
 from AgentCrew.modules.agents.agent_runner import run_agent_loop
 
 
-def get_delegate_tool_definition(provider="claude") -> Dict[str, Any]:
+def get_delegate_tool_definition() -> Dict[str, Any]:
     tool_description = (
         "Delegates a task to a specialized agent for independent execution. "
         "The target agent completes the task and returns the result without "
@@ -40,29 +40,18 @@ def get_delegate_tool_definition(provider="claude") -> Dict[str, Any]:
 
     tool_required = ["target_agent", "task_description"]
 
-    if provider == "claude":
-        return {
+    return {
+        "type": "function",
+        "function": {
             "name": "delegate",
             "description": tool_description,
-            "input_schema": {
+            "parameters": {
                 "type": "object",
                 "properties": tool_arguments,
                 "required": tool_required,
             },
-        }
-    else:
-        return {
-            "type": "function",
-            "function": {
-                "name": "delegate",
-                "description": tool_description,
-                "parameters": {
-                    "type": "object",
-                    "properties": tool_arguments,
-                    "required": tool_required,
-                },
-            },
-        }
+        },
+    }
 
 
 def get_delegate_tool_handler(agent_manager: AgentManager) -> Callable:

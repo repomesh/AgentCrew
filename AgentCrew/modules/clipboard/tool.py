@@ -2,7 +2,7 @@ from typing import Dict, Any, Callable
 from .service import ClipboardService
 
 
-def get_clipboard_read_tool_definition(provider="claude") -> Dict[str, Any]:
+def get_clipboard_read_tool_definition() -> Dict[str, Any]:
     """
     Get the tool definition for reading from clipboard based on provider.
 
@@ -15,32 +15,21 @@ def get_clipboard_read_tool_definition(provider="claude") -> Dict[str, Any]:
     tool_description = "Reads the current content from the system clipboard. Automatically detects whether the content is text or an image. Use this to access data the user may have copied from another application. Useful when the user refers to content they've copied from another source without explicitly providing it. If the user seems to be referencing external content without providing it, consider using this tool."
     tool_arguments = {}
     tool_required = []
-    if provider == "claude":
-        return {
+    return {
+        "type": "function",
+        "function": {
             "name": "read_clipboard",
             "description": tool_description,
-            "input_schema": {
+            "parameters": {
                 "type": "object",
                 "properties": tool_arguments,
                 "required": tool_required,
             },
-        }
-    else:  # OpenAI-compatible provider format
-        return {
-            "type": "function",
-            "function": {
-                "name": "read_clipboard",
-                "description": tool_description,
-                "parameters": {
-                    "type": "object",
-                    "properties": tool_arguments,
-                    "required": tool_required,
-                },
-            },
-        }
+        },
+    }
 
 
-def get_clipboard_write_tool_definition(provider="claude") -> Dict[str, Any]:
+def get_clipboard_write_tool_definition() -> Dict[str, Any]:
     """
     Get the tool definition for writing to clipboard based on provider.
 
@@ -58,29 +47,18 @@ def get_clipboard_write_tool_definition(provider="claude") -> Dict[str, Any]:
         },
     }
     tool_required = ["content"]
-    if provider == "claude":
-        return {
+    return {
+        "type": "function",
+        "function": {
             "name": "clipboard_write",
             "description": tool_description,
-            "input_schema": {
+            "parameters": {
                 "type": "object",
                 "properties": tool_arguments,
                 "required": tool_required,
             },
-        }
-    else:  # OpenAI-compatible provider format
-        return {
-            "type": "function",
-            "function": {
-                "name": "clipboard_write",
-                "description": tool_description,
-                "parameters": {
-                    "type": "object",
-                    "properties": tool_arguments,
-                    "required": tool_required,
-                },
-            },
-        }
+        },
+    }
 
 
 def get_clipboard_read_tool_handler(clipboard_service: ClipboardService) -> Callable:

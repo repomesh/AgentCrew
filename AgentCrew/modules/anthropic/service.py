@@ -155,6 +155,20 @@ class AnthropicService(BaseLLMService):
             return [content]
         return None
 
+    @staticmethod
+    def _convert_tool_to_anthropic_format(
+        tool_definition: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        """Convert an OpenAI-format tool definition to Anthropic native format."""
+        if tool_definition.get("type") == "function" and "function" in tool_definition:
+            func = tool_definition["function"]
+            return {
+                "name": func.get("name", ""),
+                "description": func.get("description", ""),
+                "input_schema": func.get("parameters", {"type": "object"}),
+            }
+        return tool_definition
+
     def register_tool(self, tool_definition, handler_function):
         """
         Register a tool with its handler function.
@@ -163,9 +177,10 @@ class AnthropicService(BaseLLMService):
             tool_definition (dict): The tool definition following Anthropic's schema
             handler_function (callable): Function to call when tool is used
         """
-        self.tools.append(tool_definition)
-        self.tool_handlers[tool_definition["name"]] = handler_function
-        logger.info(f"🔧 Registered tool: {tool_definition['name']}")
+        normalized = self._convert_tool_to_anthropic_format(tool_definition)
+        self.tools.append(normalized)
+        self.tool_handlers[normalized["name"]] = handler_function
+        logger.info(f"🔧 Registered tool: {normalized['name']}")
 
     def _convert_content_to_claude_format(
         self,

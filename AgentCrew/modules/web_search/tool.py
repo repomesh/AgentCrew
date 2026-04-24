@@ -1,7 +1,7 @@
 from AgentCrew.modules.web_search.service import TavilySearchService
 
 
-def get_web_search_tool_definition(provider="claude"):
+def get_web_search_tool_definition():
     """Return the tool definition for web search based on provider."""
     tool_description = "Searches the web for up-to-date information on a specific topic or query. Prefer this tool for informational research, current facts, documentation lookup, comparisons, and discovering relevant URLs. Summarize your findings *before* presenting them to the user. If the user is seeking information that is likely to have changed recently, this is the tool to use."
     tool_arguments = {
@@ -33,32 +33,21 @@ def get_web_search_tool_definition(provider="claude"):
         },
     }
     tool_required = ["query", "search_depth", "topic"]
-    if provider == "claude":
-        return {
+    return {
+        "type": "function",
+        "function": {
             "name": "search_web",
             "description": tool_description,
-            "input_schema": {
+            "parameters": {
                 "type": "object",
                 "properties": tool_arguments,
                 "required": tool_required,
             },
-        }
-    else:  # OpenAI-compatible provider format
-        return {
-            "type": "function",
-            "function": {
-                "name": "search_web",
-                "description": tool_description,
-                "parameters": {
-                    "type": "object",
-                    "properties": tool_arguments,
-                    "required": tool_required,
-                },
-            },
-        }
+        },
+    }
 
 
-def get_web_extract_tool_definition(provider="claude"):
+def get_web_extract_tool_definition():
     """Return the tool definition for web content extraction based on provider."""
     tool_description = "Retrieves the content from a web page specified by its URL. Prefer this tool for reading and extracting webpage information when you already have a URL. Only use HTTP/HTTPS URLs. DO NOT use this tool to access local project files. Summarize the content of the webpage before presenting it to the user. Prioritize extracting information relevant to the user's current request."
     tool_arguments = {
@@ -68,29 +57,18 @@ def get_web_extract_tool_definition(provider="claude"):
         }
     }
     tool_required = ["url"]
-    if provider == "claude":
-        return {
+    return {
+        "type": "function",
+        "function": {
             "name": "fetch_webpage",
             "description": tool_description,
-            "input_schema": {
+            "parameters": {
                 "type": "object",
                 "properties": tool_arguments,
                 "required": tool_required,
             },
-        }
-    else:  # OpenAI-compatible provider format
-        return {
-            "type": "function",
-            "function": {
-                "name": "fetch_webpage",
-                "description": tool_description,
-                "parameters": {
-                    "type": "object",
-                    "properties": tool_arguments,
-                    "required": tool_required,
-                },
-            },
-        }
+        },
+    }
 
 
 def get_web_search_tool_handler(tavily_service: TavilySearchService):

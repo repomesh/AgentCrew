@@ -49,7 +49,7 @@ def browser_instruction_prompt() -> str:
 </Browser_Tools_Instruction>"""
 
 
-def get_browser_navigate_tool_definition(provider="claude") -> Dict[str, Any]:
+def get_browser_navigate_tool_definition() -> Dict[str, Any]:
     """Get tool definition for browser navigation."""
     tool_description = "Navigate to a URL in the browser when you need a live rendered page for interaction, workflow testing, authenticated or session-specific access, JavaScript-rendered content, or inspection of page behavior. Check result before proceeding with other actions."
     tool_arguments = {
@@ -65,32 +65,21 @@ def get_browser_navigate_tool_definition(provider="claude") -> Dict[str, Any]:
     }
     tool_required = ["url"]
 
-    if provider == "claude":
-        return {
+    return {
+        "type": "function",
+        "function": {
             "name": "open_browser_url",
             "description": tool_description,
-            "input_schema": {
+            "parameters": {
                 "type": "object",
                 "properties": tool_arguments,
                 "required": tool_required,
             },
-        }
-    else:  # OpenAI-compatible provider format
-        return {
-            "type": "function",
-            "function": {
-                "name": "open_browser_url",
-                "description": tool_description,
-                "parameters": {
-                    "type": "object",
-                    "properties": tool_arguments,
-                    "required": tool_required,
-                },
-            },
-        }
+        },
+    }
 
 
-def get_browser_mouse_action_tool_definition(provider="claude") -> Dict[str, Any]:
+def get_browser_mouse_action_tool_definition() -> Dict[str, Any]:
     tool_description = (
         "Perform a mouse action on a live browser element using its UUID. "
         "Use this for interaction and workflow testing on the rendered page: `action=click` clicks the target element, and `action=scroll_to` scrolls that element into view. "
@@ -110,32 +99,21 @@ def get_browser_mouse_action_tool_definition(provider="claude") -> Dict[str, Any
     }
     tool_required = ["action", "element_uuid"]
 
-    if provider == "claude":
-        return {
+    return {
+        "type": "function",
+        "function": {
             "name": "perform_browser_mouse_action",
             "description": tool_description,
-            "input_schema": {
+            "parameters": {
                 "type": "object",
                 "properties": tool_arguments,
                 "required": tool_required,
             },
-        }
-    else:
-        return {
-            "type": "function",
-            "function": {
-                "name": "perform_browser_mouse_action",
-                "description": tool_description,
-                "parameters": {
-                    "type": "object",
-                    "properties": tool_arguments,
-                    "required": tool_required,
-                },
-            },
-        }
+        },
+    }
 
 
-def get_browser_get_content_tool_definition(provider="claude") -> Dict[str, Any]:
+def get_browser_get_content_tool_definition() -> Dict[str, Any]:
     """Get tool definition for browser content extraction."""
     tool_description = (
         "Extract live rendered page content as markdown with tables of clickable, input, and scrollable elements. Use this after opening a page when you need interactive element discovery, workflow testing, authenticated or session-specific content, or inspection of rendered output. UUIDs remain stable across repeated calls when the XPath stays the same, but may become invalid after page rerenders or element removal. "
@@ -144,29 +122,18 @@ def get_browser_get_content_tool_definition(provider="claude") -> Dict[str, Any]
     tool_arguments = {}
     tool_required = []
 
-    if provider == "claude":
-        return {
+    return {
+        "type": "function",
+        "function": {
             "name": "get_browser_content",
             "description": tool_description,
-            "input_schema": {
+            "parameters": {
                 "type": "object",
                 "properties": tool_arguments,
                 "required": tool_required,
             },
-        }
-    else:  # OpenAI-compatible provider format
-        return {
-            "type": "function",
-            "function": {
-                "name": "get_browser_content",
-                "description": tool_description,
-                "parameters": {
-                    "type": "object",
-                    "properties": tool_arguments,
-                    "required": tool_required,
-                },
-            },
-        }
+        },
+    }
 
 
 def get_browser_get_content_tool_handler(
@@ -266,7 +233,7 @@ def get_browser_mouse_action_tool_handler(
     return handle_browser_mouse_action
 
 
-def get_browser_keyboard_action_tool_definition(provider="claude") -> Dict[str, Any]:
+def get_browser_keyboard_action_tool_definition() -> Dict[str, Any]:
     tool_description = (
         "Perform a keyboard action in the browser for live-page interaction and workflow testing. "
         "Use `action=input_text` to type text into a specific input element, and use `action=send_key` to send a keyboard key or shortcut to the browser. "
@@ -300,29 +267,18 @@ def get_browser_keyboard_action_tool_definition(provider="claude") -> Dict[str, 
     }
     tool_required = ["action"]
 
-    if provider == "claude":
-        return {
+    return {
+        "type": "function",
+        "function": {
             "name": "perform_browser_keyboard_action",
             "description": tool_description,
-            "input_schema": {
+            "parameters": {
                 "type": "object",
                 "properties": tool_arguments,
                 "required": tool_required,
             },
-        }
-    else:
-        return {
-            "type": "function",
-            "function": {
-                "name": "perform_browser_keyboard_action",
-                "description": tool_description,
-                "parameters": {
-                    "type": "object",
-                    "properties": tool_arguments,
-                    "required": tool_required,
-                },
-            },
-        }
+        },
+    }
 
 
 def get_browser_keyboard_action_tool_handler(
@@ -392,9 +348,7 @@ def get_browser_keyboard_action_tool_handler(
     return handle_browser_keyboard_action
 
 
-def get_browser_get_elements_by_text_tool_definition(
-    provider="claude",
-) -> Dict[str, Any]:
+def get_browser_get_elements_by_text_tool_definition() -> Dict[str, Any]:
     """Get tool definition for browser elements by text search."""
     tool_description = "Find div elements containing specific text in the currently rendered browser page. Use this to locate live page elements for interaction, navigation, or testing after loading the page. Returns UUID table for use with other browser tools."
     tool_arguments = {
@@ -405,29 +359,18 @@ def get_browser_get_elements_by_text_tool_definition(
     }
     tool_required = ["text"]
 
-    if provider == "claude":
-        return {
+    return {
+        "type": "function",
+        "function": {
             "name": "get_browser_elements_by_text",
             "description": tool_description,
-            "input_schema": {
+            "parameters": {
                 "type": "object",
                 "properties": tool_arguments,
                 "required": tool_required,
             },
-        }
-    else:
-        return {
-            "type": "function",
-            "function": {
-                "name": "get_browser_elements_by_text",
-                "description": tool_description,
-                "parameters": {
-                    "type": "object",
-                    "properties": tool_arguments,
-                    "required": tool_required,
-                },
-            },
-        }
+        },
+    }
 
 
 def get_browser_get_elements_by_text_tool_handler(
@@ -459,35 +402,24 @@ def get_browser_get_elements_by_text_tool_handler(
     return handle_browser_get_elements_by_text
 
 
-def get_browser_refresh_tool_definition(provider="claude") -> Dict[str, Any]:
+def get_browser_refresh_tool_definition() -> Dict[str, Any]:
     """Get tool definition for browser page refresh."""
     tool_description = "Refresh/reload the current browser page to re-check live rendered state during interaction or testing. Equivalent to pressing F5 or Ctrl+R."
     tool_arguments = {}
     tool_required = []
 
-    if provider == "claude":
-        return {
+    return {
+        "type": "function",
+        "function": {
             "name": "refresh_browser_content",
             "description": tool_description,
-            "input_schema": {
+            "parameters": {
                 "type": "object",
                 "properties": tool_arguments,
                 "required": tool_required,
             },
-        }
-    else:
-        return {
-            "type": "function",
-            "function": {
-                "name": "refresh_browser_content",
-                "description": tool_description,
-                "parameters": {
-                    "type": "object",
-                    "properties": tool_arguments,
-                    "required": tool_required,
-                },
-            },
-        }
+        },
+    }
 
 
 def get_browser_refresh_tool_handler(
@@ -508,7 +440,7 @@ def get_browser_refresh_tool_handler(
     return handle_browser_refresh
 
 
-def get_browser_execute_script_tool_definition(provider="claude") -> Dict[str, Any]:
+def get_browser_execute_script_tool_definition() -> Dict[str, Any]:
     tool_description = (
         "Execute JavaScript in the current browser page context using CDP. "
         "Use this for runtime debugging, rendered DOM inspection, metadata or style extraction, or custom page queries when built-in browser tools are insufficient. "
@@ -527,29 +459,18 @@ def get_browser_execute_script_tool_definition(provider="claude") -> Dict[str, A
     }
     tool_required = ["script"]
 
-    if provider == "claude":
-        return {
+    return {
+        "type": "function",
+        "function": {
             "name": "execute_browser_script",
             "description": tool_description,
-            "input_schema": {
+            "parameters": {
                 "type": "object",
                 "properties": tool_arguments,
                 "required": tool_required,
             },
-        }
-    else:
-        return {
-            "type": "function",
-            "function": {
-                "name": "execute_browser_script",
-                "description": tool_description,
-                "parameters": {
-                    "type": "object",
-                    "properties": tool_arguments,
-                    "required": tool_required,
-                },
-            },
-        }
+        },
+    }
 
 
 def get_browser_execute_script_tool_handler(
@@ -587,7 +508,7 @@ def get_browser_execute_script_tool_handler(
     return handle_execute_browser_script
 
 
-def get_browser_view_console_log_tool_definition(provider="claude") -> Dict[str, Any]:
+def get_browser_view_console_log_tool_definition() -> Dict[str, Any]:
     tool_description = (
         "View browser console/runtime log entries captured through CDP. "
         "Use this for testing and diagnosing live page behavior, including console.log/warn/error output, JavaScript exceptions, and network errors."
@@ -614,29 +535,18 @@ def get_browser_view_console_log_tool_definition(provider="claude") -> Dict[str,
     }
     tool_required: list = []
 
-    if provider == "claude":
-        return {
+    return {
+        "type": "function",
+        "function": {
             "name": "view_browser_console_log",
             "description": tool_description,
-            "input_schema": {
+            "parameters": {
                 "type": "object",
                 "properties": tool_arguments,
                 "required": tool_required,
             },
-        }
-    else:
-        return {
-            "type": "function",
-            "function": {
-                "name": "view_browser_console_log",
-                "description": tool_description,
-                "parameters": {
-                    "type": "object",
-                    "properties": tool_arguments,
-                    "required": tool_required,
-                },
-            },
-        }
+        },
+    }
 
 
 def get_browser_view_console_log_tool_handler(
@@ -687,7 +597,7 @@ def get_browser_view_console_log_tool_handler(
     return handle_view_browser_console_log
 
 
-def get_browser_element_xpath_tool_definition(provider="claude") -> Dict[str, Any]:
+def get_browser_element_xpath_tool_definition() -> Dict[str, Any]:
     tool_description = (
         "Get the XPath value for a browser element by its UUID. "
         "Use this for DOM metadata, selector inspection, or debugging on the live rendered page. UUIDs are obtained from get_browser_content or get_browser_elements_by_text."
@@ -700,29 +610,18 @@ def get_browser_element_xpath_tool_definition(provider="claude") -> Dict[str, An
     }
     tool_required = ["element_uuid"]
 
-    if provider == "claude":
-        return {
+    return {
+        "type": "function",
+        "function": {
             "name": "get_browser_element_xpath",
             "description": tool_description,
-            "input_schema": {
+            "parameters": {
                 "type": "object",
                 "properties": tool_arguments,
                 "required": tool_required,
             },
-        }
-    else:
-        return {
-            "type": "function",
-            "function": {
-                "name": "get_browser_element_xpath",
-                "description": tool_description,
-                "parameters": {
-                    "type": "object",
-                    "properties": tool_arguments,
-                    "required": tool_required,
-                },
-            },
-        }
+        },
+    }
 
 
 def get_browser_element_xpath_tool_handler(

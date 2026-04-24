@@ -37,7 +37,7 @@ def _coerce_persistence_service_context(
     )
 
 
-def get_memory_forget_tool_definition(provider="claude") -> Dict[str, Any]:
+def get_memory_forget_tool_definition() -> Dict[str, Any]:
     """Optimized memory forgetting tool definition."""
 
     tool_description = """Removes memories using IDs from memory bank.
@@ -56,29 +56,18 @@ Search for memories need to remote, use date filters to limit scope whenever pos
 
     tool_required = ["ids"]
 
-    if provider == "claude":
-        return {
+    return {
+        "type": "function",
+        "function": {
             "name": "forget_memory_topic",
             "description": tool_description,
-            "input_schema": {
+            "parameters": {
                 "type": "object",
                 "properties": tool_arguments,
                 "required": tool_required,
             },
-        }
-    else:
-        return {
-            "type": "function",
-            "function": {
-                "name": "forget_memory_topic",
-                "description": tool_description,
-                "parameters": {
-                    "type": "object",
-                    "properties": tool_arguments,
-                    "required": tool_required,
-                },
-            },
-        }
+        },
+    }
 
 
 def get_memory_forget_tool_handler(
@@ -106,7 +95,7 @@ def get_memory_forget_tool_handler(
     return handle_memory_forget
 
 
-def get_memory_retrieve_tool_definition(provider="claude") -> Dict[str, Any]:
+def get_memory_retrieve_tool_definition() -> Dict[str, Any]:
     """Optimized memory retrieval tool definition."""
 
     tool_description = """Search relevant information from conversation history using semantic search.
@@ -133,29 +122,18 @@ Use from_date and to_date to filter memories by time whenever posible, Eg: yeste
 
     tool_required = ["query"]
 
-    if provider == "claude":
-        return {
+    return {
+        "type": "function",
+        "function": {
             "name": "search_memory",
             "description": tool_description,
-            "input_schema": {
+            "parameters": {
                 "type": "object",
                 "properties": tool_arguments,
                 "required": tool_required,
             },
-        }
-    else:
-        return {
-            "type": "function",
-            "function": {
-                "name": "search_memory",
-                "description": tool_description,
-                "parameters": {
-                    "type": "object",
-                    "properties": tool_arguments,
-                    "required": tool_required,
-                },
-            },
-        }
+        },
+    }
 
 
 def memory_instruction_prompt():
@@ -237,7 +215,7 @@ def get_memory_retrieve_tool_handler(
     return handle_memory_retrieve
 
 
-def get_learn_behavior_tool_definition(provider="claude") -> Dict[str, Any]:
+def get_learn_behavior_tool_definition() -> Dict[str, Any]:
     """Optimized adaptive behavior tool definition."""
 
     tool_description = """Stores behavioral patterns to personalize future interactions based on user preferences and successful approaches.
@@ -269,29 +247,18 @@ All behaviors must follow 'when..., [action]...' format for automatic activation
 
     tool_required = ["id", "condition", "action_steps"]
 
-    if provider == "claude":
-        return {
+    return {
+        "type": "function",
+        "function": {
             "name": "learn_behavior",
             "description": tool_description,
-            "input_schema": {
+            "parameters": {
                 "type": "object",
                 "properties": tool_arguments,
                 "required": tool_required,
             },
-        }
-    else:
-        return {
-            "type": "function",
-            "function": {
-                "name": "learn_behavior",
-                "description": tool_description,
-                "parameters": {
-                    "type": "object",
-                    "properties": tool_arguments,
-                    "required": tool_required,
-                },
-            },
-        }
+        },
+    }
 
 
 def get_learn_behavior_tool_handler(

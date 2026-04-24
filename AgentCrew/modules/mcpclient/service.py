@@ -529,8 +529,8 @@ class MCPService:
             for tool in filtered_tools:
 
                 def tool_definition_factory(tool_info=tool, srv_id=server_name):
-                    def get_definition(provider=None):
-                        return self._format_tool_definition(tool_info, srv_id, provider)
+                    def get_definition():
+                        return self._format_tool_definition(tool_info, srv_id)
 
                     return get_definition
 
@@ -599,9 +599,7 @@ class MCPService:
                 if combined_server_id in self.tools_cache:
                     self._remove_agent_server_tool_definitions(local_agent, server_name)
 
-    def _format_tool_definition(
-        self, tool: Tool, server_id: str, provider: Optional[str] = None
-    ) -> Dict[str, Any]:
+    def _format_tool_definition(self, tool: Tool, server_id: str) -> Dict[str, Any]:
         """
         Format a tool definition for the tool registry.
 
@@ -632,21 +630,14 @@ class MCPService:
             del merged_inputSchema["$defs"]
 
         # Format for different providers
-        if provider == "claude":
-            return {
+        return {
+            "type": "function",
+            "function": {
                 "name": namespaced_name,
                 "description": tool.description,
-                "input_schema": merged_inputSchema,
-            }
-        else:  # Default format (OpenAI-compatible)
-            return {
-                "type": "function",
-                "function": {
-                    "name": namespaced_name,
-                    "description": tool.description,
-                    "parameters": merged_inputSchema,
-                },
-            }
+                "parameters": merged_inputSchema,
+            },
+        }
 
     def _run_async(self, coro):
         """Helper method to run coroutines in the service's event loop"""

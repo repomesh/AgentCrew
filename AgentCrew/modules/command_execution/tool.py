@@ -9,7 +9,7 @@ from .service import CommandExecutionService
 import os
 
 
-def get_run_command_tool_definition(provider="claude") -> Dict[str, Any]:
+def get_run_command_tool_definition() -> Dict[str, Any]:
     """Get tool definition for running shell commands."""
     import sys
 
@@ -48,32 +48,21 @@ def get_run_command_tool_definition(provider="claude") -> Dict[str, Any]:
         },
     }
 
-    if provider == "claude":
-        return {
+    return {
+        "type": "function",
+        "function": {
             "name": "run_command",
             "description": desc,
-            "input_schema": {
+            "parameters": {
                 "type": "object",
                 "properties": args,
                 "required": ["command", "working_dir"],
             },
-        }
-    else:
-        return {
-            "type": "function",
-            "function": {
-                "name": "run_command",
-                "description": desc,
-                "parameters": {
-                    "type": "object",
-                    "properties": args,
-                    "required": ["command", "working_dir"],
-                },
-            },
-        }
+        },
+    }
 
 
-def get_check_command_status_tool_definition(provider="claude") -> Dict[str, Any]:
+def get_check_command_status_tool_definition() -> Dict[str, Any]:
     """Get tool definition for checking command status."""
 
     desc = "Check status and output of running command. Returns output, status (running/completed), elapsed time, exit code if completed. Use for monitoring long-running commands."
@@ -85,54 +74,36 @@ def get_check_command_status_tool_definition(provider="claude") -> Dict[str, Any
         },
     }
 
-    if provider == "claude":
-        return {
+    return {
+        "type": "function",
+        "function": {
             "name": "check_command_status",
             "description": desc,
-            "input_schema": {
+            "parameters": {
                 "type": "object",
                 "properties": args,
                 "required": ["command_id"],
             },
-        }
-    else:
-        return {
-            "type": "function",
-            "function": {
-                "name": "check_command_status",
-                "description": desc,
-                "parameters": {
-                    "type": "object",
-                    "properties": args,
-                    "required": ["command_id"],
-                },
-            },
-        }
+        },
+    }
 
 
-def get_list_running_commands_tool_definition(provider="claude") -> Dict[str, Any]:
+def get_list_running_commands_tool_definition() -> Dict[str, Any]:
     """Get tool definition for listing running commands."""
 
     desc = "List all running commands with IDs, commands, states, elapsed times, working dirs. Use to monitor active processes, find command IDs for status/termination."
 
-    if provider == "claude":
-        return {
+    return {
+        "type": "function",
+        "function": {
             "name": "list_running_commands",
             "description": desc,
-            "input_schema": {"type": "object", "properties": {}, "required": []},
-        }
-    else:
-        return {
-            "type": "function",
-            "function": {
-                "name": "list_running_commands",
-                "description": desc,
-                "parameters": {"type": "object", "properties": {}, "required": []},
-            },
-        }
+            "parameters": {"type": "object", "properties": {}, "required": []},
+        },
+    }
 
 
-def get_terminate_command_tool_definition(provider="claude") -> Dict[str, Any]:
+def get_terminate_command_tool_definition() -> Dict[str, Any]:
     """Get tool definition for terminating commands."""
     import sys
 
@@ -148,32 +119,21 @@ def get_terminate_command_tool_definition(provider="claude") -> Dict[str, Any]:
         },
     }
 
-    if provider == "claude":
-        return {
+    return {
+        "type": "function",
+        "function": {
             "name": "terminate_command",
             "description": desc,
-            "input_schema": {
+            "parameters": {
                 "type": "object",
                 "properties": args,
                 "required": ["command_id"],
             },
-        }
-    else:
-        return {
-            "type": "function",
-            "function": {
-                "name": "terminate_command",
-                "description": desc,
-                "parameters": {
-                    "type": "object",
-                    "properties": args,
-                    "required": ["command_id"],
-                },
-            },
-        }
+        },
+    }
 
 
-def get_send_command_input_tool_definition(provider="claude") -> Dict[str, Any]:
+def get_send_command_input_tool_definition() -> Dict[str, Any]:
     """Get tool definition for sending input to commands."""
 
     desc = "Send input to interactive command's stdin. Auto-terminates with newline. Use for commands awaiting input (Python input(), prompts, confirmations). Max 1024 chars."
@@ -189,29 +149,18 @@ def get_send_command_input_tool_definition(provider="claude") -> Dict[str, Any]:
         },
     }
 
-    if provider == "claude":
-        return {
+    return {
+        "type": "function",
+        "function": {
             "name": "send_command_input",
             "description": desc,
-            "input_schema": {
+            "parameters": {
                 "type": "object",
                 "properties": args,
                 "required": ["command_id", "input_text"],
             },
-        }
-    else:
-        return {
-            "type": "function",
-            "function": {
-                "name": "send_command_input",
-                "description": desc,
-                "parameters": {
-                    "type": "object",
-                    "properties": args,
-                    "required": ["command_id", "input_text"],
-                },
-            },
-        }
+        },
+    }
 
 
 def get_run_command_tool_handler(command_service: CommandExecutionService) -> Callable:

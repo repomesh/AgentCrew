@@ -168,19 +168,14 @@ class AgentToolRegistrar:
 
         self._clear_from_llm()
 
-        provider = getattr(agent.llm, "provider_name", None)
-
         for tool_name, (
             definition_func,
             handler_factory,
             service_instance,
         ) in agent.tool_definitions.items():
             try:
-                if callable(definition_func) and provider:
-                    try:
-                        tool_def = definition_func(provider)
-                    except TypeError:
-                        tool_def = definition_func()
+                if callable(definition_func):
+                    tool_def = definition_func()
                 else:
                     tool_def = definition_func
 

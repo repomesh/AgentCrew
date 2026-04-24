@@ -5,9 +5,7 @@ if TYPE_CHECKING:
     from .service import SkillsService
 
 
-def get_activate_skill_tool_definition(
-    skills_service: "SkillsService", provider="claude"
-):
+def get_activate_skill_tool_definition(skills_service: "SkillsService"):
     skill_names = skills_service.get_skill_names()
     tool_description = (
         "Load the full instructions for a named skill. "
@@ -26,12 +24,6 @@ def get_activate_skill_tool_definition(
         "required": ["name"],
     }
 
-    if provider == "claude":
-        return {
-            "name": "activate_skill",
-            "description": tool_description,
-            "input_schema": tool_arguments,
-        }
     return {
         "type": "function",
         "function": {
@@ -84,8 +76,8 @@ def get_activate_skill_tool_handler(skills_service: "SkillsService"):
 def register(service_instance: "SkillsService", agent=None):
     from AgentCrew.modules.tools.registration import register_tool
 
-    def definition_func(provider="claude"):
-        return get_activate_skill_tool_definition(service_instance, provider)
+    def definition_func():
+        return get_activate_skill_tool_definition(service_instance)
 
     register_tool(
         definition_func,

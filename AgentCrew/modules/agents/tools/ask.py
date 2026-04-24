@@ -6,7 +6,7 @@ This tool allows agents to request additional information from users with guided
 from typing import Dict, Any, Callable
 
 
-def get_ask_tool_definition(provider="claude") -> Dict[str, Any]:
+def get_ask_tool_definition() -> Dict[str, Any]:
     """
     Get the definition for the ask tool.
 
@@ -42,29 +42,18 @@ def get_ask_tool_definition(provider="claude") -> Dict[str, Any]:
 
     tool_required = ["question", "guided_answers"]
 
-    if provider == "claude":
-        return {
+    return {
+        "type": "function",
+        "function": {
             "name": "ask",
             "description": tool_description,
-            "input_schema": {
+            "parameters": {
                 "type": "object",
                 "properties": tool_arguments,
                 "required": tool_required,
             },
-        }
-    else:
-        return {
-            "type": "function",
-            "function": {
-                "name": "ask",
-                "description": tool_description,
-                "parameters": {
-                    "type": "object",
-                    "properties": tool_arguments,
-                    "required": tool_required,
-                },
-            },
-        }
+        },
+    }
 
 
 def ask_tool_prompt() -> str:
