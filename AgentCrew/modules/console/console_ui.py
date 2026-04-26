@@ -133,11 +133,8 @@ class ConsoleUI(Observer):
             self.ui_effects.stop_loading_animation()  # Stop loading on first chunk
             # self.display_handlers.display_thinking_started(data)  # data is agent_name
         elif event == "thinking_chunk":
-            self.ui_effects.update_live_display(data, is_thinking=True)
-            # self.display_handlers.display_thinking_chunk(
-            #     data
-            # )  # data is the thinking chunk
-            #
+            if data.strip():
+                self.ui_effects.update_live_display(data, is_thinking=True)
         elif event == "thinking_completed":
             self.ui_effects.finish_response(
                 self.ui_effects.updated_text, is_thinking=True

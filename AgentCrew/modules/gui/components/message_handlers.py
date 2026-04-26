@@ -24,7 +24,8 @@ class MessageEventHandler:
         elif event == "thinking_started":
             self.handle_thinking_started(data)
         elif event == "thinking_chunk":
-            self.handle_thinking_chunk(data)
+            if data.strip():
+                self.handle_thinking_chunk(data)
         elif event == "thinking_completed":
             self.handle_thinking_completed()
         elif event == "stream_cancel_requested":

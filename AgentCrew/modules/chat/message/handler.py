@@ -420,7 +420,7 @@ class MessageHandler(Observable):
                             # Delays it a bit when using without stream
                             await asyncio.sleep(0.5)
                         start_thinking = True
-                    if think_text_chunk.strip():
+                    if think_text_chunk:
                         thinking_content += think_text_chunk
                         self._notify("thinking_chunk", think_text_chunk)
                     if signature:
