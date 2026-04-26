@@ -165,7 +165,7 @@ def get_file_content_tool_handler(
             raise Exception("File path is required")
 
         if not os.path.isabs(file_path):
-            file_path = os.path.abspath(file_path)
+            file_path = os.path.abspath(os.path.expanduser(file_path))
 
         path, file_content = code_analysis_service.get_file_content(
             file_path, start_line=start_line, end_line=end_line
