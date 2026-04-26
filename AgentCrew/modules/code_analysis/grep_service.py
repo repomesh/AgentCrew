@@ -36,6 +36,7 @@ class GrepTextService:
     DEFAULT_MAX_RESULTS = 100
     DEFAULT_TIMEOUT = 30
     DEFAULT_EXCLUDE_DIRS = [".agentcrew"]
+    MATCH_CONTEXT_CHARS = 120
 
     @classmethod
     def get_instance(cls):
@@ -539,12 +540,8 @@ class GrepTextService:
         """
         if isinstance(path, str):
             raw_paths = [path]
-        elif isinstance(path, list):
-            raw_paths = path
         else:
-            error_msg = f"path must be an array of strings, got: {type(path).__name__}"
-            logger.error(error_msg)
-            raise GrepTextError(error_msg)
+            raw_paths = path
 
         if not raw_paths:
             error_msg = "At least one path must be provided"
@@ -620,10 +617,42 @@ class GrepTextService:
         logger.error(error_msg)
         raise GrepTextError(error_msg)
 
+    def _format_line_context(
+        self,
+        line_content: str,
+        pattern: Optional[str] = None,
+        case_sensitive: bool = True,
+    ) -> str:
+        max_length = self.MATCH_CONTEXT_CHARS * 2
+        if len(line_content) <= max_length:
+            return line_content
+
+        match = None
+        if pattern:
+            try:
+                flags = 0 if case_sensitive else re.IGNORECASE
+                match = re.search(pattern, line_content, flags)
+            except re.error:
+                match = None
+
+        if match:
+            start = max(0, match.start() - self.MATCH_CONTEXT_CHARS)
+            end = min(len(line_content), match.end() + self.MATCH_CONTEXT_CHARS)
+        else:
+            start = 0
+            end = max_length
+
+        snippet = line_content[start:end]
+        prefix = "..." if start > 0 else ""
+        suffix = "..." if end < len(line_content) else ""
+        return f"{prefix}{snippet}{suffix}"
+
     def _parse_output(
         self,
         output: str,
         max_results: Optional[int] = None,
+        pattern: Optional[str] = None,
+        case_sensitive: bool = True,
     ) -> str:
         """
         Parse grep tool output into formatted string result.
@@ -702,7 +731,12 @@ class GrepTextService:
                 current_file = file_path
 
             # Add match line
-            result_lines.append(f"- {line_number}: {line_content}")
+            formatted_content = self._format_line_context(
+                line_content,
+                pattern=pattern,
+                case_sensitive=case_sensitive,
+            )
+            result_lines.append(f"- {line_number}: {formatted_content}")
 
         return "\n".join(result_lines)
 
@@ -831,7 +865,12 @@ class GrepTextService:
             if file_path != current_file:
                 result_lines.append(f"**{file_path}:**")
                 current_file = file_path
-            result_lines.append(f"- {line_number}: {line_content}")
+            formatted_content = self._format_line_context(
+                line_content,
+                pattern=validated_pattern,
+                case_sensitive=case_sensitive,
+            )
+            result_lines.append(f"- {line_number}: {formatted_content}")
 
         logger.info("Search completed successfully")
         return "\n".join(result_lines)

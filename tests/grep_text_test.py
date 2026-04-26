@@ -830,6 +830,19 @@ another:malformed
         file2_index = result.find("file2.py")
         self.assertLess(file1_index, file2_index)
 
+    def test_parse_output_truncates_long_line_around_match(self):
+        prefix = "a" * 500
+        suffix = "b" * 500
+        output = f"/home/user/app.min.js:1:{prefix}needle{suffix}"
+
+        result = self.service._parse_output(output, pattern="needle")
+
+        self.assertIn("...", result)
+        self.assertIn("needle", result)
+        self.assertLess(len(result), len(output))
+        self.assertNotIn("a" * 500, result)
+        self.assertNotIn("b" * 500, result)
+
 
 class TestGrepTextServiceCommandExecution(unittest.TestCase):
     """Test command execution functionality."""
@@ -1281,6 +1294,38 @@ class TestGrepTextServiceMainSearch(unittest.TestCase):
 
         self.assertIn("Found 4 match(es).", result)
         self.assertEqual(result.count("test line"), 4)
+
+    @patch(
+        "AgentCrew.modules.command_execution.service.CommandExecutionService.get_instance"
+    )
+    @patch("shutil.which")
+    def test_search_text_truncates_long_line_around_match(
+        self, mock_which, mock_get_instance
+    ):
+        """Test long minified lines are shown as match-centered snippets."""
+        mock_which.return_value = "/usr/local/bin/rg"
+        self.service._is_windows = False
+        self.service._tool_availability_cache.clear()
+
+        mock_cmd_instance = Mock()
+        mock_get_instance.return_value = mock_cmd_instance
+
+        prefix = "a" * 500
+        suffix = "b" * 500
+        output = f"{self.temp_dir}/app.min.js:1:{prefix}needle{suffix}"
+        mock_cmd_instance.execute_command.return_value = {
+            "status": "completed",
+            "exit_code": 0,
+            "output": output,
+        }
+
+        result = self.service.search_text("needle", self.temp_dir)
+
+        self.assertIn("needle", result)
+        self.assertIn("...", result)
+        self.assertLess(len(result), len(output))
+        self.assertNotIn("a" * 500, result)
+        self.assertNotIn("b" * 500, result)
 
     @patch(
         "AgentCrew.modules.command_execution.service.CommandExecutionService.get_instance"

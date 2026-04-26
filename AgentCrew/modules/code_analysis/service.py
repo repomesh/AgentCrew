@@ -818,9 +818,10 @@ Keep it under 500 words."""
                 end_line = total_lines
 
             selected_lines = lines[start_line - 1 : end_line]
-            return file_path, "\n".join(selected_lines)
-
-        return file_path, decoded_content
+            return file_path, "\n".join(
+                line[:200] + "..." if len(line) > 200 else line
+                for line in selected_lines
+            )
 
         return file_path, decoded_content
 
