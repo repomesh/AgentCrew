@@ -70,6 +70,9 @@ class ConsoleUI(Observer):
         self.confirmation_handler = ConfirmationHandler(self)
         self.conversation_handler = ConversationHandler(self)
         self.command_handlers = CommandHandlers(self)
+        self._input_tokens = 0
+        self._output_tokens = 0
+        self._total_cost = 0
 
     def _set_voice_processing_state(self, is_processing: bool):
         voice_service = self.message_handler.voice_service
@@ -87,8 +90,6 @@ class ConsoleUI(Observer):
 
     def _process_voice_activation(self, transcript: str):
         assistant_response = None
-        input_tokens = 0
-        output_tokens = 0
 
         try:
             self.input_handler.is_message_processing = True
@@ -99,7 +100,7 @@ class ConsoleUI(Observer):
             if should_exit or was_cleared or not self.message_handler.agent.history:
                 return
 
-            assistant_response, input_tokens, output_tokens = asyncio.run(
+            assistant_response, self._input_tokens, self._output_tokens = asyncio.run(
                 self.message_handler.get_assistant_response()
             )
         except Exception as e:
@@ -109,11 +110,14 @@ class ConsoleUI(Observer):
             self._clear_pending_input_queue()
             self._set_voice_processing_state(False)
 
-        total_cost = self._calculate_token_usage(input_tokens, output_tokens)
+        self._calculate_token_usage(self._input_tokens, self._output_tokens)
 
         if assistant_response:
             self.display_token_usage(
-                input_tokens, output_tokens, total_cost, self.session_cost
+                self._input_tokens,
+                self._output_tokens,
+                self._total_cost,
+                self.session_cost,
             )
 
     def listen(self, event: str, data: Any = None):
@@ -415,6 +419,20 @@ class ConsoleUI(Observer):
         self._is_resizing = True
         time.sleep(0.5)  # brief pause to allow resize to complete
         self._clear_and_reprint_chat()
+
+        self.display_token_usage(
+            self._input_tokens,
+            self._output_tokens,
+            self._total_cost,
+            self.session_cost,
+        )
+
+        self.display_handlers.print_prompt_prefix(
+            self.message_handler.agent.name,
+            self.message_handler.agent.get_model(),
+            self.message_handler.tool_manager.get_effective_yolo_mode(),
+        )
+
         self.display_handlers.print_divider("👤 YOU: ", with_time=True)
         prompt = Text(
             PROMPT_CHAR,
@@ -437,11 +455,6 @@ class ConsoleUI(Observer):
         os.system("cls" if os.name == "nt" else "printf '\033c'")
         self.display_handlers.display_loaded_conversation(
             self.message_handler.streamline_messages, self.message_handler.agent.name
-        )
-        self.display_handlers.print_prompt_prefix(
-            self.message_handler.agent.name,
-            self.message_handler.agent.get_model(),
-            self.message_handler.tool_manager.get_effective_yolo_mode(),
         )
 
     def start_streaming_response(self, agent_name: str):
@@ -533,11 +546,10 @@ class ConsoleUI(Observer):
 
     def _calculate_token_usage(self, input_tokens: int, output_tokens: int):
         """Calculate token usage and update session cost."""
-        total_cost = self.message_handler.agent.calculate_usage_cost(
+        self._total_cost = self.message_handler.agent.calculate_usage_cost(
             input_tokens, output_tokens
         )
-        self.session_cost += total_cost
-        return total_cost
+        self.session_cost += self._total_cost
 
     def start(self):
         """Start the console UI main loop."""
@@ -788,18 +800,19 @@ class ConsoleUI(Observer):
                     )
 
                     self._is_resizing = False
+                    self._input_tokens = input_tokens
+                    self._output_tokens = output_tokens
 
                     # Ensure loading animation is stopped
                     self.stop_loading_animation()
 
-                    total_cost = self._calculate_token_usage(
-                        input_tokens, output_tokens
-                    )
-
                     if assistant_response:
                         # Calculate and display token usage
                         self.display_token_usage(
-                            input_tokens, output_tokens, total_cost, self.session_cost
+                            self._input_tokens,
+                            self._output_tokens,
+                            self._total_cost,
+                            self.session_cost,
                         )
                 except KeyboardInterrupt:
                     self._handle_keyboard_interrupt()
