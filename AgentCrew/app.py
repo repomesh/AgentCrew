@@ -338,7 +338,7 @@ class AgentCrewApplication:
             services = self.setup.setup_services(
                 provider,
                 memory_llm,
-                need_memory=False,
+                need_memory=True,
                 model_id=model_id,
             )
 
