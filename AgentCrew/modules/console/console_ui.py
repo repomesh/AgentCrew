@@ -653,6 +653,7 @@ class ConsoleUI(Observer):
                             )
                             viewer.show()
                         finally:
+                            self._clear_and_reprint_chat()
                             self.input_handler._start_input_thread()
                         continue
 
