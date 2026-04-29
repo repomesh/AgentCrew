@@ -50,8 +50,9 @@ class ContextPersistenceService:
         # Expand user path (~) if present, and get absolute path for clarity
         self.base_dir = os.path.abspath(os.path.expanduser(persistence_dir))
         self.conversations_dir = os.path.join(self.base_dir, self.CONVERSATIONS_SUBDIR)
-        self.adaptive_behaviors_file_path = os.path.join(
-            self.base_dir, self.ADAPTIVE_BEHAVIORS_FILE
+        self.adaptive_behaviors_file_path = os.getenv(
+            "AGENTCREW_ADAPTIVE_PATH",
+            os.path.join(self.base_dir, self.ADAPTIVE_BEHAVIORS_FILE),
         )
         self.adaptive_behaviors_local_path = os.path.join(
             ".agentcrew", self.ADAPTIVE_BEHAVIORS_FILE

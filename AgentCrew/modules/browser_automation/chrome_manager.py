@@ -35,8 +35,11 @@ class ChromeManager:
         self.debug_port = debug_port
         self.chrome_process: Optional[subprocess.Popen] = None
         self.chrome_thread: Optional[threading.Thread] = None
-        self._user_data_dir = os.path.join(
-            os.getenv("AGENTCREW_PERSISTENCE_DIR", "./"), "chrome_user_data"
+        self._user_data_dir = os.getenv(
+            "AGENTCREW_BROWSER_PROFILE_PATH",
+            os.path.join(
+                os.getenv("AGENTCREW_PERSISTENCE_DIR", "./"), "chrome_user_data"
+            ),
         )
         self._is_windows = platform.system() == "Windows"
 
