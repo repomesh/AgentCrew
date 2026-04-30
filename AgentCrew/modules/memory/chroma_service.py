@@ -45,7 +45,7 @@ class ChromaMemoryService(BaseMemoryService):
             elif self.llm_service.provider_name == "together":
                 self.llm_service.model = "Qwen/Qwen3.5-9B"
             elif self.llm_service.provider_name == "opencode_go":
-                self.llm_service.model = "kimi-k2.5"
+                self.llm_service.model = "qwen3.6-plus"
 
         self._collection = None
         self.collection_name = collection_name
