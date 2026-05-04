@@ -41,7 +41,7 @@ def get_code_analysis_tool_definition() -> Dict[str, Any]:
         },
         "deep_analysis": {
             "type": "boolean",
-            "description": "When true, include project notes (rules, conventions, patterns) extracted in the tool result. When false, skip project notes for faster analysis. Default is false.",
+            "description": "When true, include project notes (rules, conventions, patterns, flows) extracted in the tool result. When false, skip project notes for faster analysis. Default is true.",
         },
     }
     tool_required = ["path"]
@@ -74,7 +74,7 @@ def get_code_analysis_tool_handler(
 
         exclude_patterns = params.get("exclude_patterns", [])
         feature_scope = params.get("feature_scope")
-        deep_analysis = params.get("deep_analysis", False)
+        deep_analysis = params.get("deep_analysis", True)
         result = await code_analysis_service.analyze_code_structure(
             path, exclude_patterns, feature_scope=feature_scope
         )
@@ -90,7 +90,7 @@ def get_code_analysis_tool_handler(
 
         if deep_analysis:
             project_notes = await code_analysis_service.extract_project_notes(
-                result, path
+                result, path, feature_scope=feature_scope
             )
             output.append(
                 {

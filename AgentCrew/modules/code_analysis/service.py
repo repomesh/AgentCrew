@@ -1,13 +1,16 @@
 import os
 import fnmatch
 import subprocess
-import json
 import base64
 from typing import Any, Dict, List, Optional, Tuple, Union, TYPE_CHECKING
-from loguru import logger
 
 from .tree_sitter_runtime import TreeSitterRuntime, EXTENSION_TO_LANGUAGE
 from .parsers import get_parser_for_language, BaseLanguageParser, LANGUAGE_PARSER_MAP
+from .text_map_formatter import TextMapFormatter
+from .file_tree_formatter import FileTreeFormatter
+from .result_formatter import ResultFormatter
+from .project_notes import ProjectNotesExtractor
+from .file_selector import FileSelector, MAX_FILES_TO_ANALYZE
 import mimetypes
 
 IMAGE_MIME_TYPES = [
@@ -19,9 +22,6 @@ IMAGE_MIME_TYPES = [
 
 if TYPE_CHECKING:
     from AgentCrew.modules.llm.base import BaseLLMService
-
-MAX_ITEMS_OUT = 40
-MAX_FILES_TO_ANALYZE = 200
 
 
 class CodeAnalysisService:
@@ -50,7 +50,7 @@ class CodeAnalysisService:
             elif self.llm_service.provider_name == "deepinfra":
                 self.llm_service.model = "google/gemma-4-31B-it"
             elif self.llm_service.provider_name == "github_copilot":
-                self.llm_service.model = "gpt-5-mini"
+                self.llm_service.model = "claude-haiku-4.5"
             elif self.llm_service.provider_name == "copilot_response":
                 self.llm_service.model = "gpt-5.4-mini"
             elif self.llm_service.provider_name == "openai_codex":
@@ -86,6 +86,20 @@ class CodeAnalysisService:
             "singleton_method",
             "primary_constructor",
         }
+
+        self._text_map_formatter = TextMapFormatter()
+        self._file_tree_formatter = FileTreeFormatter()
+        self._result_formatter = ResultFormatter(
+            text_map_formatter=self._text_map_formatter,
+            file_tree_formatter=self._file_tree_formatter,
+            class_types=self.class_types,
+            function_types=self.function_types,
+            max_files_to_analyze=MAX_FILES_TO_ANALYZE,
+        )
+        self._project_notes_extractor = ProjectNotesExtractor(
+            llm_service=self.llm_service
+        )
+        self._file_selector = FileSelector(llm_service=self.llm_service)
 
     def _detect_language(self, file_path: str) -> str:
         """Detect programming language based on file extension."""
@@ -165,188 +179,23 @@ class CodeAnalysisService:
         max_files: int = MAX_FILES_TO_ANALYZE,
         feature_scope: Optional[str] = None,
     ) -> List[str]:
-        """Use LLM to intelligently select which files to analyze from a large repository.
+        """Use LLM to intelligently select files for analysis. Delegates to FileSelector."""
+        return await self._file_selector.select_files_with_llm(
+            files, max_files, feature_scope=feature_scope
+        )
 
-        Args:
-            files: List of relative file paths to select from
-            max_files: Maximum number of files to select
+    async def extract_project_notes(
+        self,
+        analysis_result: str,
+        repo_path: str,
+        feature_scope: Optional[str] = None,
+    ) -> str:
+        """Extract project notes, rules, and conventions from the analysis result.
 
-        Returns:
-            List of selected file paths that should be analyzed
-        """
-        if not self.llm_service:
-            return files[:max_files]
-
-        feature_scope_instruction = ""
-        if feature_scope:
-            feature_scope_instruction = f"""
-Feature focus:
-- Prioritize files that are most relevant to this feature scope: {feature_scope}
-- Prefer keeping files whose paths, modules, or responsibilities are closely related to that feature scope
-- If tradeoffs are needed, keep feature-relevant files even when they would otherwise be lower priority than generic core files
-- Still preserve critical shared/base/core files needed to understand the feature in context
-"""
-
-        prompt = f"""You are analyzing a code repository with {len(files)} files.
-The analysis system can only process {max_files} files at a time.
-
-Generate glob patterns to EXCLUDE less important files. The goal is to keep around {max_files} most important files after exclusion.
-{feature_scope_instruction}
-Files to EXCLUDE (generate patterns for these):
-1. Test files
-2. Generated/build files
-3. Vendor/dependency files
-4. Documentation files (e.g., **/docs/**, **/*.md)
-5. Configuration duplicates and environment files
-6. Migration files
-7. Static assets (images, fonts, etc.)
-8. Example/sample files
-
-Files to KEEP (NEVER exclude) - ordered by priority:
-1. Shared functions, utilities, and helper modules (e.g., utils/, helpers/, common/, shared/, lib/)
-2. Base classes, abstract classes, and interfaces that other modules inherit from
-3. Core application logic (main entry points, core modules)
-4. Business features logic and domain models
-5. API endpoints and controllers
-6. Service classes and middleware
-7. Key configuration files that define app structure
-8. Files directly relevant to the requested feature scope, if one is provided
-
-Here is the complete list of files:
-{chr(10).join(files)}
-
-Current file count: {len(files)}
-Target file count: ~{max_files}
-Files to exclude: ~{max(0, len(files) - max_files)}
-
-Return ONLY a JSON array of glob patterns to exclude. Be strategic - use broad patterns when possible.
-
-Example response format:
-["**/tests/**", "**/test_*", "**/*.test.*", "**/docs/**", "**/migrations/**", "**/__pycache__/**"]"""
-
-        try:
-            response = await self.llm_service.process_message(prompt, temperature=0)
-
-            response = response.strip()
-            if response.startswith("```json"):
-                response = response[7:]
-            if response.startswith("```"):
-                response = response[3:]
-            if response.endswith("```"):
-                response = response[:-3]
-            response = response.strip()
-
-            exclude_patterns = json.loads(response)
-
-            if isinstance(exclude_patterns, list):
-                filtered_files = []
-                for file_path in files:
-                    excluded = False
-                    for pattern in exclude_patterns:
-                        if fnmatch.fnmatch(file_path, pattern):
-                            excluded = True
-                            break
-                    if not excluded:
-                        filtered_files.append(file_path)
-
-                logger.info(
-                    f"LLM exclusion patterns reduced files from {len(files)} to {len(filtered_files)}"
-                )
-
-                return filtered_files[:max_files]
-        except Exception as e:
-            logger.warning(f"Cannot extract exclusion patterns from LLM response: {e}")
-
-        return files[:max_files]
-
-    KNOWN_RULE_FILES = [
-        ".cursorrules",
-        "CLAUDE.md",
-        ".github/copilot-instructions.md",
-        "CONVENTIONS.md",
-        ".windsurfrules",
-        "AGENTS.md",
-        ".editorconfig",
-        "CONTRIBUTING.md",
-        ".ai/rules.md",
-    ]
-
-    async def extract_project_notes(self, analysis_result: str, repo_path: str) -> str:
-        """Extract project notes, rules, and conventions from the analysis result using LLM.
-
-        Sends the analyzed code structure to the LLM with a prompt to extract
-        project-specific patterns, conventions, and rules. Also checks for
-        known rule/instruction files in the repository.
-
-        Args:
-            analysis_result: The formatted analysis result string from analyze_code_structure
-            repo_path: The root path of the repository being analyzed
-
-        Returns:
-            Structured project notes string for the agent to use as context
-        """
-        if not self.llm_service:
-            return self._fallback_project_notes(repo_path)
-
-        found_rule_files = []
-        for rule_file in self.KNOWN_RULE_FILES:
-            full_path = os.path.join(repo_path, rule_file)
-            if os.path.isfile(full_path):
-                found_rule_files.append(rule_file)
-
-        rule_files_section = ""
-        if found_rule_files:
-            rule_files_section = f"""\n\nIMPORTANT: The following project rule/instruction files were detected in the repository:
-{chr(10).join(f"- {f}" for f in found_rule_files)}
-
-You MUST read these files using the get_file tool to understand project-specific rules and conventions before making any changes."""
-
-        prompt = f"""You are analyzing a codebase structure to extract project notes and rules for a development assistant.
-
-Based on the following code structure analysis, extract:
-
-1. **Technology Stack**: Languages, frameworks, key libraries detected
-2. **Architecture Pattern**: How the project is organized (e.g., MVC, modular, monorepo, microservices)
-3. **Naming Conventions**: File naming, module naming, any patterns observed
-4. **Terminologies**: Extract and formalize domain terminology from the current analysis into a consistent glossary.
-5. **Key Entry Points**: Main files, configuration files, app bootstrapping
-6. **Development Patterns**: Dependency injection, service layers, middleware patterns, etc.
-7. **Project-Specific Rules**: Any conventions that a developer MUST follow when working on this codebase (e.g., where to place new files, how modules are registered, import patterns)
-
-Code Structure Analysis:
-{analysis_result}
-
-Return a concise, structured summary in plain text (NOT JSON). Use clear headings and bullet points.
-Focus only on actionable insights that help a developer understand how to work within this codebase.
-Keep it under 500 words."""
-
-        try:
-            response = await self.llm_service.process_message(prompt, temperature=0)
-
-            notes = response.strip()
-            if rule_files_section:
-                notes += rule_files_section
-
-            logger.info("Successfully extracted project notes from analysis result")
-            return notes
-        except Exception as e:
-            logger.warning(f"Failed to extract project notes via LLM: {e}")
-            return self._fallback_project_notes(repo_path)
-
-    def _fallback_project_notes(self, repo_path: str) -> str:
-        """Generate minimal project notes when LLM is unavailable."""
-        found_rule_files = []
-        for rule_file in self.KNOWN_RULE_FILES:
-            full_path = os.path.join(repo_path, rule_file)
-            if os.path.isfile(full_path):
-                found_rule_files.append(rule_file)
-
-        notes = "Based on the code analysis, learn about the patterns and development flows, adapt project behaviors if possible for better response."
-        if found_rule_files:
-            notes += "\n\nIMPORTANT: The following project rule/instruction files were detected:\n"
-            notes += chr(10).join(f"- {f}" for f in found_rule_files)
-            notes += "\n\nYou MUST read these files using the get_file tool before making any changes."
-        return notes
+        Delegates to ProjectNotesExtractor."""
+        return await self._project_notes_extractor.extract_project_notes(
+            analysis_result, repo_path, feature_scope=feature_scope
+        )
 
     async def analyze_code_structure(
         self,
@@ -354,8 +203,7 @@ Keep it under 500 words."""
         exclude_patterns: Optional[List[str]] = None,
         feature_scope: Optional[str] = None,
     ) -> Dict[str, Any] | str:
-        """
-        Build a tree-sitter based structural map of source code files in a git repository.
+        """Build a tree-sitter based structural map of source code files in a git repository.
 
         Args:
             path: Root directory to analyze (must be a git repository)
@@ -454,299 +302,7 @@ Keep it under 500 words."""
 
     def _generate_text_map(self, analysis_results: List[Dict[str, Any]]) -> str:
         """Generate a hierarchical text representation of the code structure analysis."""
-
-        def format_node(
-            node: Dict[str, Any], prefix: str = "", is_last: bool = True
-        ) -> List[str]:
-            lines = []
-
-            node_type = node.get("type", "")
-            node_name = node.get("name", "")
-            node_lines = (
-                f" //L: {node.get('start_line', '')}-{node.get('end_line', '')}"
-            )
-
-            if node_type == "decorated_definition" and "children" in node:
-                for child in node.get("children", []):
-                    if child.get("type") in {
-                        "function_definition",
-                        "method_definition",
-                        "member_function_definition",
-                    }:
-                        return format_node(child, prefix, is_last)
-
-            if not node_name and node_type in {
-                "class_body",
-                "block",
-                "declaration_list",
-                "body",
-                "namespace_declaration",
-                "lexical_declaration",
-                "variable_declarator",
-            }:
-                return process_children(node.get("children", []), prefix, is_last)
-            elif not node_name:
-                return lines
-
-            branch = "  "
-            if node_type in {
-                "class_definition",
-                "class_declaration",
-                "class_specifier",
-                "class",
-                "interface_declaration",
-                "struct_specifier",
-                "struct_declaration",
-                "struct_item",
-                "trait_item",
-                "trait_declaration",
-                "module",
-                "type_declaration",
-            }:
-                node_info = f"class {node_name}{node_lines}"
-            elif node_type in {
-                "function_definition",
-                "function_declaration",
-                "method_definition",
-                "method_declaration",
-                "fn_item",
-                "method",
-                "singleton_method",
-                "constructor_declaration",
-                "member_function_definition",
-                "constructor",
-                "destructor",
-                "public_method_definition",
-                "private_method_definition",
-                "protected_method_definition",
-                "arrow_function",
-                "lexical_declaration",
-            }:
-                if "first_line" in node:
-                    node_info = node["first_line"] + node_lines
-                else:
-                    params = []
-                    modfilers = ""
-                    if "parameters" in node and node["parameters"]:
-                        params = node["parameters"]
-                    elif "children" in node:
-                        for child in node["children"]:
-                            if child.get("type") in {
-                                "parameter_list",
-                                "parameters",
-                                "formal_parameters",
-                                "argument_list",
-                            }:
-                                for param in child.get("children", []):
-                                    if param.get("type") in {"identifier", "parameter"}:
-                                        param_name = param.get("name", "")
-                                        if param_name:
-                                            params.append(param_name)
-
-                    params_str = ", ".join(params) if params else ""
-                    params_str = params_str.replace("\n", "")
-                    if "modifiers" in node:
-                        modfilers = " ".join(node["modifiers"]) + " "
-                    node_info = f"{modfilers}{node_name}({params_str}){node_lines}"
-            else:
-                if "first_line" in node:
-                    node_info = node["first_line"]
-                else:
-                    node_info = node_name
-
-            if len(node_info) > 300:
-                node_info = node_info[:297] + "... (REDACTED due to long content)"
-
-            lines.append(f"{prefix}{branch}{node_info}")
-
-            if "children" in node:
-                new_prefix = prefix + "  "
-                child_lines = process_children(node["children"], new_prefix, is_last)
-                if child_lines:
-                    lines.extend(child_lines)
-
-            return lines
-
-        def process_children(
-            children: List[Dict], prefix: str, is_last: bool
-        ) -> List[str]:
-            if not children:
-                return []
-
-            lines = []
-            significant_children = [
-                child
-                for child in children
-                if child.get("type")
-                in {
-                    "arrow_function",
-                    "call_expression",
-                    "lexical_declaration",
-                    "decorated_definition",
-                    "class_definition",
-                    "class_declaration",
-                    "class_specifier",
-                    "class",
-                    "interface_declaration",
-                    "struct_specifier",
-                    "struct_declaration",
-                    "struct_item",
-                    "trait_item",
-                    "trait_declaration",
-                    "module",
-                    "type_declaration",
-                    "impl_item",
-                    "function_definition",
-                    "function_declaration",
-                    "method_definition",
-                    "method_declaration",
-                    "fn_item",
-                    "method",
-                    "singleton_method",
-                    "constructor_declaration",
-                    "member_function_definition",
-                    "constructor",
-                    "destructor",
-                    "public_method_definition",
-                    "private_method_definition",
-                    "protected_method_definition",
-                    "class_body",
-                    "block",
-                    "declaration_list",
-                    "body",
-                    "impl_block",
-                    "property_declaration",
-                    "field_declaration",
-                    "variable_declaration",
-                    "const_declaration",
-                }
-            ]
-
-            for i, child in enumerate(significant_children):
-                is_last_child = i == len(significant_children) - 1
-                child_lines = format_node(child, prefix, is_last_child)
-                if child_lines:
-                    lines.extend(child_lines)
-                if i >= MAX_ITEMS_OUT:
-                    lines.append(
-                        f"{prefix}  ...({len(significant_children) - MAX_ITEMS_OUT} more items)"
-                    )
-                    break
-
-            return lines
-
-        def get_file_code_content(
-            result: Dict[str, Any], file_indent: str
-        ) -> List[str]:
-            """Generate code structure content for a single file."""
-            lines = []
-            structure = result.get("structure")
-            if not structure:
-                return lines
-
-            if not structure.get("children"):
-                if structure.get("type"):
-                    return [f"{file_indent}  {structure['type']}"]
-                return lines
-
-            significant_nodes = [
-                child
-                for child in structure["children"]
-                if child.get("type")
-                in {
-                    "arrow_function",
-                    "lexical_declaration",
-                    "call_expression",
-                    "decorated_definition",
-                    "class_definition",
-                    "class_declaration",
-                    "class_specifier",
-                    "class",
-                    "interface_declaration",
-                    "struct_specifier",
-                    "struct_declaration",
-                    "struct_item",
-                    "trait_item",
-                    "trait_declaration",
-                    "module",
-                    "type_declaration",
-                    "impl_item",
-                    "function_definition",
-                    "function_declaration",
-                    "method_definition",
-                    "method_declaration",
-                    "fn_item",
-                    "method",
-                    "singleton_method",
-                    "constructor_declaration",
-                    "member_function_definition",
-                    "constructor",
-                    "destructor",
-                    "public_method_definition",
-                    "private_method_definition",
-                    "protected_method_definition",
-                    "property_declaration",
-                    "field_declaration",
-                    "variable_declaration",
-                    "const_declaration",
-                    "namespace_declaration",
-                }
-            ]
-
-            for i, node in enumerate(significant_nodes):
-                is_last = i == len(significant_nodes) - 1
-                node_lines = format_node(node, file_indent, is_last)
-                if node_lines:
-                    lines.extend(node_lines)
-                if i >= MAX_ITEMS_OUT:
-                    lines.append(
-                        f"{file_indent}  ...({len(significant_nodes) - MAX_ITEMS_OUT} more items)"
-                    )
-                    break
-            return lines
-
-        sorted_results = sorted(analysis_results, key=lambda x: x["path"])
-
-        results_by_path = {result["path"]: result for result in sorted_results}
-
-        tree: Dict[str, Any] = {}
-        for result in sorted_results:
-            path = result["path"].replace("\\", "/")
-            parts = path.split("/")
-            current = tree
-            for i, part in enumerate(parts):
-                if i == len(parts) - 1:
-                    current[part] = {"__is_file__": True, "__path__": result["path"]}
-                else:
-                    if part not in current:
-                        current[part] = {}
-                    current = current[part]
-
-        output_lines = []
-
-        def format_tree(node: Dict[str, Any], indent: str = "") -> None:
-            items = sorted(node.keys())
-            for name in items:
-                child = node[name]
-                if isinstance(child, dict) and child.get("__is_file__"):
-                    output_lines.append(f"{indent}{name}")
-                    file_path = child["__path__"]
-                    if file_path in results_by_path:
-                        file_content = get_file_code_content(
-                            results_by_path[file_path], indent
-                        )
-                        output_lines.extend(file_content)
-                elif isinstance(child, dict):
-                    output_lines.append(f"{indent}{name}/")
-                    format_tree(child, indent + "  ")
-
-        format_tree(tree)
-
-        return (
-            "\n".join(output_lines)
-            if output_lines
-            else "No significant code structure found."
-        )
+        return self._text_map_formatter.generate_text_map(analysis_results)
 
     def get_file_content(
         self,
@@ -754,8 +310,8 @@ Keep it under 500 words."""
         start_line=None,
         end_line=None,
     ) -> Union[Tuple[str, str], Tuple[str, Dict[str, Any]]]:
-        """
-        Return the content of a file, optionally reading only a specific line range.
+        """Return the content of a file, optionally reading only a specific line range.
+
         For document files (PDF, DOCX, XLSX, PPTX), uses Docling to convert
         to text/markdown and ignores start_line/end_line parameters.
         For image files, returns base64 encoded data in image_url format.
@@ -826,48 +382,12 @@ Keep it under 500 words."""
         return file_path, decoded_content
 
     def _build_file_tree(self, file_paths: List[str]) -> Dict[str, Any]:
-        """Build a hierarchical tree structure from flat file paths.
-
-        Args:
-            file_paths: List of relative file paths
-
-        Returns:
-            Nested dictionary representing the file tree
-        """
-        tree: Dict[str, Any] = {}
-        for path in sorted(file_paths):
-            parts = path.replace("\\", "/").split("/")
-            current = tree
-            for i, part in enumerate(parts):
-                if i == len(parts) - 1:
-                    current[part] = None
-                else:
-                    if part not in current:
-                        current[part] = {}
-                    current = current[part]
-        return tree
+        """Build a hierarchical tree structure from flat file paths."""
+        return self._file_tree_formatter.build_file_tree(file_paths)
 
     def _format_file_tree(self, tree: Dict[str, Any], indent: str = "") -> List[str]:
-        """Format a file tree dictionary into indented lines.
-
-        Args:
-            tree: Nested dictionary representing file tree
-            indent: Current indentation string
-
-        Returns:
-            List of formatted lines
-        """
-        lines = []
-        items = sorted(tree.keys())
-        for name in items:
-            subtree = tree[name]
-            if subtree is None:
-                lines.append(f"{indent}{name}")
-            else:
-                lines.append(f"{indent}{name}/")
-                child_lines = self._format_file_tree(subtree, indent + "  ")
-                lines.extend(child_lines)
-        return lines
+        """Format a file tree dictionary into indented lines."""
+        return self._file_tree_formatter.format_file_tree(tree, indent)
 
     def _format_analysis_results(
         self,
@@ -877,71 +397,11 @@ Keep it under 500 words."""
         non_analyzed_files: List[str] = [],
         total_supported_files: int = 0,
     ) -> str:
-        """Format the analysis results into a clear text format.
-
-        Args:
-            analysis_results: List of analysis results for each file
-            analyzed_files: List of files that were analyzed
-            errors: List of errors encountered during analysis
-            non_analyzed_files: List of files that were skipped due to file limit
-            total_supported_files: Total number of supported files in the repository
-        """
-
-        total_files = len(analyzed_files)
-        classes = sum(
-            self._count_nodes(f["structure"], self.class_types)
-            for f in analysis_results
+        """Format the analysis results into a clear text format."""
+        return self._result_formatter.format_analysis_results(
+            analysis_results,
+            analyzed_files,
+            errors,
+            non_analyzed_files,
+            total_supported_files,
         )
-        functions = sum(
-            self._count_nodes(f["structure"], self.function_types)
-            for f in analysis_results
-        )
-        decorated_functions = sum(
-            self._count_nodes(f["structure"], {"decorated_definition"})
-            for f in analysis_results
-        )
-        error_count = len(errors)
-        non_analyzed_count = len(non_analyzed_files)
-
-        sections = []
-
-        sections.append("\n===ANALYSIS STATISTICS===\n")
-        sections.append(f"Total files analyzed: {total_files}")
-        if non_analyzed_count > 0:
-            sections.append(
-                f"Total files skipped (repository too large): {non_analyzed_count}"
-            )
-            sections.append(
-                f"Total supported files in repository: {total_supported_files}"
-            )
-        sections.append(f"Total errors: {error_count}")
-        sections.append(f"Total classes found: {classes}")
-        sections.append(f"Total functions found: {functions}")
-        sections.append(f"Total decorated functions: {decorated_functions}")
-
-        if errors:
-            sections.append("\n===ERRORS===")
-            for error in errors:
-                error_first_line = error["error"].split("\n")[0]
-                sections.append(f"{error['path']}: {error_first_line}")
-
-        sections.append("\n===REPOSITORY STRUCTURE===")
-        sections.append(self._generate_text_map(analysis_results))
-
-        if non_analyzed_files:
-            sections.append("\n===NON-ANALYZED FILES (repository too large)===")
-            sections.append(
-                f"The following {non_analyzed_count} files were not analyzed due to the {MAX_FILES_TO_ANALYZE} file limit:"
-            )
-            max_non_analyzed_to_show = int(MAX_FILES_TO_ANALYZE / 2)
-            non_analyzed_tree = self._build_file_tree(
-                sorted(non_analyzed_files)[:max_non_analyzed_to_show]
-            )
-            non_analyzed_tree_lines = self._format_file_tree(non_analyzed_tree)
-            sections.extend(non_analyzed_tree_lines)
-            if len(non_analyzed_files) > max_non_analyzed_to_show:
-                sections.append(
-                    f"...and {len(non_analyzed_files) - max_non_analyzed_to_show} more files."
-                )
-
-        return "\n".join(sections)

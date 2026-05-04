@@ -29,16 +29,18 @@ async def main():
     code_analysis_llm = llm_manager.initialize_standalone_service("github_copilot")
     analyze = CodeAnalysisService(code_analysis_llm)
     path = "./"
+    feature_scope = "a2a server"
     result = await analyze.analyze_code_structure(
-        path,
-        exclude_patterns=["*.js"],
+        path, exclude_patterns=["*.js"], feature_scope=feature_scope
     )
     print(result)
 
     if isinstance(result, dict):
         raise Exception(f"Failed to analyze code: {result.get('error', '')}")
 
-    project_notes = await analyze.extract_project_notes(result, path)
+    project_notes = await analyze.extract_project_notes(
+        result, path, feature_scope=feature_scope
+    )
 
     print(project_notes)
     token_count = count_tokens(json.dumps(result))

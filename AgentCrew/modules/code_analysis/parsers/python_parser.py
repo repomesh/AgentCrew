@@ -14,6 +14,16 @@ class PythonParser(BaseLanguageParser):
     def language_name(self) -> str:
         return "python"
 
+    @staticmethod
+    def _is_inside_function(node) -> bool:
+        """Check if a node is inside a function body by walking the parent chain."""
+        parent = node.parent
+        while parent:
+            if parent.type == "function_definition":
+                return True
+            parent = parent.parent
+        return False
+
     def process_node(
         self, node, source_code: bytes, process_children_callback
     ) -> Optional[Dict[str, Any]]:
@@ -32,6 +42,9 @@ class PythonParser(BaseLanguageParser):
                         result["parameters"] = params
 
         elif node.type == "assignment":
+            if self._is_inside_function(node):
+                return None
+
             var_name = None
             var_type = None
             for child in node.children:
