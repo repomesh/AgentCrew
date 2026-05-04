@@ -253,7 +253,7 @@ class ChatCompleter(Completer):
                 "/debug",
                 "Show debug info (usage: /debug [agent|chat])",
             ),
-            ("/think", "Set thinking budget (usage: /think <budget>)"),
+            ("/think", "Show or set thinking budget (usage: /think [budget])"),
             (
                 "/consolidate",
                 "Consolidate conversation messages (usage: /consolidate [count])",
@@ -268,11 +268,11 @@ class ChatCompleter(Completer):
             ),
             (
                 "/jump",
-                "Jump to a previous conversation turn (usage: /jump <turn_number>)",
+                "Jump to a previous conversation turn (usage: /jump [turn_number])",
             ),
             (
                 "/fork",
-                "Fork conversation at a turn, creating a new branch (usage: /fork <turn_number> [!])",
+                "Fork conversation at a turn, creating a new branch (usage: /fork [turn_number])",
             ),
             (
                 "/voice",
@@ -285,7 +285,10 @@ class ChatCompleter(Completer):
                 "List MCP prompts or fetch specific prompt (usage: /mcp [server_id/prompt_name])",
             ),
             ("/file", "Process a file (usage: /file <path>)"),
-            ("/drop", "Remove a queued file from processing (usage: /drop <file_id>)"),
+            (
+                "/drop",
+                "Remove a queued file or list queued files (usage: /drop [file_id])",
+            ),
             (
                 "/export_agent",
                 "Export selected agents to TOML file (usage: /export_agent <agent_names> <output_file>)",
@@ -301,7 +304,7 @@ class ChatCompleter(Completer):
                 "Open AgentCrew global configuration file in default editor",
             ),
             ("/list", "List available conversations"),
-            ("/load", "Load a conversation (usage: /load <conversation_id>)"),
+            ("/load", "Load or browse conversations (usage: /load [conversation_id])"),
             ("/help", "Show help message"),
             ("/retry", "Retry the last assistant response"),
             ("/toggle_transfer", "Toggle agent transfer enforcement on/off"),

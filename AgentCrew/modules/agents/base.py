@@ -24,6 +24,7 @@ class BaseAgent(ABC):
         self.history = []
         self.is_active = False
         self.shared_context_pool: Dict[str, List[int]] = {}
+        self.llm = None
 
     @abstractmethod
     def activate(self) -> bool:

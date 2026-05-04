@@ -617,21 +617,35 @@ class ConsoleUI(Observer):
                         continue
 
                     # Handle load command directly
-                    elif user_input.strip().startswith("/load "):
+                    elif user_input.strip().startswith("/load"):
                         load_arg = user_input.strip()[
-                            6:
-                        ].strip()  # Extract argument after "/load "
+                            5:
+                        ].strip()  # Extract argument after "/load"
                         if load_arg:
                             self.conversation_handler.handle_load_conversation(
                                 load_arg, self.message_handler
                             )
                         else:
-                            self.console.print(
-                                Text(
-                                    "Usage: /load <conversation_id> or /load <number>",
-                                    style=RICH_STYLE_YELLOW,
-                                )
+                            # No argument: show conversation list like /list
+                            conversations = (
+                                self.message_handler.list_conversations_with_forks()
                             )
+                            self.conversation_handler.update_cached_conversations(
+                                conversations
+                            )
+                            self.input_handler._stop_input_thread()
+                            try:
+                                selected_id = self.display_handlers.display_conversations(
+                                    conversations,
+                                    get_history_callback=self.conversation_handler.get_conversation_history,
+                                    delete_callback=self.conversation_handler.delete_conversations,
+                                )
+                                if selected_id:
+                                    self.conversation_handler.handle_load_conversation(
+                                        selected_id, self.message_handler
+                                    )
+                            finally:
+                                self.input_handler._start_input_thread()
                         continue
 
                     elif user_input.strip() == "/help":
@@ -662,9 +676,9 @@ class ConsoleUI(Observer):
                         self.command_handlers.handle_toggle_session_yolo_command()
                         continue
 
-                    elif user_input.strip().startswith("/export_agent "):
-                        # Extract arguments after "/export_agent "
-                        args = user_input.strip()[14:].strip()
+                    elif user_input.strip().startswith("/export_agent"):
+                        # Extract arguments after "/export_agent"
+                        args = user_input.strip()[13:].strip()
                         if args:
                             # Split into agent names and output file
                             # Expected format: /export_agent <agent1,agent2,...> <output_file>
@@ -696,10 +710,10 @@ class ConsoleUI(Observer):
                             )
                         continue
 
-                    elif user_input.strip().startswith("/import_agent "):
+                    elif user_input.strip().startswith("/import_agent"):
                         file_or_url = user_input.strip()[
-                            14:
-                        ].strip()  # Extract argument after "/import_agent "
+                            13:
+                        ].strip()  # Extract argument after "/import_agent"
                         if file_or_url:
                             self.command_handlers.handle_import_agent_command(
                                 file_or_url
@@ -734,8 +748,8 @@ class ConsoleUI(Observer):
                         continue
 
                     # Handle update_behavior command
-                    elif user_input.strip().startswith("/update_behavior "):
-                        args = user_input.strip()[17:].strip()
+                    elif user_input.strip().startswith("/update_behavior"):
+                        args = user_input.strip()[16:].strip()
                         if args:
                             parts = args.split(maxsplit=2)
                             if len(parts) == 3:
@@ -762,8 +776,8 @@ class ConsoleUI(Observer):
                         continue
 
                     # Handle delete_behavior command
-                    elif user_input.strip().startswith("/delete_behavior "):
-                        args = user_input.strip()[17:].strip()
+                    elif user_input.strip().startswith("/delete_behavior"):
+                        args = user_input.strip()[16:].strip()
                         parts = args.split(maxsplit=1)
                         if len(parts) == 2:
                             scope, behavior_id = parts

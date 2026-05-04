@@ -45,16 +45,8 @@ class CommandProcessor:
             return await self._handle_copy_command(user_input)
         elif user_input.lower().startswith("/debug"):
             return self._handle_debug_command(user_input)
-        elif user_input.lower().startswith("/think "):
-            try:
-                budget = user_input[7:].strip()
-                self.message_handler.agent.configure_think(budget)
-                self.message_handler._notify("think_budget_set", budget)
-            except ValueError:
-                self.message_handler._notify(
-                    "error", "Invalid budget value. Please provide a number."
-                )
-            return CommandResult(handled=True, clear_flag=True)
+        elif user_input.lower().startswith("/think"):
+            return self._handle_think_command(user_input)
         elif user_input.lower().startswith("/consolidate"):
             return await self._handle_consolidate_command(user_input)
         elif user_input.lower().startswith("/evolve"):
@@ -68,7 +60,7 @@ class CommandProcessor:
             return self._handle_fork_command(user_input)
         elif user_input.lower().startswith("/agent_mode"):
             return self._handle_agent_mode_command(user_input)
-        elif user_input.lower().startswith("/agent "):
+        elif user_input.lower().startswith("/agent"):
             success, message = self._handle_agent_command(user_input)
             self.message_handler._notify(
                 "agent_command_result", {"success": success, "message": message}
@@ -84,9 +76,9 @@ class CommandProcessor:
             return CommandResult(
                 handled=True, exit_flag=exit_flag, clear_flag=clear_flag
             )
-        elif user_input.startswith("/file "):
+        elif user_input.startswith("/file"):
             return self._handle_file_command(user_input)
-        elif user_input.startswith("/drop "):
+        elif user_input.startswith("/drop"):
             return self._handle_drop_command(user_input)
         elif user_input.lower() == "/voice":
             return await self._handle_voice_command(user_input)
@@ -94,10 +86,71 @@ class CommandProcessor:
             return await self._handle_end_voice_command(user_input)
         elif user_input.lower() == "/toggle_transfer":
             return self._handle_toggle_transfer_command(user_input)
+
+        # Catch-all: any unrecognised /command should not fall through to the LLM
+        if user_input.startswith("/"):
+            self.message_handler._notify(
+                "error",
+                "Invalid command: type /help to view all available commands",
+            )
+            return CommandResult(handled=True, clear_flag=True)
+
         return CommandResult(handled=False)
 
     def _is_exit_command(self, user_input: str) -> bool:
         return user_input.lower() in ["/exit", "/quit"]
+
+    def _handle_think_command(self, user_input: str) -> CommandResult:
+        """Handle the /think command to set or show thinking budget.
+
+        Usage:
+            /think          - Show current thinking budget
+            /think <budget> - Set thinking budget (0 to disable)
+        """
+        parts = user_input.split()
+
+        if len(parts) == 1:
+            current_budget = getattr(
+                self.message_handler.agent.llm, "thinking_budget", None
+            )
+            if current_budget is not None:
+                if current_budget == 0:
+                    self.message_handler._notify(
+                        "system_message", "Thinking mode is currently disabled."
+                    )
+                else:
+                    self.message_handler._notify(
+                        "system_message",
+                        f"Thinking budget is currently set to {current_budget} tokens.",
+                    )
+            else:
+                reasoning_effort = getattr(
+                    self.message_handler.agent.llm, "reasoning_effort", None
+                )
+                if reasoning_effort:
+                    self.message_handler._notify(
+                        "system_message",
+                        f"Reasoning effort is currently set to: {reasoning_effort}",
+                    )
+                else:
+                    self.message_handler._notify(
+                        "system_message",
+                        "Thinking mode is not available for the current model.",
+                    )
+            self.message_handler._notify(
+                "system_message", "Usage: /think <budget> (0 to disable)"
+            )
+            return CommandResult(handled=True, clear_flag=True)
+
+        try:
+            budget = parts[1]
+            self.message_handler.agent.configure_think(budget)
+            self.message_handler._notify("think_budget_set", budget)
+        except ValueError:
+            self.message_handler._notify(
+                "error", "Invalid budget value. Please provide a number."
+            )
+        return CommandResult(handled=True, clear_flag=True)
 
     async def _handle_copy_command(self, user_input: str) -> CommandResult:
         copy_idx = user_input[5:].strip() or 1

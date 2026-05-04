@@ -49,20 +49,23 @@ class CommandHandler:
             return True
 
         elif (
-            user_input.startswith("/mcp ")
-            or user_input.startswith("/model ")
-            or user_input.startswith("/think ")
+            user_input.startswith("/mcp")
+            or user_input.startswith("/model")
+            or user_input.startswith("/think")
             or user_input.startswith("/toggle_transfer")
             or user_input.startswith("/agent_mode")
-            or user_input.startswith("/file ")
+            or user_input.startswith("/file")
         ):
             self.chat_window.llm_worker.process_request.emit(user_input)
             self.chat_window.ui_state_manager.set_input_controls_enabled(True)
             return True
         elif (
-            user_input.startswith("/consolidate ")
-            or user_input.startswith("/agent ")
+            user_input.startswith("/consolidate")
+            or user_input.startswith("/agent")
             or user_input.startswith("/evolve")
+            or user_input.startswith("/jump")
+            or user_input.startswith("/fork")
+            or user_input.startswith("/drop")
         ):
             self.chat_window.llm_worker.process_request.emit(user_input)
             self.chat_window.ui_state_manager.set_input_controls_enabled(False)
@@ -73,8 +76,11 @@ class CommandHandler:
             QApplication.quit()
             return True
 
-        # Command not processed locally - let LLM worker handle it
-        return False
+        # Catch-all: any unrecognised /command should not fall through to the LLM
+        self.chat_window.display_error(
+            "Invalid command: type /help to view all available commands"
+        )
+        return True
 
     @Slot()
     def copy_last_response(self):
