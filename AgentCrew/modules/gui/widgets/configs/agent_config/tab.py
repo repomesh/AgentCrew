@@ -65,8 +65,12 @@ class AgentsConfigTab(QWidget):
 
         # Left panel — agent list
         self.agent_list_panel = AgentListPanel()
-        self.agent_list_panel.add_local_agent_requested.connect(self.add_new_local_agent)
-        self.agent_list_panel.add_remote_agent_requested.connect(self.add_new_remote_agent)
+        self.agent_list_panel.add_local_agent_requested.connect(
+            self.add_new_local_agent
+        )
+        self.agent_list_panel.add_remote_agent_requested.connect(
+            self.add_new_remote_agent
+        )
         self.agent_list_panel.import_requested.connect(self.import_agents)
         self.agent_list_panel.export_requested.connect(self.export_agents)
         self.agent_list_panel.remove_requested.connect(self.remove_agent)

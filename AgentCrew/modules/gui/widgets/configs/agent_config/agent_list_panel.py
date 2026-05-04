@@ -43,7 +43,9 @@ class AgentListPanel(QWidget):
         buttons_layout = QHBoxLayout()
 
         self.add_agent_menu_btn = QPushButton("Add Agent")
-        self.add_agent_menu_btn.setStyleSheet(style_provider.get_button_style("agent_menu"))
+        self.add_agent_menu_btn.setStyleSheet(
+            style_provider.get_button_style("agent_menu")
+        )
         add_agent_menu = QMenu(self)
         add_agent_menu.setStyleSheet(style_provider.get_agent_menu_style())
         add_local_action = add_agent_menu.addAction("Add Local Agent")

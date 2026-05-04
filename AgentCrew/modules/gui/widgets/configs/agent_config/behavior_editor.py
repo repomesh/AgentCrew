@@ -87,7 +87,9 @@ class BehaviorEditor(QWidget):
         self.save_behavior_btn.clicked.connect(self._save_behavior)
 
         self.cancel_behavior_btn = QPushButton("Cancel")
-        self.cancel_behavior_btn.setStyleSheet(style_provider.get_button_style("secondary"))
+        self.cancel_behavior_btn.setStyleSheet(
+            style_provider.get_button_style("secondary")
+        )
         self.cancel_behavior_btn.clicked.connect(self._cancel_behavior_edit)
 
         behavior_form_buttons_layout.addWidget(self.save_behavior_btn)

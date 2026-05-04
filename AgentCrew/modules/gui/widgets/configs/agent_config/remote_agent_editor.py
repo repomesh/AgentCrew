@@ -57,7 +57,9 @@ class RemoteAgentEditor(QWidget):
 
         headers_btn_layout = QHBoxLayout()
         self.add_remote_header_btn = QPushButton("Add Header")
-        self.add_remote_header_btn.setStyleSheet(style_provider.get_button_style("primary"))
+        self.add_remote_header_btn.setStyleSheet(
+            style_provider.get_button_style("primary")
+        )
         self.add_remote_header_btn.clicked.connect(
             lambda: self.add_remote_header_field("", "")
         )
@@ -158,9 +160,7 @@ class RemoteAgentEditor(QWidget):
         }
         self.remote_header_inputs.append(header_data)
 
-        remove_btn.clicked.connect(
-            lambda: self.remove_remote_header_field(header_data)
-        )
+        remove_btn.clicked.connect(lambda: self.remove_remote_header_field(header_data))
 
         if mark_dirty_on_add:
             self._on_field_changed()

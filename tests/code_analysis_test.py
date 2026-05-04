@@ -28,10 +28,10 @@ async def main():
     llm_manager = ServiceManager.get_instance()
     code_analysis_llm = llm_manager.initialize_standalone_service("github_copilot")
     analyze = CodeAnalysisService(code_analysis_llm)
-    path = "/home/quytruong/.local/share/nvim/lazy/copilot.lua/"
+    path = "./"
     result = await analyze.analyze_code_structure(
         path,
-        # exclude_patterns=["*.js"],
+        exclude_patterns=["*.js"],
     )
     print(result)
 

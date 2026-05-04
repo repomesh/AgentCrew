@@ -56,7 +56,9 @@ def collect_local_agent_form(editor) -> dict:
         "description": editor.description_input.text().strip(),
         "temperature": temperature,
         "tools": [
-            tool for tool, checkbox in editor.tool_checkboxes.items() if checkbox.isChecked()
+            tool
+            for tool, checkbox in editor.tool_checkboxes.items()
+            if checkbox.isChecked()
         ],
         "system_prompt": editor.system_prompt_input.get_markdown().strip(),
         "enabled": editor.enabled_checkbox.isChecked(),

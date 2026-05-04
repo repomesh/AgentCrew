@@ -198,7 +198,9 @@ class LocalAgentEditor(QWidget):
         except ValueError:
             temperature = 0.5
 
-        voice_state = "enabled" if self.voice_enabled_checkbox.isChecked() else "disabled"
+        voice_state = (
+            "enabled" if self.voice_enabled_checkbox.isChecked() else "disabled"
+        )
 
         return {
             "name": self.name_input.text().strip(),
