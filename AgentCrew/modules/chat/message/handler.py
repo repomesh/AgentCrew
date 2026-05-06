@@ -350,6 +350,16 @@ class MessageHandler(Observable):
             tool_uses = _tool_uses
             input_tokens += _input_tokens
             output_tokens += _output_tokens
+            # keep tracking token usage in middle of stream
+            if self.persistent_service and self.current_conversation_id:
+                if input_tokens > 0 or output_tokens > 0:
+                    metadata = {
+                        "input_tokens": input_tokens,
+                        "output_tokens": output_tokens,
+                    }
+                    self.persistent_service.store_conversation_metadata(
+                        self.current_conversation_id, metadata
+                    )
 
         try:
             self.stream_generator = self.agent.process_messages(callback=process_result)
