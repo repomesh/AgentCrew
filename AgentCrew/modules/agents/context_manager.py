@@ -7,7 +7,7 @@ from loguru import logger
 if TYPE_CHECKING:
     from .local_agent import LocalAgent
 
-SHRINK_LENGTH_THRESHOLD = 15
+SHRINK_LENGTH_THRESHOLD = 7
 
 
 class AgentContextManager:
@@ -244,11 +244,19 @@ Skip evaluation for: simple one-sentence answers, or when the request matches "w
                 if len(msg.get("tool_calls", [])) == 0:
                     continue
 
+                msg.pop("tool_calls", None)
+
                 if is_shrinkable and i < shrink_threshold:
-                    for tool_call in msg.get("tool_calls", []):
-                        if tool_call.get("name") in shrink_excluded:
-                            continue
-                        tool_call["arguments"] = {}
+                    msg["tool_calls"] = [
+                        t
+                        for t in msg.get("tool_calls", [])
+                        if t.get("name", "") in shrink_excluded
+                    ]
+                    # for tool_call in msg.get("tool_calls", []):
+                    #     if tool_call.get("name") in shrink_excluded:
+                    #         continue
+                    #     for k, _ in tool_call["arguments"].items():
+                    #         tool_call["arguments"][k] = "..."
 
             elif msg.get("role") == "tool":
                 tool_name = msg.get("tool_name", "")
@@ -279,7 +287,10 @@ Skip evaluation for: simple one-sentence answers, or when the request matches "w
                     continue
 
                 if is_shrinkable and i < shrink_threshold:
-                    msg["content"] = "[PRUNED]"
+                    msg["content"] = [{"text": f"you called function: {tool_name}"}]
+                    msg.pop("tool_name", None)
+                    msg.pop("tool_call_id", None)
+                    msg["role"] = "user"
                     continue
 
         if len(unique_tool_indices) > 1:

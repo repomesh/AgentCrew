@@ -22,7 +22,7 @@ FIREWORKS_MODELS = [
         output_token_price_1m=4.0,
     ),
     Model(
-        id="accounts/fireworks/models/minimax-m2.7",
+        id="accounts/fireworks/models/minimax-m2p7",
         provider="fireworks",
         name="MiniMax M2.7",
         description="MiniMax M2.7 on Fireworks - efficient agentic model with tool use and structured output",
@@ -46,7 +46,7 @@ FIREWORKS_MODELS = [
         output_token_price_1m=3.0,
     ),
     Model(
-        id="accounts/fireworks/models/glm-5.1",
+        id="accounts/fireworks/models/glm-5p1",
         provider="fireworks",
         name="GLM 5.1",
         description="GLM-5.1 on Fireworks - Z-AI flagship model for agentic engineering",

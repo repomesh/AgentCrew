@@ -269,8 +269,9 @@ class CustomLLMService(OpenAIService):
                             if assistant_content.get("type", "text") == "thinking":
                                 assistant_content["type"] = "text"
                                 assistant_content["text"] = (
-                                    f"<think>{assistant_content.get('text', '')}</think>"
+                                    f"<think>{assistant_content.get('thinking', '')}</think>"
                                 )
+                                assistant_content.pop("thinking", None)
 
         return messages
 

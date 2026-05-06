@@ -33,7 +33,7 @@ class Model(BaseModel):
         None
     )
     force_sample_params: Optional[SampleParam] = None
-    max_context_token: int = 80_000
+    max_context_token: int = 50_000
     input_token_price_1m: float = 0.0
     output_token_price_1m: float = 0.0
     service_name: Optional[str] = None
