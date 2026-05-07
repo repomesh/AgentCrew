@@ -289,7 +289,7 @@ Skip evaluation for: simple one-sentence answers, or when the request matches "w
                 if is_shrinkable and i < shrink_threshold:
                     msg["content"] = [
                         {
-                            "text": f"{msg.get('agent', 'Agent')} called function: {tool_name}",
+                            "text": f"{msg.get('agent', 'Agent')} called function `{tool_name}` but it has been truncated.",
                             "type": "text",
                         }
                     ]
@@ -298,17 +298,17 @@ Skip evaluation for: simple one-sentence answers, or when the request matches "w
                     msg.pop("is_rejected", None)
                     msg["role"] = "user"
                     continue
-                else:
-                    disclaimer = "Generate a concise note of what you found from the results in your next message, the tool results will disappear soon."
-                    if isinstance(msg["content"], list):
-                        msg["content"].append(
-                            {
-                                "type": "text",
-                                "text": disclaimer,
-                            }
-                        )
-                    else:
-                        msg["content"] += disclaimer
+                # else:
+                #     disclaimer = "Generate a concise note of what you found from the results in your next message, the tool results will disappear soon."
+                #     if isinstance(msg["content"], list):
+                #         msg["content"].append(
+                #             {
+                #                 "type": "text",
+                #                 "text": disclaimer,
+                #             }
+                #         )
+                #     else:
+                #         msg["content"] += disclaimer
 
         if len(unique_tool_indices) > 1:
             for i in unique_tool_indices[:-1]:

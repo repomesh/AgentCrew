@@ -86,7 +86,7 @@ class GoogleAINativeService(BaseLLMService):
         self.tool_handlers = {}
         self.tool_definitions = []  # Keep original definitions for reference
 
-        self.thinking_enabled = False
+        self.thinking_enabled = True
         self.reasoning_effort: types.ThinkingLevel = types.ThinkingLevel.HIGH
 
         # Provider name and system prompt
@@ -380,7 +380,7 @@ class GoogleAINativeService(BaseLLMService):
         # Create configuration with tools
         config = types.GenerateContentConfig(
             temperature=self.temperature,
-            max_output_tokens=65536,
+            max_output_tokens=32768,
             top_p=0.95,
         )
 
@@ -406,6 +406,10 @@ class GoogleAINativeService(BaseLLMService):
             full_model_id
         ):
             config.tools = self.tools
+            # config.tools.append(types.Tool(google_search=types.GoogleSearch()))
+            # config.tool_config = types.ToolConfig(
+            #     include_server_side_tool_invocations=True
+            # )
 
         if self.thinking_enabled:
             config.thinking_config = types.ThinkingConfig(

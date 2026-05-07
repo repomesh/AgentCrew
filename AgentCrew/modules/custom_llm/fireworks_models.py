@@ -60,13 +60,4 @@ FIREWORKS_MODELS = [
         cached_token_price_1m=0.26,
         output_token_price_1m=4.4,
     ),
-    Model(
-        id="accounts/fireworks/models/gemma-4-31b-it",
-        provider="fireworks",
-        name="Gemma 4 31B",
-        description="Gemma 4 31B on Fireworks - lightweight open model from Google",
-        capabilities=["tool_use", "vision", "stream", "structured_output"],
-        input_token_price_1m=0.2,
-        output_token_price_1m=0.5,
-    ),
 ]
