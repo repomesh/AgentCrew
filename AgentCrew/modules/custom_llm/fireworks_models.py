@@ -9,6 +9,7 @@ FIREWORKS_MODELS = [
         capabilities=["tool_use", "thinking", "stream", "structured_output"],
         default=True,
         input_token_price_1m=1.74,
+        cached_token_price_1m=0.15,
         output_token_price_1m=3.48,
     ),
     Model(
@@ -19,6 +20,7 @@ FIREWORKS_MODELS = [
         capabilities=["tool_use", "stream", "structured_output", "vision"],
         force_sample_params=SampleParam(temperature=0.6),
         input_token_price_1m=0.95,
+        cached_token_price_1m=0.16,
         output_token_price_1m=4.0,
     ),
     Model(
@@ -29,6 +31,7 @@ FIREWORKS_MODELS = [
         capabilities=["tool_use", "stream", "structured_output"],
         force_sample_params=SampleParam(temperature=0.6),
         input_token_price_1m=0.3,
+        cached_token_price_1m=0.06,
         output_token_price_1m=1.2,
     ),
     Model(
@@ -43,6 +46,7 @@ FIREWORKS_MODELS = [
             top_k=40,
         ),
         input_token_price_1m=0.5,
+        cached_token_price_1m=0.1,
         output_token_price_1m=3.0,
     ),
     Model(
@@ -53,6 +57,7 @@ FIREWORKS_MODELS = [
         capabilities=["tool_use", "stream", "structured_output"],
         force_sample_params=SampleParam(top_p=1, top_k=40),
         input_token_price_1m=1.4,
+        cached_token_price_1m=0.26,
         output_token_price_1m=4.4,
     ),
     Model(

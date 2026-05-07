@@ -188,8 +188,6 @@ class GoogleAINativeService(BaseLLMService):
                 if hasattr(chunk.usage_metadata, "cached_content_token_count"):
                     cached_tokens = chunk.usage_metadata.cached_content_token_count or 0
 
-        if cached_tokens:
-            input_tokens = input_tokens - cached_tokens
         total_cost = self.calculate_cost(input_tokens, output_tokens, cached_tokens)
         logger.info("\nToken Usage Statistics:")
         logger.info(f"Input tokens: {input_tokens:,}")
@@ -644,7 +642,6 @@ class GoogleAINativeService(BaseLLMService):
                 output_tokens = chunk.usage_metadata.candidates_token_count or 0
             if hasattr(chunk.usage_metadata, "cached_content_token_count"):
                 cached_tokens = chunk.usage_metadata.cached_content_token_count or 0
-                input_tokens = input_tokens - cached_tokens
 
         return (
             assistant_response or " ",
@@ -687,8 +684,6 @@ class GoogleAINativeService(BaseLLMService):
             if hasattr(response.usage_metadata, "cached_content_token_count"):
                 cached_tokens = response.usage_metadata.cached_content_token_count or 0
 
-        if cached_tokens:
-            input_tokens = input_tokens - cached_tokens
         # Calculate cost
         total_cost = self.calculate_cost(input_tokens, output_tokens, cached_tokens)
 

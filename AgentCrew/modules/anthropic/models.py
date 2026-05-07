@@ -10,6 +10,7 @@ ANTHROPIC_MODELS = [
         max_context_token=200_000,
         default=False,
         input_token_price_1m=5.0,
+        cached_token_price_1m=0.5,
         output_token_price_1m=25.0,
     ),
     Model(
@@ -21,6 +22,7 @@ ANTHROPIC_MODELS = [
         max_context_token=1_000_000,
         default=False,
         input_token_price_1m=5.0,
+        cached_token_price_1m=0.5,
         output_token_price_1m=25.0,
     ),
     Model(
@@ -32,6 +34,7 @@ ANTHROPIC_MODELS = [
         max_context_token=1_000_000,
         default=False,
         input_token_price_1m=5.0,
+        cached_token_price_1m=0.5,
         output_token_price_1m=25.0,
     ),
     Model(
@@ -42,6 +45,7 @@ ANTHROPIC_MODELS = [
         capabilities=["thinking", "tool_use", "vision", "stream"],
         default=False,
         input_token_price_1m=15.0,
+        cached_token_price_1m=1.5,
         output_token_price_1m=75.0,
     ),
     Model(
@@ -53,6 +57,7 @@ ANTHROPIC_MODELS = [
         max_context_token=200_000,
         default=False,
         input_token_price_1m=3.0,
+        cached_token_price_1m=0.3,
         output_token_price_1m=15.0,
     ),
     Model(
@@ -64,6 +69,7 @@ ANTHROPIC_MODELS = [
         max_context_token=200_000,
         default=False,
         input_token_price_1m=3.0,
+        cached_token_price_1m=0.3,
         output_token_price_1m=15.0,
     ),
     Model(
@@ -74,6 +80,7 @@ ANTHROPIC_MODELS = [
         max_context_token=200_000,
         capabilities=["tool_use", "vision", "stream", "thinking"],
         input_token_price_1m=0.8,
+        cached_token_price_1m=0.1,
         output_token_price_1m=4.0,
     ),
 ]

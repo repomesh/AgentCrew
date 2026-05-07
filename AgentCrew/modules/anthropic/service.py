@@ -93,8 +93,6 @@ class AnthropicService(BaseLLMService):
                     if hasattr(event.usage, "output_tokens"):
                         output_tokens = event.usage.output_tokens
 
-        if cached_tokens:
-            input_tokens = input_tokens - cached_tokens
         total_cost = self.calculate_cost(input_tokens, output_tokens, cached_tokens)
 
         logger.info("\nToken Usage Statistics:")
@@ -436,8 +434,6 @@ class AnthropicService(BaseLLMService):
         input_tokens = message.usage.input_tokens
         output_tokens = message.usage.output_tokens
         cached_tokens = getattr(message.usage, "cache_read_input_tokens", 0) or 0
-        if cached_tokens:
-            input_tokens = input_tokens - cached_tokens
         total_cost = self.calculate_cost(input_tokens, output_tokens, cached_tokens)
 
         logger.info("\nSpec Validation Token Usage:")

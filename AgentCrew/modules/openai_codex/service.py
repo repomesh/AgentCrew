@@ -72,10 +72,10 @@ class OpenAICodexService(OpenAIResponseService):
                     output_tokens = getattr(usage, "output_tokens", 0)
                     input_tokens_details = getattr(usage, "input_tokens_details", None)
                     if input_tokens_details:
-                        cached_tokens = getattr(input_tokens_details, "cached_tokens", 0)
+                        cached_tokens = getattr(
+                            input_tokens_details, "cached_tokens", 0
+                        )
 
-        if cached_tokens:
-            input_tokens = input_tokens - cached_tokens
         total_cost = self.calculate_cost(input_tokens, output_tokens, cached_tokens)
         logger.info("\nCodex Response API Token Usage Statistics:")
         logger.info(f"Input tokens: {input_tokens:,}")

@@ -200,8 +200,6 @@ class TogetherAIService(BaseLLMService):
                 #     if hasattr(chunk.usage.prompt_tokens_details, "cached_tokens"):
                 #         cached_tokens = chunk.usage.prompt_tokens_details.cached_tokens
 
-        if cached_tokens:
-            input_tokens = input_tokens - cached_tokens
         total_cost = self.calculate_cost(input_tokens, output_tokens, cached_tokens)
 
         logger.info("\nToken Usage Statistics:")
@@ -363,8 +361,6 @@ class TogetherAIService(BaseLLMService):
             prompt_tokens_details = getattr(usage, "prompt_tokens_details", None)
             if prompt_tokens_details is not None:
                 cached_tokens = getattr(prompt_tokens_details, "cached_tokens", 0) or 0
-                if cached_tokens:
-                    input_tokens = input_tokens - cached_tokens
 
         choices = getattr(chunk, "choices", None)
         if not choices:
@@ -524,8 +520,6 @@ class TogetherAIService(BaseLLMService):
         # ):
         #     if hasattr(response.usage.prompt_tokens_details, "cached_tokens"):
         #         cached_tokens = response.usage.prompt_tokens_details.cached_tokens
-        if cached_tokens:
-            input_tokens = input_tokens - cached_tokens
         total_cost = self.calculate_cost(input_tokens, output_tokens, cached_tokens)
 
         logger.info("\nSpec Validation Token Usage:")

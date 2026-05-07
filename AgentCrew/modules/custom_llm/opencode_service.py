@@ -197,6 +197,7 @@ class OpenCodeService(CustomLLMService):
         chunk_text = ""
         input_tokens = 0
         output_tokens = 0
+        cached_tokens = 0
         thinking_content = " " if self.model.startswith("deepseek-v4") else None
 
         if hasattr(chunk, "usage"):
@@ -210,7 +211,6 @@ class OpenCodeService(CustomLLMService):
             ):
                 if hasattr(chunk.usage.prompt_tokens_details, "cached_tokens"):
                     cached_tokens = chunk.usage.prompt_tokens_details.cached_tokens
-                    input_tokens = input_tokens - cached_tokens
 
         if chunk.choices and len(chunk.choices) > 0:
             delta = chunk.choices[0].delta

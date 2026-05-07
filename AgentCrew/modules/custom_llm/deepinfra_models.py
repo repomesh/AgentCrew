@@ -84,6 +84,7 @@ DEEPINFRA_MODELS = [
         force_sample_params=SampleParam(temperature=0.7, top_p=0.95, top_k=40),
         capabilities=["tool_use", "stream"],
         input_token_price_1m=0.8,
+        cached_token_price_1m=0.12,
         output_token_price_1m=2.56,
     ),
     Model(
@@ -94,6 +95,7 @@ DEEPINFRA_MODELS = [
         force_sample_params=SampleParam(top_p=0.95, top_k=40),
         capabilities=["tool_use", "stream", "structured_output"],
         input_token_price_1m=1.05,
+        cached_token_price_1m=0.205,
         output_token_price_1m=3.75,
     ),
     Model(
@@ -129,6 +131,7 @@ DEEPINFRA_MODELS = [
         capabilities=["tool_use", "stream", "structured_output", "vision"],
         force_sample_params=SampleParam(temperature=0.6),
         input_token_price_1m=0.5,
+        cached_token_price_1m=0.07,
         output_token_price_1m=2.0,
     ),
     Model(
@@ -148,6 +151,7 @@ DEEPINFRA_MODELS = [
         capabilities=["tool_use", "stream", "structured_output", "vision"],
         force_sample_params=SampleParam(temperature=0.6),
         input_token_price_1m=0.75,
+        cached_token_price_1m=0.15,
         output_token_price_1m=3.5,
     ),
     Model(
@@ -158,6 +162,7 @@ DEEPINFRA_MODELS = [
         capabilities=["tool_use", "stream", "structured_output"],
         force_sample_params=SampleParam(temperature=0.6),
         input_token_price_1m=0.27,
+        cached_token_price_1m=0.03,
         output_token_price_1m=0.95,
     ),
     Model(
@@ -168,6 +173,7 @@ DEEPINFRA_MODELS = [
         capabilities=["tool_use", "thinking", "stream", "structured_output"],
         max_context_token=65_000,
         input_token_price_1m=1.74,
+        cached_token_price_1m=0.145,
         output_token_price_1m=3.48,
     ),
     Model(
@@ -177,6 +183,7 @@ DEEPINFRA_MODELS = [
         description="DeepSeek V4 Flash is an efficiency-focused MoE model with 284B total parameters (13B active) and a 1M-token context window",
         capabilities=["tool_use", "stream", "structured_output"],
         input_token_price_1m=0.14,
+        cached_token_price_1m=0.028,
         output_token_price_1m=0.28,
     ),
 ]

@@ -230,7 +230,7 @@ Skip evaluation for: simple one-sentence answers, or when the request matches "w
 
         is_shrinkable = (
             agent_manager.context_shrink_enabled if agent_manager else False
-        ) and agent.input_tokens_usage > shrink_context_threshold
+        ) and agent.token_usage.total_input_tokens > shrink_context_threshold
         shrink_threshold = len(final_messages) - SHRINK_LENGTH_THRESHOLD
         shrink_excluded = set(
             agent_manager.shrink_excluded_list if agent_manager else []
@@ -287,9 +287,12 @@ Skip evaluation for: simple one-sentence answers, or when the request matches "w
                     continue
 
                 if is_shrinkable and i < shrink_threshold:
-                    msg["content"] = [{"text": f"you called function: {tool_name}"}]
+                    msg["content"] = [
+                        {"text": f"you called function: {tool_name}", "type": "text"}
+                    ]
                     msg.pop("tool_name", None)
                     msg.pop("tool_call_id", None)
+                    msg.pop("is_rejected", None)
                     msg["role"] = "user"
                     continue
 

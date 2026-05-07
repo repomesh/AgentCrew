@@ -190,7 +190,6 @@ class GoogleAIService(OpenAIService):
             ):
                 if hasattr(chunk.usage.prompt_tokens_details, "cached_tokens"):
                     cached_tokens = chunk.usage.prompt_tokens_details.cached_tokens
-                    input_tokens = input_tokens - cached_tokens
 
         return (
             assistant_response or " ",

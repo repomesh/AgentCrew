@@ -550,7 +550,7 @@ class DisplayHandlers:
                 style=RICH_STYLE_YELLOW,
             )
         token_info.append(
-            f"Total: {input_tokens + output_tokens + cached_tokens:,} | Cost: ${total_cost:.4f} | Total: {session_cost:.4f}",
+            f"Total: {input_tokens + output_tokens + cached_tokens:,} | Cost: ${total_cost:.4f} | Session: ${session_cost:.4f}",
             style=RICH_STYLE_YELLOW,
         )
         self.console.print(Panel(token_info, box=HORIZONTALS))

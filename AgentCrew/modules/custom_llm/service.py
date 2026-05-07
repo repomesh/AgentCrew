@@ -221,8 +221,6 @@ class CustomLLMService(OpenAIService):
                             chunk.usage.prompt_tokens_details.cached_tokens or 0
                         )
 
-        if cached_tokens:
-            input_tokens = input_tokens - cached_tokens
         total_cost = self.calculate_cost(input_tokens, output_tokens, cached_tokens)
 
         logger.info("\nToken Usage Statistics:")
@@ -547,7 +545,6 @@ class CustomLLMService(OpenAIService):
             ):
                 if hasattr(chunk.usage.prompt_tokens_details, "cached_tokens"):
                     cached_tokens = chunk.usage.prompt_tokens_details.cached_tokens
-                    input_tokens = input_tokens - cached_tokens
 
         # Handle regular content chunks
         if (

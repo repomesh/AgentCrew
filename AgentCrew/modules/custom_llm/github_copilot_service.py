@@ -196,7 +196,6 @@ class GithubCopilotService(CustomLLMService):
             ):
                 if hasattr(chunk.usage.prompt_tokens_details, "cached_tokens"):
                     cached_tokens = chunk.usage.prompt_tokens_details.cached_tokens
-                    input_tokens = input_tokens - cached_tokens
 
         if (not chunk.choices) or (len(chunk.choices) == 0):
             return (
