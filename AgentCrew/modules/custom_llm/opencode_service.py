@@ -2,6 +2,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from AgentCrew.modules.custom_llm.service import CustomLLMService
 from AgentCrew.modules.llm.model_registry import ModelRegistry
+from AgentCrew.modules.llm.token_usage import TokenUsage
 
 
 class OpenCodeService(CustomLLMService):
@@ -138,7 +139,7 @@ class OpenCodeService(CustomLLMService):
 
     def process_stream_chunk(
         self, chunk, assistant_response: str, tool_uses: List[Dict]
-    ) -> Tuple[str, List[Dict], int, int, Optional[str], Optional[tuple]]:
+    ) -> Tuple[str, List[Dict], TokenUsage, Optional[str], Optional[tuple]]:
         if "stream" in ModelRegistry.get_model_capabilities(
             f"{self._provider_name}/{self.model}"
         ):
@@ -147,7 +148,7 @@ class OpenCodeService(CustomLLMService):
 
     def _process_non_stream_chunk(
         self, chunk, assistant_response, tool_uses
-    ) -> Tuple[str, List[Dict], int, int, Optional[str], Optional[tuple]]:
+    ) -> Tuple[str, List[Dict], TokenUsage, Optional[str], Optional[tuple]]:
         input_tokens = self.current_input_tokens
         self.current_input_tokens = 0
         output_tokens = self.current_output_tokens
@@ -169,8 +170,7 @@ class OpenCodeService(CustomLLMService):
                 return (
                     content,
                     tool_uses,
-                    input_tokens,
-                    output_tokens,
+                    TokenUsage(input_tokens=input_tokens, output_tokens=output_tokens),
                     content,
                     thinking_data,
                 )
@@ -178,8 +178,7 @@ class OpenCodeService(CustomLLMService):
             return (
                 content,
                 tool_uses,
-                input_tokens,
-                output_tokens,
+                TokenUsage(input_tokens=input_tokens, output_tokens=output_tokens),
                 content,
                 thinking_data,
             )
@@ -187,15 +186,14 @@ class OpenCodeService(CustomLLMService):
         return (
             assistant_response or " ",
             tool_uses,
-            input_tokens,
-            output_tokens,
+            TokenUsage(input_tokens=input_tokens, output_tokens=output_tokens),
             None,
             thinking_data,
         )
 
     def _process_stream_chunk(
         self, chunk, assistant_response: str, tool_uses: List[Dict]
-    ) -> Tuple[str, List[Dict], int, int, Optional[str], Optional[tuple]]:
+    ) -> Tuple[str, List[Dict], TokenUsage, Optional[str], Optional[tuple]]:
         chunk_text = ""
         input_tokens = 0
         output_tokens = 0
@@ -206,6 +204,13 @@ class OpenCodeService(CustomLLMService):
                 input_tokens = chunk.usage.prompt_tokens
             if hasattr(chunk.usage, "completion_tokens"):
                 output_tokens = chunk.usage.completion_tokens
+            if (
+                hasattr(chunk.usage, "prompt_tokens_details")
+                and chunk.usage.prompt_tokens_details
+            ):
+                if hasattr(chunk.usage.prompt_tokens_details, "cached_tokens"):
+                    cached_tokens = chunk.usage.prompt_tokens_details.cached_tokens
+                    input_tokens = input_tokens - cached_tokens
 
         if chunk.choices and len(chunk.choices) > 0:
             delta = chunk.choices[0].delta
@@ -228,8 +233,11 @@ class OpenCodeService(CustomLLMService):
         return (
             assistant_response or " ",
             tool_uses,
-            input_tokens,
-            output_tokens,
+            TokenUsage(
+                input_tokens=input_tokens,
+                output_tokens=output_tokens,
+                cached_tokens=cached_tokens,
+            ),
             chunk_text or None,
             (thinking_content, None) if thinking_content else None,
         )

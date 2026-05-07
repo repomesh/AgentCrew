@@ -24,6 +24,7 @@ from AgentCrew.modules.chat.message_handler import Observer
 from loguru import logger
 
 from AgentCrew.modules.gui.widgets.system_message import SystemMessageWidget
+from AgentCrew.modules.llm.token_usage import TokenUsage
 
 from .worker import LLMWorker
 from typing import TYPE_CHECKING
@@ -297,26 +298,30 @@ class ChatWindow(QMainWindow, Observer):
         self.display_status_message("Processing your message...")
         self.llm_worker.process_request.emit(user_input)
 
-    def _update_cost_info(self, input_tokens, output_tokens):
+    def _update_cost_info(self, token_usage: TokenUsage):
         """Update cost statistic."""
         # Calculate cost
         total_cost = self.message_handler.agent.calculate_usage_cost(
-            input_tokens, output_tokens
+            token_usage.input_tokens,
+            token_usage.output_tokens,
+            token_usage.cached_tokens,
         )
 
         # Update token usage
         self.update_token_usage(
             {
-                "input_tokens": input_tokens,
-                "output_tokens": output_tokens,
+                "input_tokens": token_usage.input_tokens,
+                "output_tokens": token_usage.output_tokens,
+                "cached_tokens": token_usage.cached_tokens,
+                "cache_creation_tokens": token_usage.cache_creation_tokens,
                 "total_cost": total_cost,
             }
         )
 
-    @Slot(str, int, int)
-    def handle_response(self, response, input_tokens, output_tokens):
+    @Slot(str, object)
+    def handle_response(self, response, token_usage):
         """Handle the full response from the LLM worker"""
-        self._update_cost_info(input_tokens, output_tokens)
+        self._update_cost_info(token_usage)
 
         voice_service = self.message_handler.voice_service
         if voice_service and hasattr(voice_service, "audio_handler"):
@@ -357,6 +362,8 @@ class ChatWindow(QMainWindow, Observer):
         """Update token usage display."""
         input_tokens = usage_data.get("input_tokens", 0)
         output_tokens = usage_data.get("output_tokens", 0)
+        cached_tokens = usage_data.get("cached_tokens", 0)
+        cache_creation_tokens = usage_data.get("cache_creation_tokens", 0)
         total_cost = usage_data.get("total_cost", 0.0)
 
         # Update session cost
@@ -364,7 +371,12 @@ class ChatWindow(QMainWindow, Observer):
 
         # Update the token usage widget
         self.token_usage.update_token_info(
-            input_tokens, output_tokens, total_cost, self.session_cost
+            input_tokens,
+            output_tokens,
+            total_cost,
+            self.session_cost,
+            cached_tokens,
+            cache_creation_tokens,
         )
 
     @Slot()
@@ -601,7 +613,13 @@ class ChatWindow(QMainWindow, Observer):
             )
             self.ui_state_manager.set_input_controls_enabled(True)
         elif event == "update_token_usage":
-            self._update_cost_info(data["input_tokens"], data["output_tokens"])
+            token_usage = TokenUsage(
+                input_tokens=data.get("input_tokens", 0),
+                output_tokens=data.get("output_tokens", 0),
+                cached_tokens=data.get("cached_tokens", 0),
+                cache_creation_tokens=data.get("cache_creation_tokens", 0),
+            )
+            self._update_cost_info(token_usage)
         elif event == "mcp_prompt":
             self.message_input.setPlainText(data.get("content", ""))
         elif event == "transfer_enforce_toggled":

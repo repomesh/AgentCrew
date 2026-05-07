@@ -2,6 +2,7 @@ from typing import Any, Callable, Dict, List, Optional
 
 from AgentCrew.modules.agents.local_agent import LocalAgent
 from AgentCrew.modules.agents.base import MessageType
+from AgentCrew.modules.llm.token_usage import TokenUsage
 from AgentCrew.modules.tools.parallel_executor import (
     execute_tools_in_parallel,
     is_sequential_tool,
@@ -18,14 +19,12 @@ async def run_agent_loop(
     thinking_content = ""
     thinking_signature = ""
     tool_uses: List[Dict[str, Any]] = []
-    input_tokens = 0
-    output_tokens = 0
+    token_usage = TokenUsage()
 
-    def process_result(_tool_uses, _input_tokens, _output_tokens):
-        nonlocal tool_uses, input_tokens, output_tokens
+    def process_result(_tool_uses, _token_usage):
+        nonlocal tool_uses, token_usage
         tool_uses = _tool_uses
-        input_tokens += _input_tokens
-        output_tokens += _output_tokens
+        token_usage = token_usage.merge(_token_usage)
 
     async for (
         response_message,

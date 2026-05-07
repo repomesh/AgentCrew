@@ -3,10 +3,11 @@ import mimetypes
 import re
 from typing import Dict, Any, List, Union
 from anthropic import AsyncAnthropic
-from anthropic.types import TextBlock
+from anthropic.types import TextBlock, TextDelta
 from dotenv import load_dotenv
 from AgentCrew.modules.llm.base import BaseLLMService, read_binary_file, read_text_file
 from AgentCrew.modules.llm.model_registry import ModelRegistry
+from AgentCrew.modules.llm.token_usage import TokenUsage
 from loguru import logger
 
 
@@ -34,7 +35,9 @@ class AnthropicService(BaseLLMService):
     async def close(self):
         await self.client.close()
 
-    def calculate_cost(self, input_tokens: int, output_tokens: int) -> float:
+    def calculate_cost(
+        self, input_tokens: int, output_tokens: int, cached_tokens: int = 0
+    ) -> float:
         current_model = ModelRegistry.get_instance().get_model(
             f"{self._provider_name}/{self.model}"
         )
@@ -43,7 +46,10 @@ class AnthropicService(BaseLLMService):
             output_cost = (
                 output_tokens / 1_000_000
             ) * current_model.output_token_price_1m
-            return input_cost + output_cost
+            cached_cost = (
+                cached_tokens / 1_000_000
+            ) * current_model.cached_token_price_1m
+            return input_cost + output_cost + cached_cost
         return 0.0
 
     async def process_message(self, prompt: str, temperature: float = 0) -> str:
@@ -51,6 +57,7 @@ class AnthropicService(BaseLLMService):
         result_text = ""
         input_tokens = 0
         output_tokens = 0
+        cached_tokens = 0
 
         async with self.client.messages.stream(
             model=self.model,
@@ -65,7 +72,9 @@ class AnthropicService(BaseLLMService):
             ],
         ) as stream:
             async for event in stream:
-                if event.type == "content_block_delta" and hasattr(event.delta, "text"):
+                if event.type == "content_block_delta" and isinstance(
+                    event.delta, TextDelta
+                ):
                     result_text += event.delta.text
                 elif (
                     event.type == "message_start"
@@ -74,6 +83,8 @@ class AnthropicService(BaseLLMService):
                 ):
                     if hasattr(event.message.usage, "input_tokens"):
                         input_tokens = event.message.usage.input_tokens
+                    if hasattr(event.message.usage, "cache_read_input_tokens"):
+                        cached_tokens = event.message.usage.cache_read_input_tokens or 0
                 elif (
                     event.type == "message_delta"
                     and hasattr(event, "usage")
@@ -82,12 +93,16 @@ class AnthropicService(BaseLLMService):
                     if hasattr(event.usage, "output_tokens"):
                         output_tokens = event.usage.output_tokens
 
-        total_cost = self.calculate_cost(input_tokens, output_tokens)
+        if cached_tokens:
+            input_tokens = input_tokens - cached_tokens
+        total_cost = self.calculate_cost(input_tokens, output_tokens, cached_tokens)
 
         logger.info("\nToken Usage Statistics:")
         logger.info(f"Input tokens: {input_tokens:,}")
         logger.info(f"Output tokens: {output_tokens:,}")
-        logger.info(f"Total tokens: {input_tokens + output_tokens:,}")
+        if cached_tokens:
+            logger.info(f"Cached tokens: {cached_tokens:,}")
+        logger.info(f"Total tokens: {input_tokens + output_tokens + cached_tokens:,}")
         logger.info(f"Estimated cost: ${total_cost:.4f}")
 
         return result_text
@@ -304,6 +319,8 @@ class AnthropicService(BaseLLMService):
         thinking_signature = None
         input_tokens = 0
         output_tokens = 0
+        cached_tokens = 0
+        cache_creation_tokens = 0
 
         if chunk.type == "content_block_delta" and hasattr(chunk.delta, "text"):
             chunk_text = chunk.delta.text
@@ -321,6 +338,10 @@ class AnthropicService(BaseLLMService):
         ):
             if hasattr(chunk.message.usage, "input_tokens"):
                 input_tokens = chunk.message.usage.input_tokens
+            if hasattr(chunk.message.usage, "cache_read_input_tokens"):
+                cached_tokens = chunk.message.usage.cache_read_input_tokens
+            if hasattr(chunk.message.usage, "cache_creation_input_tokens"):
+                cache_creation_tokens = chunk.message.usage.cache_creation_input_tokens
         elif chunk.type == "message_delta" and hasattr(chunk, "usage") and chunk.usage:
             if hasattr(chunk.usage, "output_tokens"):
                 output_tokens = chunk.usage.output_tokens
@@ -373,8 +394,12 @@ class AnthropicService(BaseLLMService):
         return (
             assistant_response,
             tool_uses,
-            input_tokens,
-            output_tokens,
+            TokenUsage(
+                input_tokens=input_tokens,
+                output_tokens=output_tokens,
+                cached_tokens=cached_tokens,
+                cache_creation_tokens=cache_creation_tokens,
+            ),
             chunk_text,
             thinking_data,
         )
@@ -410,12 +435,17 @@ class AnthropicService(BaseLLMService):
         # Calculate and log token usage and cost
         input_tokens = message.usage.input_tokens
         output_tokens = message.usage.output_tokens
-        total_cost = self.calculate_cost(input_tokens, output_tokens)
+        cached_tokens = getattr(message.usage, "cache_read_input_tokens", 0) or 0
+        if cached_tokens:
+            input_tokens = input_tokens - cached_tokens
+        total_cost = self.calculate_cost(input_tokens, output_tokens, cached_tokens)
 
         logger.info("\nSpec Validation Token Usage:")
         logger.info(f"Input tokens: {input_tokens:,}")
         logger.info(f"Output tokens: {output_tokens:,}")
-        logger.info(f"Total tokens: {input_tokens + output_tokens:,}")
+        if cached_tokens:
+            logger.info(f"Cached tokens: {cached_tokens:,}")
+        logger.info(f"Total tokens: {input_tokens + output_tokens + cached_tokens:,}")
         logger.info(f"Estimated cost: ${total_cost:.4f}")
 
         return content_block.text

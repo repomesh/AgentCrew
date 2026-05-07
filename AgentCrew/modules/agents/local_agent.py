@@ -7,6 +7,7 @@ import copy
 from typing import List, TYPE_CHECKING, Literal
 
 from .base import BaseAgent, MessageType
+from AgentCrew.modules.llm.token_usage import TokenUsage
 from loguru import logger
 
 if TYPE_CHECKING:
@@ -55,8 +56,7 @@ class LocalAgent(BaseAgent):
         self.custom_system_prompt = None
         self.tool_prompts = []
         self.is_remoting_mode: bool = is_remoting_mode
-        self.input_tokens_usage = 0
-        self.output_tokens_usage = 0
+        self.token_usage = TokenUsage()
         self.voice_enabled: Literal["enabled", "disabled"] = normalize_voice_enabled(
             voice_enabled
         )
@@ -74,6 +74,32 @@ class LocalAgent(BaseAgent):
 
         self._tool_registrar = AgentToolRegistrar(self)
         self._context_manager = AgentContextManager(self)
+
+    @property
+    def input_tokens_usage(self) -> int:
+        return self.token_usage.input_tokens
+
+    @input_tokens_usage.setter
+    def input_tokens_usage(self, value: int):
+        self.token_usage = TokenUsage(
+            input_tokens=value,
+            output_tokens=self.token_usage.output_tokens,
+            cached_tokens=self.token_usage.cached_tokens,
+            cache_creation_tokens=self.token_usage.cache_creation_tokens,
+        )
+
+    @property
+    def output_tokens_usage(self) -> int:
+        return self.token_usage.output_tokens
+
+    @output_tokens_usage.setter
+    def output_tokens_usage(self, value: int):
+        self.token_usage = TokenUsage(
+            input_tokens=self.token_usage.input_tokens,
+            output_tokens=value,
+            cached_tokens=self.token_usage.cached_tokens,
+            cache_creation_tokens=self.token_usage.cache_creation_tokens,
+        )
 
     def _extract_tool_name(self, tool_def: Any) -> str:
         """Extract tool name from definition regardless of format."""
@@ -346,8 +372,10 @@ class LocalAgent(BaseAgent):
     async def execute_tool_call(self, tool_name: str, tool_input: Dict) -> Any:
         return await self.llm.execute_tool(tool_name, tool_input)
 
-    def calculate_usage_cost(self, input_tokens, output_tokens) -> float:
-        return self.llm.calculate_cost(input_tokens, output_tokens)
+    def calculate_usage_cost(
+        self, input_tokens, output_tokens, cached_tokens=0
+    ) -> float:
+        return self.llm.calculate_cost(input_tokens, output_tokens, cached_tokens)
 
     def get_model(self) -> str:
         return f"{self.llm.provider_name}/{self.llm.model}"
@@ -430,8 +458,7 @@ class LocalAgent(BaseAgent):
 
         assistant_response = ""
         _tool_uses = []
-        _input_tokens_usage = 0
-        _output_tokens_usage = 0
+        _token_usage = TokenUsage()
         # Ensure the first message is a system message with the agent's prompt
         final_messages = messages[:] if messages else self.history[:]
         self._enhance_agent_context_messages(final_messages)
@@ -446,8 +473,7 @@ class LocalAgent(BaseAgent):
                     (
                         assistant_response,
                         tool_uses,
-                        chunk_input_tokens,
-                        chunk_output_tokens,
+                        chunk_token_usage,
                         chunk_text,
                         thinking_chunk,
                     ) = self.llm.process_stream_chunk(
@@ -457,18 +483,14 @@ class LocalAgent(BaseAgent):
 
                     if tool_uses:
                         _tool_uses = tool_uses
-                    if chunk_input_tokens > 0:
-                        _input_tokens_usage = chunk_input_tokens
-                    if chunk_output_tokens > 0:
-                        _output_tokens_usage = chunk_output_tokens
+                    if chunk_token_usage:
+                        _token_usage = _token_usage.merge(chunk_token_usage)
 
-            self.input_tokens_usage = _input_tokens_usage
-            self.output_tokens_usage = _output_tokens_usage
+            self.token_usage = _token_usage
             if callback:
                 callback(
                     self._filter_invalid_tool_uses(_tool_uses),
-                    _input_tokens_usage,
-                    _output_tokens_usage,
+                    _token_usage,
                 )
             else:
                 self.tool_uses = _tool_uses
@@ -485,4 +507,4 @@ class LocalAgent(BaseAgent):
         """
         @DEPRECATED: Use the callback in process_messages instead.
         """
-        return (self.tool_uses, self.input_tokens_usage, self.output_tokens_usage)
+        return (self.tool_uses, self.token_usage)

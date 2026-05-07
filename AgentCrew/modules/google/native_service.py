@@ -6,6 +6,7 @@ from typing import Dict, Any, List, Optional, Tuple
 from dotenv import load_dotenv
 from google import genai
 from AgentCrew.modules.llm.model_registry import ModelRegistry
+from AgentCrew.modules.llm.token_usage import TokenUsage
 from google.genai import types
 from AgentCrew.modules.llm.base import (
     BaseLLMService,
@@ -131,18 +132,20 @@ class GoogleAINativeService(BaseLLMService):
         logger.info(f"Thinking mode enabled with budget of {budget_tokens} tokens.")
         return True
 
-    def calculate_cost(self, input_tokens: int, output_tokens: int) -> float:
+    def calculate_cost(
+        self, input_tokens: int, output_tokens: int, cached_tokens: int = 0
+    ) -> float:
         """
         Calculate the cost based on token usage.
 
         Args:
             input_tokens (int): Number of input tokens
             output_tokens (int): Number of output tokens
+            cached_tokens (int): Number of cached input tokens
 
         Returns:
             float: Estimated cost in USD
         """
-        # Current Gemini pricing as of March 2025
         current_model = ModelRegistry.get_instance().get_model(
             f"{self._provider_name}/{self.model}"
         )
@@ -151,13 +154,17 @@ class GoogleAINativeService(BaseLLMService):
             output_cost = (
                 output_tokens / 1_000_000
             ) * current_model.output_token_price_1m
-            return input_cost + output_cost
+            cached_cost = (
+                cached_tokens / 1_000_000
+            ) * current_model.cached_token_price_1m
+            return input_cost + output_cost + cached_cost
         return 0.0
 
     async def process_message(self, prompt: str, temperature: float = 0) -> str:
         result_text = ""
         input_tokens = 0
         output_tokens = 0
+        cached_tokens = 0
 
         stream_generator = GoogleStreamAdapter(
             self.client.aio.models.generate_content_stream(
@@ -178,12 +185,18 @@ class GoogleAINativeService(BaseLLMService):
                     input_tokens = chunk.usage_metadata.prompt_token_count or 0
                 if hasattr(chunk.usage_metadata, "candidates_token_count"):
                     output_tokens = chunk.usage_metadata.candidates_token_count or 0
+                if hasattr(chunk.usage_metadata, "cached_content_token_count"):
+                    cached_tokens = chunk.usage_metadata.cached_content_token_count or 0
 
-        total_cost = self.calculate_cost(input_tokens, output_tokens)
+        if cached_tokens:
+            input_tokens = input_tokens - cached_tokens
+        total_cost = self.calculate_cost(input_tokens, output_tokens, cached_tokens)
         logger.info("\nToken Usage Statistics:")
         logger.info(f"Input tokens: {input_tokens:,}")
         logger.info(f"Output tokens: {output_tokens:,}")
-        logger.info(f"Total tokens: {input_tokens + output_tokens:,}")
+        if cached_tokens:
+            logger.info(f"Cached tokens: {cached_tokens:,}")
+        logger.info(f"Total tokens: {input_tokens + output_tokens + cached_tokens:,}")
         logger.info(f"Estimated cost: ${total_cost:.4f}")
 
         return result_text
@@ -506,7 +519,7 @@ class GoogleAINativeService(BaseLLMService):
 
     def process_stream_chunk(
         self, chunk, assistant_response: str, tool_uses: List[Dict]
-    ) -> Tuple[str, List[Dict], int, int, Optional[str], Optional[tuple]]:
+    ) -> Tuple[str, List[Dict], TokenUsage, Optional[str], Optional[tuple]]:
         """
         Process a single chunk from the streaming response.
 
@@ -519,8 +532,7 @@ class GoogleAINativeService(BaseLLMService):
             tuple: (
                 updated_assistant_response,
                 updated_tool_uses,
-                input_tokens,
-                output_tokens,
+                token_usage,
                 chunk_text,
                 thinking_data
             )
@@ -528,6 +540,7 @@ class GoogleAINativeService(BaseLLMService):
         chunk_text = ""
         input_tokens = 0
         output_tokens = 0
+        cached_tokens = 0
         thinking_content = ""
 
         if hasattr(chunk, "candidates") and chunk.candidates:
@@ -629,12 +642,18 @@ class GoogleAINativeService(BaseLLMService):
                 input_tokens = chunk.usage_metadata.prompt_token_count or 0
             if hasattr(chunk.usage_metadata, "candidates_token_count"):
                 output_tokens = chunk.usage_metadata.candidates_token_count or 0
+            if hasattr(chunk.usage_metadata, "cached_content_token_count"):
+                cached_tokens = chunk.usage_metadata.cached_content_token_count or 0
+                input_tokens = input_tokens - cached_tokens
 
         return (
             assistant_response or " ",
             tool_uses,
-            input_tokens,
-            output_tokens,
+            TokenUsage(
+                input_tokens=input_tokens,
+                output_tokens=output_tokens,
+                cached_tokens=cached_tokens,
+            ),
             chunk_text,
             (thinking_content, None) if thinking_content.strip() else None,
         )
@@ -659,19 +678,26 @@ class GoogleAINativeService(BaseLLMService):
         # Calculate and log token usage
         input_tokens = 0
         output_tokens = 0
+        cached_tokens = 0
         if hasattr(response, "usage_metadata") and response.usage_metadata:
             if hasattr(response.usage_metadata, "prompt_token_count"):
                 input_tokens = response.usage_metadata.prompt_token_count or 0
             if hasattr(response.usage_metadata, "candidates_token_count"):
                 output_tokens = response.usage_metadata.candidates_token_count or 0
+            if hasattr(response.usage_metadata, "cached_content_token_count"):
+                cached_tokens = response.usage_metadata.cached_content_token_count or 0
 
+        if cached_tokens:
+            input_tokens = input_tokens - cached_tokens
         # Calculate cost
-        total_cost = self.calculate_cost(input_tokens, output_tokens)
+        total_cost = self.calculate_cost(input_tokens, output_tokens, cached_tokens)
 
         logger.info("\nSpec Validation Token Usage:")
         logger.info(f"Input tokens: {input_tokens:,}")
         logger.info(f"Output tokens: {output_tokens:,}")
-        logger.info(f"Total tokens: {input_tokens + output_tokens:,}")
+        if cached_tokens:
+            logger.info(f"Cached tokens: {cached_tokens:,}")
+        logger.info(f"Total tokens: {input_tokens + output_tokens + cached_tokens:,}")
         logger.info(f"Estimated cost: ${total_cost:.4f}")
 
         # Return the response text (should be JSON)

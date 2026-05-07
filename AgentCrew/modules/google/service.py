@@ -4,6 +4,7 @@ import json
 import os
 from dotenv import load_dotenv
 from AgentCrew.modules.llm.model_registry import ModelRegistry
+from AgentCrew.modules.llm.token_usage import TokenUsage
 
 
 class GoogleAIService(OpenAIService):
@@ -73,7 +74,7 @@ class GoogleAIService(OpenAIService):
 
     def process_stream_chunk(
         self, chunk, assistant_response: str, tool_uses: List[Dict]
-    ) -> Tuple[str, List[Dict], int, int, Optional[str], Optional[tuple]]:
+    ) -> Tuple[str, List[Dict], TokenUsage, Optional[str], Optional[tuple]]:
         """
         Process a single chunk from the streaming response.
 
@@ -162,8 +163,7 @@ class GoogleAIService(OpenAIService):
                 return (
                     assistant_response or " ",
                     tool_uses,
-                    input_tokens,
-                    output_tokens,
+                    TokenUsage(input_tokens=input_tokens, output_tokens=output_tokens),
                     "",
                     None,
                 )
@@ -178,17 +178,28 @@ class GoogleAIService(OpenAIService):
             assistant_response += chunk_text
 
         # Handle final chunk with usage information
+        cached_tokens = 0
         if hasattr(chunk, "usage"):
             if hasattr(chunk.usage, "prompt_tokens"):
                 input_tokens = chunk.usage.prompt_tokens
             if hasattr(chunk.usage, "completion_tokens"):
                 output_tokens = chunk.usage.completion_tokens
+            if (
+                hasattr(chunk.usage, "prompt_tokens_details")
+                and chunk.usage.prompt_tokens_details
+            ):
+                if hasattr(chunk.usage.prompt_tokens_details, "cached_tokens"):
+                    cached_tokens = chunk.usage.prompt_tokens_details.cached_tokens
+                    input_tokens = input_tokens - cached_tokens
 
         return (
             assistant_response or " ",
             tool_uses,
-            input_tokens,
-            output_tokens,
+            TokenUsage(
+                input_tokens=input_tokens,
+                output_tokens=output_tokens,
+                cached_tokens=cached_tokens,
+            ),
             chunk_text,
             None,
         )

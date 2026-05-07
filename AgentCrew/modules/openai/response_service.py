@@ -6,6 +6,7 @@ from openai import AsyncOpenAI
 from dotenv import load_dotenv
 from AgentCrew.modules.llm.base import BaseLLMService, read_binary_file, read_text_file
 from AgentCrew.modules.llm.model_registry import ModelRegistry
+from AgentCrew.modules.llm.token_usage import TokenUsage
 from loguru import logger
 
 
@@ -61,7 +62,9 @@ class OpenAIResponseService(BaseLLMService):
         logger.info("Thinking mode is not supported for this OpenAI model.")
         return False
 
-    def calculate_cost(self, input_tokens: int, output_tokens: int) -> float:
+    def calculate_cost(
+        self, input_tokens: int, output_tokens: int, cached_tokens: int = 0
+    ) -> float:
         """Calculate the cost based on token usage."""
         current_model = ModelRegistry.get_instance().get_model(
             f"{self._provider_name}/{self.model}"
@@ -71,7 +74,10 @@ class OpenAIResponseService(BaseLLMService):
             output_cost = (
                 output_tokens / 1_000_000
             ) * current_model.output_token_price_1m
-            return input_cost + output_cost
+            cached_cost = (
+                cached_tokens / 1_000_000
+            ) * current_model.cached_token_price_1m
+            return input_cost + output_cost + cached_cost
         return 0.0
 
     def _convert_internal_format(self, messages: List[Dict[str, Any]]):
@@ -142,6 +148,7 @@ class OpenAIResponseService(BaseLLMService):
         result_text = ""
         input_tokens = 0
         output_tokens = 0
+        cached_tokens = 0
 
         async for event in await self.client.responses.create(**request_params):
             if event.type == "response.output_text.delta":
@@ -151,8 +158,13 @@ class OpenAIResponseService(BaseLLMService):
                 if usage:
                     input_tokens = getattr(usage, "input_tokens", 0)
                     output_tokens = getattr(usage, "output_tokens", 0)
+                    input_tokens_details = getattr(usage, "input_tokens_details", None)
+                    if input_tokens_details:
+                        cached_tokens = getattr(
+                            input_tokens_details, "cached_tokens", 0
+                        )
 
-        total_cost = self.calculate_cost(input_tokens, output_tokens)
+        total_cost = self.calculate_cost(input_tokens, output_tokens, cached_tokens)
 
         logger.info("\nResponse API Token Usage Statistics:")
         logger.info(f"Input tokens: {input_tokens:,}")
@@ -308,7 +320,7 @@ class OpenAIResponseService(BaseLLMService):
 
     def process_stream_chunk(
         self, chunk, assistant_response: str, tool_uses: List[Dict]
-    ) -> Tuple[str, List[Dict], int, int, Optional[str], Optional[tuple]]:
+    ) -> Tuple[str, List[Dict], TokenUsage, Optional[str], Optional[tuple]]:
         """
         Process a single chunk from Response API streaming.
         Response API uses structured event objects with semantic types.
@@ -320,6 +332,7 @@ class OpenAIResponseService(BaseLLMService):
         chunk_text = None
         input_tokens = 0
         output_tokens = 0
+        cached_tokens = 0
         thinking_content = None
 
         try:
@@ -431,6 +444,13 @@ class OpenAIResponseService(BaseLLMService):
                     if usage:
                         input_tokens = getattr(usage, "input_tokens", 0)
                         output_tokens = getattr(usage, "output_tokens", 0)
+                        input_tokens_details = getattr(
+                            usage, "input_tokens_details", None
+                        )
+                        if input_tokens_details:
+                            cached_tokens = getattr(
+                                input_tokens_details, "cached_tokens", 0
+                            )
                         output_tokens_details = getattr(
                             usage, "output_tokens_details", None
                         )
@@ -480,8 +500,11 @@ class OpenAIResponseService(BaseLLMService):
         return (
             assistant_response or "",
             tool_uses,
-            input_tokens,
-            output_tokens,
+            TokenUsage(
+                input_tokens=input_tokens - cached_tokens,
+                output_tokens=output_tokens,
+                cached_tokens=cached_tokens,
+            ),
             chunk_text,
             thinking_content,
         )
@@ -556,12 +579,20 @@ class OpenAIResponseService(BaseLLMService):
         # Calculate usage and cost
         input_tokens = getattr(response, "input_tokens", 0)
         output_tokens = getattr(response, "output_tokens", 0)
-        total_cost = self.calculate_cost(input_tokens, output_tokens)
+        cached_tokens = 0
+        input_tokens_details = getattr(response, "input_tokens_details", None)
+        if input_tokens_details:
+            cached_tokens = getattr(input_tokens_details, "cached_tokens", 0)
+        if cached_tokens:
+            input_tokens = input_tokens - cached_tokens
+        total_cost = self.calculate_cost(input_tokens, output_tokens, cached_tokens)
 
         logger.info("\nResponse API Spec Validation Token Usage:")
         logger.info(f"Input tokens: {input_tokens:,}")
         logger.info(f"Output tokens: {output_tokens:,}")
-        logger.info(f"Total tokens: {input_tokens + output_tokens:,}")
+        if cached_tokens:
+            logger.info(f"Cached tokens: {cached_tokens:,}")
+        logger.info(f"Total tokens: {input_tokens + output_tokens + cached_tokens:,}")
         logger.info(f"Estimated cost: ${total_cost:.4f}")
 
         return response.output_text or ""

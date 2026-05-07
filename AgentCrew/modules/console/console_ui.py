@@ -25,6 +25,7 @@ from .constants import (
     PROMPT_CHAR,
 )
 
+from AgentCrew.modules.llm.token_usage import TokenUsage
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -70,8 +71,7 @@ class ConsoleUI(Observer):
         self.confirmation_handler = ConfirmationHandler(self)
         self.conversation_handler = ConversationHandler(self)
         self.command_handlers = CommandHandlers(self)
-        self._input_tokens = 0
-        self._output_tokens = 0
+        self._token_usage = TokenUsage()
         self._total_cost = 0
 
     def _set_voice_processing_state(self, is_processing: bool):
@@ -100,7 +100,7 @@ class ConsoleUI(Observer):
             if should_exit or was_cleared or not self.message_handler.agent.history:
                 return
 
-            assistant_response, self._input_tokens, self._output_tokens = asyncio.run(
+            assistant_response, self._token_usage = asyncio.run(
                 self.message_handler.get_assistant_response()
             )
         except Exception as e:
@@ -110,12 +110,11 @@ class ConsoleUI(Observer):
             self._clear_pending_input_queue()
             self._set_voice_processing_state(False)
 
-        self._calculate_token_usage(self._input_tokens, self._output_tokens)
+        self._calculate_token_usage(self._token_usage)
 
         if assistant_response:
             self.display_token_usage(
-                self._input_tokens,
-                self._output_tokens,
+                self._token_usage,
                 self._total_cost,
                 self.session_cost,
             )
@@ -227,8 +226,7 @@ class ConsoleUI(Observer):
             )
             self.display_handlers.clear_files()
             self.session_cost = 0
-            self._input_tokens = 0
-            self._output_tokens = 0
+            self._token_usage = TokenUsage()
             self._total_cost = 0
         elif event == "copy_requested":
             self.copy_to_clipboard(data)  # data is the text to copy
@@ -374,9 +372,13 @@ class ConsoleUI(Observer):
         elif event == "conversation_saved":
             logger.info(f"Conversation saved: {data.get('id', 'N/A')}")
         elif event == "update_token_usage":
-            self._input_tokens = data.get("input_tokens", 0)
-            self._output_tokens = data.get("output_tokens", 0)
-            self._calculate_token_usage(self._input_tokens, self._output_tokens)
+            self._token_usage = TokenUsage(
+                input_tokens=data.get("input_tokens", 0),
+                output_tokens=data.get("output_tokens", 0),
+                cached_tokens=data.get("cached_tokens", 0),
+                cache_creation_tokens=data.get("cache_creation_tokens", 0),
+            )
+            self._calculate_token_usage(self._token_usage)
         elif event == "voice_recording_started":
             self.display_handlers.display_message(
                 Text("Start recording. Press Enter to stop...", style="bold yellow")
@@ -433,8 +435,7 @@ class ConsoleUI(Observer):
         self._clear_and_reprint_chat()
 
         self.display_token_usage(
-            self._input_tokens,
-            self._output_tokens,
+            self._token_usage,
             self._total_cost,
             self.session_cost,
         )
@@ -546,20 +547,19 @@ class ConsoleUI(Observer):
 
     def display_token_usage(
         self,
-        input_tokens: int,
-        output_tokens: int,
+        token_usage: TokenUsage,
         total_cost: float,
         session_cost: float,
     ):
         """Display token usage and cost information."""
-        self.display_handlers.display_token_usage(
-            input_tokens, output_tokens, total_cost, session_cost
-        )
+        self.display_handlers.display_token_usage(token_usage, total_cost, session_cost)
 
-    def _calculate_token_usage(self, input_tokens: int, output_tokens: int):
+    def _calculate_token_usage(self, token_usage: TokenUsage):
         """Calculate token usage and update session cost."""
         self._total_cost = self.message_handler.agent.calculate_usage_cost(
-            input_tokens, output_tokens
+            token_usage.input_tokens,
+            token_usage.output_tokens,
+            token_usage.cached_tokens,
         )
         self.session_cost += self._total_cost
 
@@ -822,25 +822,21 @@ class ConsoleUI(Observer):
                         continue
 
                     # Get assistant response
-                    assistant_response, input_tokens, output_tokens = asyncio.run(
+                    assistant_response, token_usage = asyncio.run(
                         self.message_handler.get_assistant_response()
                     )
 
                     self._is_resizing = False
-                    self._input_tokens = input_tokens
-                    self._output_tokens = output_tokens
+                    self._token_usage = token_usage
 
                     # Ensure loading animation is stopped
                     self.stop_loading_animation()
 
                     if assistant_response:
                         # Calculate and display token usage
-                        self._calculate_token_usage(
-                            self._input_tokens, self._output_tokens
-                        )
+                        self._calculate_token_usage(token_usage)
                         self.display_token_usage(
-                            self._input_tokens,
-                            self._output_tokens,
+                            token_usage,
                             self._total_cost,
                             self.session_cost,
                         )

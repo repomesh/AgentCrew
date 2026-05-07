@@ -5,6 +5,7 @@ from loguru import logger
 from typing import Dict, List, Optional, Tuple, Any
 
 from AgentCrew.modules.llm.model_registry import ModelRegistry
+from AgentCrew.modules.llm.token_usage import TokenUsage
 
 
 class FireworksService(CustomLLMService):
@@ -61,10 +62,11 @@ class FireworksService(CustomLLMService):
 
     def _process_stream_chunk(
         self, chunk, assistant_response: str, tool_uses: List[Dict]
-    ) -> Tuple[str, List[Dict], int, int, Optional[str], Optional[tuple]]:
+    ) -> Tuple[str, List[Dict], TokenUsage, Optional[str], Optional[tuple]]:
         chunk_text = ""
         input_tokens = 0
         output_tokens = 0
+        cached_tokens = 0
         thinking_content = None
 
         if hasattr(chunk, "usage"):
@@ -72,13 +74,23 @@ class FireworksService(CustomLLMService):
                 input_tokens = chunk.usage.prompt_tokens
             if hasattr(chunk.usage, "completion_tokens"):
                 output_tokens = chunk.usage.completion_tokens
+            if (
+                hasattr(chunk.usage, "prompt_tokens_details")
+                and chunk.usage.prompt_tokens_details
+            ):
+                if hasattr(chunk.usage.prompt_tokens_details, "cached_tokens"):
+                    cached_tokens = chunk.usage.prompt_tokens_details.cached_tokens
+                    input_tokens = input_tokens - cached_tokens
 
         if (not chunk.choices) or (len(chunk.choices) == 0):
             return (
                 assistant_response or " ",
                 tool_uses,
-                input_tokens,
-                output_tokens,
+                TokenUsage(
+                    input_tokens=input_tokens,
+                    output_tokens=output_tokens,
+                    cached_tokens=cached_tokens,
+                ),
                 "",
                 (thinking_content, None) if thinking_content else None,
             )
@@ -131,8 +143,11 @@ class FireworksService(CustomLLMService):
                 return (
                     assistant_response or " ",
                     tool_uses,
-                    input_tokens,
-                    output_tokens,
+                    TokenUsage(
+                        input_tokens=input_tokens,
+                        output_tokens=output_tokens,
+                        cached_tokens=cached_tokens,
+                    ),
                     chunk_text,
                     (thinking_content, None) if thinking_content else None,
                 )
@@ -140,8 +155,11 @@ class FireworksService(CustomLLMService):
         return (
             assistant_response or " ",
             tool_uses,
-            input_tokens,
-            output_tokens,
+            TokenUsage(
+                input_tokens=input_tokens,
+                output_tokens=output_tokens,
+                cached_tokens=cached_tokens,
+            ),
             chunk_text,
             (thinking_content, None) if thinking_content else None,
         )

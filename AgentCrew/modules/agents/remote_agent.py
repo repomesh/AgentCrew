@@ -107,7 +107,9 @@ class RemoteAgent(BaseAgent):
     def configure_think(self, think_setting):
         pass
 
-    def calculate_usage_cost(self, input_tokens, output_tokens) -> float:
+    def calculate_usage_cost(
+        self, input_tokens, output_tokens, cached_tokens=0
+    ) -> float:
         return 0.0
 
     async def process_messages(

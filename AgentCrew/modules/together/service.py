@@ -9,6 +9,7 @@ from together import AsyncTogether
 
 from AgentCrew.modules.llm.base import BaseLLMService, read_binary_file, read_text_file
 from AgentCrew.modules.llm.model_registry import ModelRegistry
+from AgentCrew.modules.llm.token_usage import TokenUsage
 
 
 class TogetherAIService(BaseLLMService):
@@ -44,7 +45,9 @@ class TogetherAIService(BaseLLMService):
         logger.info("Thinking mode is not supported for Together models.")
         return False
 
-    def calculate_cost(self, input_tokens: int, output_tokens: int) -> float:
+    def calculate_cost(
+        self, input_tokens: int, output_tokens: int, cached_tokens: int = 0
+    ) -> float:
         current_model = ModelRegistry.get_instance().get_model(
             f"{self._provider_name}/{self.model}"
         )
@@ -53,7 +56,10 @@ class TogetherAIService(BaseLLMService):
             output_cost = (
                 output_tokens / 1_000_000
             ) * current_model.output_token_price_1m
-            return input_cost + output_cost
+            cached_cost = (
+                cached_tokens / 1_000_000
+            ) * current_model.cached_token_price_1m
+            return input_cost + output_cost + cached_cost
         return 0.0
 
     def _convert_internal_format(self, messages: List[Dict[str, Any]]):
@@ -162,6 +168,7 @@ class TogetherAIService(BaseLLMService):
         result_text = ""
         input_tokens = 0
         output_tokens = 0
+        cached_tokens = 0
 
         stream = await self.client.chat.completions.create(
             model=self.model,
@@ -186,13 +193,23 @@ class TogetherAIService(BaseLLMService):
                     input_tokens = chunk.usage.prompt_tokens
                 if hasattr(chunk.usage, "completion_tokens"):
                     output_tokens = chunk.usage.completion_tokens
+                # if (
+                #     hasattr(chunk.usage, "prompt_tokens_details")
+                #     and chunk.usage.prompt_tokens_details
+                # ):
+                #     if hasattr(chunk.usage.prompt_tokens_details, "cached_tokens"):
+                #         cached_tokens = chunk.usage.prompt_tokens_details.cached_tokens
 
-        total_cost = self.calculate_cost(input_tokens, output_tokens)
+        if cached_tokens:
+            input_tokens = input_tokens - cached_tokens
+        total_cost = self.calculate_cost(input_tokens, output_tokens, cached_tokens)
 
         logger.info("\nToken Usage Statistics:")
         logger.info(f"Input tokens: {input_tokens:,}")
         logger.info(f"Output tokens: {output_tokens:,}")
-        logger.info(f"Total tokens: {input_tokens + output_tokens:,}")
+        if cached_tokens:
+            logger.info(f"Cached tokens: {cached_tokens:,}")
+        logger.info(f"Total tokens: {input_tokens + output_tokens + cached_tokens:,}")
         logger.info(f"Estimated cost: ${total_cost:.4f}")
 
         if "thinking" in ModelRegistry.get_model_capabilities(
@@ -332,24 +349,33 @@ class TogetherAIService(BaseLLMService):
 
     def process_stream_chunk(
         self, chunk, assistant_response: str, tool_uses: List[Dict]
-    ) -> Tuple[str, List[Dict], int, int, Optional[str], Optional[tuple]]:
+    ) -> Tuple[str, List[Dict], TokenUsage, Optional[str], Optional[tuple]]:
         chunk_text = None
         input_tokens = 0
         output_tokens = 0
+        cached_tokens = 0
         thinking_content = None
 
         usage = getattr(chunk, "usage", None)
         if usage is not None:
             input_tokens = getattr(usage, "prompt_tokens", 0) or 0
             output_tokens = getattr(usage, "completion_tokens", 0) or 0
+            prompt_tokens_details = getattr(usage, "prompt_tokens_details", None)
+            if prompt_tokens_details is not None:
+                cached_tokens = getattr(prompt_tokens_details, "cached_tokens", 0) or 0
+                if cached_tokens:
+                    input_tokens = input_tokens - cached_tokens
 
         choices = getattr(chunk, "choices", None)
         if not choices:
             return (
                 assistant_response or " ",
                 tool_uses,
-                input_tokens,
-                output_tokens,
+                TokenUsage(
+                    input_tokens=input_tokens,
+                    output_tokens=output_tokens,
+                    cached_tokens=cached_tokens,
+                ),
                 chunk_text,
                 None,
             )
@@ -359,8 +385,11 @@ class TogetherAIService(BaseLLMService):
             return (
                 assistant_response or " ",
                 tool_uses,
-                input_tokens,
-                output_tokens,
+                TokenUsage(
+                    input_tokens=input_tokens,
+                    output_tokens=output_tokens,
+                    cached_tokens=cached_tokens,
+                ),
                 chunk_text,
                 None,
             )
@@ -427,8 +456,11 @@ class TogetherAIService(BaseLLMService):
             return (
                 assistant_response or " ",
                 tool_uses,
-                input_tokens,
-                output_tokens,
+                TokenUsage(
+                    input_tokens=input_tokens,
+                    output_tokens=output_tokens,
+                    cached_tokens=cached_tokens,
+                ),
                 chunk_text,
                 thinking_content,
             )
@@ -466,8 +498,11 @@ class TogetherAIService(BaseLLMService):
         return (
             assistant_response or " ",
             tool_uses,
-            input_tokens,
-            output_tokens,
+            TokenUsage(
+                input_tokens=input_tokens,
+                output_tokens=output_tokens,
+                cached_tokens=cached_tokens,
+            ),
             chunk_text,
             thinking_content,
         )
@@ -481,12 +516,24 @@ class TogetherAIService(BaseLLMService):
 
         input_tokens = response.usage.prompt_tokens if response.usage else 0
         output_tokens = response.usage.completion_tokens if response.usage else 0
-        total_cost = self.calculate_cost(input_tokens, output_tokens)
+        cached_tokens = 0
+        # if (
+        #     response.usage
+        #     and hasattr(response.usage, "prompt_tokens_details")
+        #     and response.usage.prompt_tokens_details
+        # ):
+        #     if hasattr(response.usage.prompt_tokens_details, "cached_tokens"):
+        #         cached_tokens = response.usage.prompt_tokens_details.cached_tokens
+        if cached_tokens:
+            input_tokens = input_tokens - cached_tokens
+        total_cost = self.calculate_cost(input_tokens, output_tokens, cached_tokens)
 
         logger.info("\nSpec Validation Token Usage:")
         logger.info(f"Input tokens: {input_tokens:,}")
         logger.info(f"Output tokens: {output_tokens:,}")
-        logger.info(f"Total tokens: {input_tokens + output_tokens:,}")
+        if cached_tokens:
+            logger.info(f"Cached tokens: {cached_tokens:,}")
+        logger.info(f"Total tokens: {input_tokens + output_tokens + cached_tokens:,}")
         logger.info(f"Estimated cost: ${total_cost:.4f}")
 
         return (

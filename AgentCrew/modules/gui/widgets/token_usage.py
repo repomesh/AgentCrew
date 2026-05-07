@@ -37,12 +37,21 @@ class TokenUsageWidget(QWidget):
         output_tokens: int,
         total_cost: float,
         session_cost: float,
+        cached_tokens: int = 0,
+        cache_creation_tokens: int = 0,
     ):
         """Update the token usage information."""
-        self.token_label.setText(
-            f"📊  Input: {input_tokens:,}  ·  Output: {output_tokens:,}  ·  "
-            f"Total: {input_tokens + output_tokens:,}  ·  Cost: ${total_cost:.4f}  ·  Session: ${session_cost:.4f}"
-        )
+        parts = [f"📊  Input: {input_tokens:,}"]
+        if cached_tokens > 0:
+            parts.append(f"Cached: {cached_tokens:,}")
+        if cache_creation_tokens > 0:
+            parts.append(f"Cache Write: {cache_creation_tokens:,}")
+        parts.append(f"Output: {output_tokens:,}")
+        total = input_tokens + cached_tokens + cache_creation_tokens + output_tokens
+        parts.append(f"Total: {total:,}")
+        parts.append(f"Cost: ${total_cost:.4f}")
+        parts.append(f"Session: ${session_cost:.4f}")
+        self.token_label.setText("  ·  ".join(parts))
 
     def update_style(self, style_provider=None):
         """Update the widget's style based on the current theme."""

@@ -6,6 +6,7 @@ from openai import AsyncOpenAI
 from dotenv import load_dotenv
 from AgentCrew.modules.llm.base import BaseLLMService, read_binary_file, read_text_file
 from AgentCrew.modules.llm.model_registry import ModelRegistry
+from AgentCrew.modules.llm.token_usage import TokenUsage
 from loguru import logger
 
 
@@ -55,7 +56,9 @@ class OpenAIService(BaseLLMService):
         logger.info("Thinking mode is not supported for OpenAI models.")
         return False
 
-    def calculate_cost(self, input_tokens: int, output_tokens: int) -> float:
+    def calculate_cost(
+        self, input_tokens: int, output_tokens: int, cached_tokens: int = 0
+    ) -> float:
         """Calculate the cost based on token usage."""
         current_model = ModelRegistry.get_instance().get_model(
             f"{self._provider_name}/{self.model}"
@@ -65,7 +68,10 @@ class OpenAIService(BaseLLMService):
             output_cost = (
                 output_tokens / 1_000_000
             ) * current_model.output_token_price_1m
-            return input_cost + output_cost
+            cached_cost = (
+                cached_tokens / 1_000_000
+            ) * current_model.cached_token_price_1m
+            return input_cost + output_cost + cached_cost
         return 0.0
 
     def _convert_internal_format(self, messages: List[Dict[str, Any]]):
@@ -86,6 +92,7 @@ class OpenAIService(BaseLLMService):
         result_text = ""
         input_tokens = 0
         output_tokens = 0
+        cached_tokens = 0
 
         stream = await self.client.chat.completions.create(
             model=self.model,
@@ -114,13 +121,25 @@ class OpenAIService(BaseLLMService):
                     input_tokens = chunk.usage.prompt_tokens
                 if hasattr(chunk.usage, "completion_tokens"):
                     output_tokens = chunk.usage.completion_tokens
+                if (
+                    hasattr(chunk.usage, "prompt_tokens_details")
+                    and chunk.usage.prompt_tokens_details
+                ):
+                    if hasattr(chunk.usage.prompt_tokens_details, "cached_tokens"):
+                        cached_tokens = (
+                            chunk.usage.prompt_tokens_details.cached_tokens or 0
+                        )
 
-        total_cost = self.calculate_cost(input_tokens, output_tokens)
+        if cached_tokens:
+            input_tokens = input_tokens - cached_tokens
+        total_cost = self.calculate_cost(input_tokens, output_tokens, cached_tokens)
 
         logger.info("\nToken Usage Statistics:")
         logger.info(f"Input tokens: {input_tokens:,}")
         logger.info(f"Output tokens: {output_tokens:,}")
-        logger.info(f"Total tokens: {input_tokens + output_tokens:,}")
+        if cached_tokens:
+            logger.info(f"Cached tokens: {cached_tokens:,}")
+        logger.info(f"Total tokens: {input_tokens + output_tokens + cached_tokens:,}")
         logger.info(f"Estimated cost: ${total_cost:.4f}")
 
         return result_text
@@ -250,7 +269,7 @@ class OpenAIService(BaseLLMService):
 
     def process_stream_chunk(
         self, chunk, assistant_response: str, tool_uses: List[Dict]
-    ) -> Tuple[str, List[Dict], int, int, Optional[str], Optional[tuple]]:
+    ) -> Tuple[str, List[Dict], TokenUsage, Optional[str], Optional[tuple]]:
         """
         Process a single chunk from the streaming response.
 
@@ -263,8 +282,7 @@ class OpenAIService(BaseLLMService):
             tuple: (
                 updated_assistant_response,
                 updated_tool_uses,
-                input_tokens,
-                output_tokens,
+                token_usage (TokenUsage),
                 chunk_text,
                 thinking_data
             )
@@ -272,9 +290,9 @@ class OpenAIService(BaseLLMService):
         chunk_text = None
         input_tokens = 0
         output_tokens = 0
-        thinking_content = None  # OpenAI doesn't support thinking mode
+        cached_tokens = 0
+        thinking_content = None
 
-        # Handle regular content chunks
         if (
             len(chunk.choices) > 0
             and hasattr(chunk.choices[0].delta, "content")
@@ -283,12 +301,17 @@ class OpenAIService(BaseLLMService):
             chunk_text = chunk.choices[0].delta.content
             assistant_response += chunk_text
 
-        # Handle final chunk with usage information
         if hasattr(chunk, "usage"):
             if hasattr(chunk.usage, "prompt_tokens"):
                 input_tokens = chunk.usage.prompt_tokens
             if hasattr(chunk.usage, "completion_tokens"):
                 output_tokens = chunk.usage.completion_tokens
+            if (
+                hasattr(chunk.usage, "prompt_tokens_details")
+                and chunk.usage.prompt_tokens_details
+            ):
+                if hasattr(chunk.usage.prompt_tokens_details, "cached_tokens"):
+                    cached_tokens = chunk.usage.prompt_tokens_details.cached_tokens
 
         # Handle tool call chunks
         if len(chunk.choices) > 0 and hasattr(chunk.choices[0].delta, "tool_calls"):
@@ -354,8 +377,11 @@ class OpenAIService(BaseLLMService):
                 return (
                     assistant_response or " ",
                     tool_uses,
-                    input_tokens,
-                    output_tokens,
+                    TokenUsage(
+                        input_tokens=input_tokens - cached_tokens,
+                        output_tokens=output_tokens,
+                        cached_tokens=cached_tokens,
+                    ),
                     "",
                     thinking_content,
                 )
@@ -363,8 +389,11 @@ class OpenAIService(BaseLLMService):
         return (
             assistant_response or " ",
             tool_uses,
-            input_tokens,
-            output_tokens,
+            TokenUsage(
+                input_tokens=input_tokens - cached_tokens,
+                output_tokens=output_tokens,
+                cached_tokens=cached_tokens,
+            ),
             chunk_text,
             thinking_content,
         )
@@ -394,12 +423,24 @@ class OpenAIService(BaseLLMService):
         # Calculate and log token usage and cost
         input_tokens = response.usage.prompt_tokens if response.usage else 0
         output_tokens = response.usage.completion_tokens if response.usage else 0
-        total_cost = self.calculate_cost(input_tokens, output_tokens)
+        cached_tokens = 0
+        if (
+            response.usage
+            and hasattr(response.usage, "prompt_tokens_details")
+            and response.usage.prompt_tokens_details
+        ):
+            if hasattr(response.usage.prompt_tokens_details, "cached_tokens"):
+                cached_tokens = response.usage.prompt_tokens_details.cached_tokens or 0
+        if cached_tokens:
+            input_tokens = input_tokens - cached_tokens
+        total_cost = self.calculate_cost(input_tokens, output_tokens, cached_tokens)
 
         logger.info("\nSpec Validation Token Usage:")
         logger.info(f"Input tokens: {input_tokens:,}")
         logger.info(f"Output tokens: {output_tokens:,}")
-        logger.info(f"Total tokens: {input_tokens + output_tokens:,}")
+        if cached_tokens:
+            logger.info(f"Cached tokens: {cached_tokens:,}")
+        logger.info(f"Total tokens: {input_tokens + output_tokens + cached_tokens:,}")
         logger.info(f"Estimated cost: ${total_cost:.4f}")
 
         return response.choices[0].message.content or ""

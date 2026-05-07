@@ -1,6 +1,7 @@
 from AgentCrew.modules.llm.model_registry import ModelRegistry
 from AgentCrew.modules.openai import OpenAIService
 from AgentCrew.modules.llm.base import AsyncIterator
+from AgentCrew.modules.llm.token_usage import TokenUsage
 from typing import Dict, Any, List, Optional, Tuple
 import json
 from loguru import logger
@@ -180,6 +181,7 @@ class CustomLLMService(OpenAIService):
         result_text = ""
         input_tokens = 0
         output_tokens = 0
+        cached_tokens = 0
 
         stream = await self.client.chat.completions.create(
             model=self.model,
@@ -210,13 +212,25 @@ class CustomLLMService(OpenAIService):
                     input_tokens = chunk.usage.prompt_tokens
                 if hasattr(chunk.usage, "completion_tokens"):
                     output_tokens = chunk.usage.completion_tokens
+                if (
+                    hasattr(chunk.usage, "prompt_tokens_details")
+                    and chunk.usage.prompt_tokens_details
+                ):
+                    if hasattr(chunk.usage.prompt_tokens_details, "cached_tokens"):
+                        cached_tokens = (
+                            chunk.usage.prompt_tokens_details.cached_tokens or 0
+                        )
 
-        total_cost = self.calculate_cost(input_tokens, output_tokens)
+        if cached_tokens:
+            input_tokens = input_tokens - cached_tokens
+        total_cost = self.calculate_cost(input_tokens, output_tokens, cached_tokens)
 
         logger.info("\nToken Usage Statistics:")
         logger.info(f"Input tokens: {input_tokens:,}")
         logger.info(f"Output tokens: {output_tokens:,}")
-        logger.info(f"Total tokens: {input_tokens + output_tokens:,}")
+        if cached_tokens:
+            logger.info(f"Cached tokens: {cached_tokens:,}")
+        logger.info(f"Total tokens: {input_tokens + output_tokens + cached_tokens:,}")
         logger.info(f"Estimated cost: ${total_cost:.4f}")
 
         if "thinking" in ModelRegistry.get_model_capabilities(
@@ -375,7 +389,7 @@ class CustomLLMService(OpenAIService):
 
     def process_stream_chunk(
         self, chunk, assistant_response: str, tool_uses: List[Dict]
-    ) -> Tuple[str, List[Dict], int, int, Optional[str], Optional[tuple]]:
+    ) -> Tuple[str, List[Dict], TokenUsage, Optional[str], Optional[tuple]]:
         if "stream" in ModelRegistry.get_model_capabilities(
             f"{self._provider_name}/{self.model}"
         ):
@@ -385,7 +399,7 @@ class CustomLLMService(OpenAIService):
 
     def _process_non_stream_chunk(
         self, chunk, assistant_response, tool_uses
-    ) -> Tuple[str, List[Dict], int, int, Optional[str], Optional[tuple]]:
+    ) -> Tuple[str, List[Dict], TokenUsage, Optional[str], Optional[tuple]]:
         """
         Process a single chunk from the streaming response.
 
@@ -439,8 +453,7 @@ class CustomLLMService(OpenAIService):
                 return (
                     content,
                     tool_uses,
-                    input_tokens,
-                    output_tokens,
+                    TokenUsage(input_tokens=input_tokens, output_tokens=output_tokens),
                     content,  # Return the full content to be printed
                     thinking_content,
                 )
@@ -479,8 +492,7 @@ class CustomLLMService(OpenAIService):
             return (
                 content,
                 tool_uses,
-                input_tokens,
-                output_tokens,
+                TokenUsage(input_tokens=input_tokens, output_tokens=output_tokens),
                 content,  # Return the full content to be printed
                 thinking_content,
             )
@@ -492,15 +504,14 @@ class CustomLLMService(OpenAIService):
         return (
             updated_assistant_response,
             tool_uses,
-            input_tokens,
-            output_tokens,
+            TokenUsage(input_tokens=input_tokens, output_tokens=output_tokens),
             chunk_text,
             thinking_content,
         )
 
     def _process_stream_chunk(
         self, chunk, assistant_response: str, tool_uses: List[Dict]
-    ) -> Tuple[str, List[Dict], int, int, Optional[str], Optional[tuple]]:
+    ) -> Tuple[str, List[Dict], TokenUsage, Optional[str], Optional[tuple]]:
         """
         Process a single chunk from the streaming response.
 
@@ -524,11 +535,19 @@ class CustomLLMService(OpenAIService):
         output_tokens = 0
         thinking_content = None  # OpenAI doesn't support thinking mode
 
+        cached_tokens = 0
         if hasattr(chunk, "usage"):
             if hasattr(chunk.usage, "prompt_tokens"):
                 input_tokens = chunk.usage.prompt_tokens
             if hasattr(chunk.usage, "completion_tokens"):
                 output_tokens = chunk.usage.completion_tokens
+            if (
+                hasattr(chunk.usage, "prompt_tokens_details")
+                and chunk.usage.prompt_tokens_details
+            ):
+                if hasattr(chunk.usage.prompt_tokens_details, "cached_tokens"):
+                    cached_tokens = chunk.usage.prompt_tokens_details.cached_tokens
+                    input_tokens = input_tokens - cached_tokens
 
         # Handle regular content chunks
         if (
@@ -575,8 +594,11 @@ class CustomLLMService(OpenAIService):
         return (
             assistant_response or " ",
             tool_uses,
-            input_tokens,
-            output_tokens,
+            TokenUsage(
+                input_tokens=input_tokens,
+                output_tokens=output_tokens,
+                cached_tokens=cached_tokens,
+            ),
             chunk_text,
             (thinking_content, None) if thinking_content else None,
         )

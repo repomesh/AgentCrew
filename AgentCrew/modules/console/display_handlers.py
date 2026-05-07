@@ -16,6 +16,8 @@ from rich.text import Text
 from rich.panel import Panel
 from rich.table import Table
 
+from AgentCrew.modules.llm.token_usage import TokenUsage
+
 from .constants import (
     RICH_STYLE_YELLOW,
     RICH_STYLE_BLUE,
@@ -528,20 +530,27 @@ class DisplayHandlers:
 
     def display_token_usage(
         self,
-        input_tokens: int,
-        output_tokens: int,
+        token_usage: TokenUsage,
         total_cost: float,
         session_cost: float,
     ):
         """Display token usage and cost information."""
         self.display_divider()
+        input_tokens = token_usage.input_tokens
+        output_tokens = token_usage.output_tokens
+        cached_tokens = token_usage.cached_tokens
         token_info = Text("📊 Token Usage: ", style=RICH_STYLE_YELLOW)
         token_info.append(
             f"Input: {input_tokens:,} | Output: {output_tokens:,} | ",
             style=RICH_STYLE_YELLOW,
         )
+        if cached_tokens > 0:
+            token_info.append(
+                f"Cached: {cached_tokens:,} | ",
+                style=RICH_STYLE_YELLOW,
+            )
         token_info.append(
-            f"Total: {input_tokens + output_tokens:,} | Cost: ${total_cost:.4f} | Total: {session_cost:.4f}",
+            f"Total: {input_tokens + output_tokens + cached_tokens:,} | Cost: ${total_cost:.4f} | Total: {session_cost:.4f}",
             style=RICH_STYLE_YELLOW,
         )
         self.console.print(Panel(token_info, box=HORIZONTALS))

@@ -7,6 +7,8 @@ import json
 import base64
 from loguru import logger
 
+from .token_usage import TokenUsage
+
 if TYPE_CHECKING:
     from typing import List, Dict, Any, Optional, Tuple
 
@@ -202,7 +204,9 @@ class BaseLLMService(ABC):
         return summary_data, cleaned_response
 
     @abstractmethod
-    def calculate_cost(self, input_tokens: int, output_tokens: int) -> float:
+    def calculate_cost(
+        self, input_tokens: int, output_tokens: int, cached_tokens: int = 0
+    ) -> float:
         """Calculate the cost of a request based on token usage."""
         pass
 
@@ -290,7 +294,7 @@ class BaseLLMService(ABC):
     @abstractmethod
     def process_stream_chunk(
         self, chunk, assistant_response, tool_uses
-    ) -> tuple[str, list[Dict] | None, int, int, str | None, tuple | None]:
+    ) -> tuple[str, list[Dict] | None, TokenUsage, str | None, tuple | None]:
         """
         Process a single chunk from the streaming response.
 
@@ -303,8 +307,7 @@ class BaseLLMService(ABC):
             tuple: (
                 updated_assistant_response (str),
                 updated_tool_uses (List of dict or empty),
-                input_tokens (int),
-                output_tokens (int),
+                token_usage (TokenUsage) - token usage for this chunk,
                 chunk_text (str or None) - text to print for this chunk,
                 thinking_content (tuple or None) - thinking content from this chunk
             )

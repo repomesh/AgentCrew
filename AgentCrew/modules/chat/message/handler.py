@@ -22,6 +22,7 @@ from .conversation import ConversationManager
 from .base import Observable
 from .prompt_evolution_coordinator import PromptEvolutionCoordinator
 from AgentCrew.modules.chat.stream_session import StreamSession
+from AgentCrew.modules.llm.token_usage import TokenUsage
 
 
 _AT_AGENT_RE = re.compile(r"@([\.\w-]+)")
@@ -251,8 +252,7 @@ class MessageHandler(Observable):
     def _finalize_current_turn(
         self,
         assistant_response: str,
-        input_tokens: int,
-        output_tokens: int,
+        token_usage: TokenUsage,
         *,
         store_memory: bool,
         emit_response_completed: bool,
@@ -272,11 +272,13 @@ class MessageHandler(Observable):
         if self.current_conversation_id and messages_for_this_turn:
             try:
                 if self.persistent_service:
-                    if input_tokens > 0 or output_tokens > 0:
+                    if token_usage:
                         metadata = {
-                            "input_tokens": input_tokens,
-                            "output_tokens": output_tokens,
-                            "total_tokens": input_tokens + output_tokens,
+                            "input_tokens": token_usage.input_tokens,
+                            "output_tokens": token_usage.output_tokens,
+                            "cached_tokens": token_usage.cached_tokens,
+                            "cache_creation_tokens": token_usage.cache_creation_tokens,
+                            "total_tokens": token_usage.total_tokens,
                         }
                         self.persistent_service.store_conversation_metadata(
                             self.current_conversation_id, metadata
@@ -322,17 +324,17 @@ class MessageHandler(Observable):
     async def _run_stream_response(
         self,
         session: StreamSession,
-        input_tokens: int,
-        output_tokens: int,
-    ) -> Tuple[Optional[str], int, int]:
+        prior_token_usage: Optional[TokenUsage] = None,
+    ) -> Tuple[Optional[str], TokenUsage]:
         """
         Stream the assistant's response and return the response and token usage.
 
         Returns:
-            Tuple of (assistant_response, input_tokens, output_tokens)
+            Tuple of (assistant_response, token_usage)
         """
         assistant_response = ""
         tool_uses = []
+        token_usage = prior_token_usage or TokenUsage()
         thinking_content = ""  # Reset thinking content for new response
         thinking_signature = ""  # Store the signature
         start_thinking = False
@@ -340,22 +342,23 @@ class MessageHandler(Observable):
         has_stop_interupted = False
 
         if len(self.agent.history) == 0:
-            return None, 0, 0
+            return None, TokenUsage()
 
         # Create a reference to the streaming generator
         self.stream_generator = None
 
-        def process_result(_tool_uses, _input_tokens, _output_tokens):
-            nonlocal tool_uses, input_tokens, output_tokens
+        def process_result(_tool_uses, _token_usage):
+            nonlocal tool_uses, token_usage
             tool_uses = _tool_uses
-            input_tokens += _input_tokens
-            output_tokens += _output_tokens
+            token_usage = token_usage.merge(_token_usage)
             # keep tracking token usage in middle of stream
             if self.persistent_service and self.current_conversation_id:
-                if input_tokens > 0 or output_tokens > 0:
+                if token_usage:
                     metadata = {
-                        "input_tokens": input_tokens,
-                        "output_tokens": output_tokens,
+                        "input_tokens": token_usage.input_tokens,
+                        "output_tokens": token_usage.output_tokens,
+                        "cached_tokens": token_usage.cached_tokens,
+                        "cache_creation_tokens": token_usage.cache_creation_tokens,
                     }
                     self.persistent_service.store_conversation_metadata(
                         self.current_conversation_id, metadata
@@ -405,8 +408,7 @@ class MessageHandler(Observable):
                     await self.stream_generator.aclose()
                     self._finalize_current_turn(
                         assistant_response,
-                        input_tokens,
-                        output_tokens,
+                        token_usage,
                         store_memory=False,
                         emit_response_completed=bool(assistant_response.strip()),
                     )
@@ -417,7 +419,7 @@ class MessageHandler(Observable):
                             "assistant_response": assistant_response,
                         },
                     )
-                    return assistant_response, input_tokens, output_tokens
+                    return assistant_response, token_usage
 
                 # Accumulate thinking content if available
                 if thinking_chunk:
@@ -455,19 +457,19 @@ class MessageHandler(Observable):
                 self._notify("thinking_completed", thinking_content)
                 end_thinking = True
 
+            # Add thinking content as a separate message if available
+            thinking_data = (
+                (thinking_content, thinking_signature) if thinking_content else None
+            )
+            thinking_message = self.agent.format_message(
+                MessageType.Thinking, {"thinking": thinking_data}
+            )
+            if thinking_message:
+                self._messages_append(thinking_message)
+                self._notify("thinking_message_added", thinking_message)
+
             # Handle tool use if needed
             if not has_stop_interupted and tool_uses and len(tool_uses) > 0:
-                # Add thinking content as a separate message if available
-                thinking_data = (
-                    (thinking_content, thinking_signature) if thinking_content else None
-                )
-                thinking_message = self.agent.format_message(
-                    MessageType.Thinking, {"thinking": thinking_data}
-                )
-                if thinking_message:
-                    self._messages_append(thinking_message)
-                    self._notify("thinking_message_added", thinking_message)
-
                 # Format assistant message with the response and tool uses
                 tool_uses_without_transfer = [
                     t for t in tool_uses if t["name"] != "transfer"
@@ -498,23 +500,31 @@ class MessageHandler(Observable):
                 # Process each tool use
                 await self.tool_manager.execute_tools_batch(tool_uses)
 
-                if input_tokens > 0 or output_tokens > 0:
+                if token_usage:
                     self._notify(
                         "update_token_usage",
-                        {"input_tokens": input_tokens, "output_tokens": output_tokens},
+                        {
+                            "input_tokens": token_usage.input_tokens,
+                            "output_tokens": token_usage.output_tokens,
+                            "cached_tokens": token_usage.cached_tokens,
+                        },
                     )
 
                 if has_stop_interupted:
                     # return as soon as possible
                     self._notify("response_completed", assistant_response)
-                    return assistant_response, input_tokens, output_tokens
+                    return assistant_response, token_usage
 
+                return await self.get_assistant_response()
+
+            print(assistant_response)
+            # prevent stream drop
+            if assistant_response.strip() == "":
                 return await self.get_assistant_response()
 
             self._finalize_current_turn(
                 assistant_response,
-                input_tokens,
-                output_tokens,
+                token_usage,
                 store_memory=True,
                 emit_response_completed=True,
             )
@@ -534,7 +544,7 @@ class MessageHandler(Observable):
                 self.agent_manager.defered_transfer = ""
                 return await self.get_assistant_response()
 
-            return assistant_response, input_tokens, output_tokens
+            return assistant_response, token_usage
 
         except asyncio.CancelledError:
             has_stop_interupted = True
@@ -547,8 +557,7 @@ class MessageHandler(Observable):
                 session.finalize("canceled")
             self._finalize_current_turn(
                 assistant_response,
-                input_tokens,
-                output_tokens,
+                token_usage,
                 store_memory=False,
                 emit_response_completed=bool(assistant_response.strip()),
             )
@@ -559,9 +568,9 @@ class MessageHandler(Observable):
                     "assistant_response": assistant_response,
                 },
             )
-            return assistant_response, input_tokens, output_tokens
+            return assistant_response, token_usage
         except GeneratorExit:
-            return assistant_response, input_tokens, output_tokens
+            return assistant_response, token_usage
         except Exception as e:
             from openai import BadRequestError
 
@@ -589,9 +598,11 @@ class MessageHandler(Observable):
                 messages_for_this_turn = self.get_recent_agent_responses()
                 if messages_for_this_turn and self.persistent_service:
                     metadata = {
-                        "input_tokens": input_tokens,
-                        "output_tokens": output_tokens,
-                        "total_tokens": input_tokens + output_tokens,
+                        "input_tokens": token_usage.input_tokens,
+                        "output_tokens": token_usage.output_tokens,
+                        "cached_tokens": token_usage.cached_tokens,
+                        "cache_creation_tokens": token_usage.cache_creation_tokens,
+                        "total_tokens": token_usage.total_tokens,
                     }
                     self.persistent_service.store_conversation_metadata(
                         self.current_conversation_id, metadata
@@ -618,16 +629,16 @@ class MessageHandler(Observable):
             )
             if not session.finished.is_set():
                 session.finalize("failed")
-            return None, 0, 0
+            return None, TokenUsage()
 
     async def get_assistant_response(
-        self, input_tokens=0, output_tokens=0
-    ) -> Tuple[Optional[str], int, int]:
+        self, token_usage: TokenUsage | None = None
+    ) -> Tuple[Optional[str], TokenUsage]:
+        if token_usage is None:
+            token_usage = TokenUsage()
         loop = asyncio.get_running_loop()
         session = self._create_stream_session()
-        task = loop.create_task(
-            self._run_stream_response(session, input_tokens, output_tokens)
-        )
+        task = loop.create_task(self._run_stream_response(session, token_usage))
         session.bind(loop, task)
 
         audio_handler = None

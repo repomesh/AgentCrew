@@ -2,6 +2,26 @@ from AgentCrew.modules.llm.types import Model, SampleParam
 
 GOOGLE_MODELS = [
     Model(
+        id="gemma-4-31b-it",
+        provider="google",
+        name="Gemma 4 Densed",
+        description="Gemma 4 models are multimodal, handling text and image input (with audio supported on small models) and generating text output",
+        max_context_token=256_000,
+        capabilities=["tool_use", "vision", "structured_output", "thinking"],
+        input_token_price_1m=0.0,
+        output_token_price_1m=0.0,
+    ),
+    Model(
+        id="gemma-4-26b-a4b-it",
+        provider="google",
+        name="Gemma 4 MoE",
+        description="Gemma 4 models are multimodal, handling text and image input (with audio supported on small models) and generating text output",
+        max_context_token=256_000,
+        capabilities=["tool_use", "vision", "structured_output"],
+        input_token_price_1m=0.0,
+        output_token_price_1m=0.0,
+    ),
+    Model(
         id="gemini-2.5-flash-lite",
         provider="google",
         name="Gemini 2.5 Lite",

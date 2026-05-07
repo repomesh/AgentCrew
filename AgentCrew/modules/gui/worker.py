@@ -13,7 +13,7 @@ from loguru import logger
 class LLMWorker(QObject):
     """Worker object that processes LLM requests in a separate thread"""
 
-    response_ready = Signal(str, int, int)
+    response_ready = Signal(str, object)
     error = Signal(str)
     status_message = Signal(str)
     request_exit = Signal()
@@ -71,15 +71,12 @@ class LLMWorker(QObject):
             # Get assistant response
             (
                 assistant_response,
-                input_tokens,
-                output_tokens,
+                token_usage,
             ) = asyncio.run(self.message_handler.get_assistant_response())
 
             # Emit the response
             if assistant_response:
-                self.response_ready.emit(
-                    assistant_response, input_tokens, output_tokens
-                )
+                self.response_ready.emit(assistant_response, token_usage)
             else:
                 logger.info("No response received from assistant")
                 self.status_message.emit("No response received")

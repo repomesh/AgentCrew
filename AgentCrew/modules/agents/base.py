@@ -83,7 +83,9 @@ class BaseAgent(ABC):
         pass
 
     @abstractmethod
-    def calculate_usage_cost(self, input_tokens, output_tokens) -> float:
+    def calculate_usage_cost(
+        self, input_tokens, output_tokens, cached_tokens=0
+    ) -> float:
         pass
 
     @abstractmethod

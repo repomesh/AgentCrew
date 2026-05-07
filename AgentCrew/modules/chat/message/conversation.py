@@ -175,15 +175,24 @@ class ConversationManager:
                     "conversation_loaded", {"id": conversation_id, "history": history}
                 )
                 if isinstance(self.message_handler.agent, LocalAgent) and metadata:
-                    input_tokens = metadata.get("input_tokens", 0)
-                    output_tokens = metadata.get("output_tokens", 0)
+                    from AgentCrew.modules.llm.token_usage import TokenUsage
 
-                    self.message_handler.agent.input_tokens_usage = input_tokens
-                    self.message_handler.agent.output_tokens_usage = output_tokens
+                    token_usage = TokenUsage(
+                        input_tokens=metadata.get("input_tokens", 0),
+                        output_tokens=metadata.get("output_tokens", 0),
+                        cached_tokens=metadata.get("cached_tokens", 0),
+                        cache_creation_tokens=metadata.get("cache_creation_tokens", 0),
+                    )
+                    self.message_handler.agent.token_usage = token_usage
 
                     self.message_handler._notify(
                         "update_token_usage",
-                        {"input_tokens": input_tokens, "output_tokens": output_tokens},
+                        {
+                            "input_tokens": token_usage.input_tokens,
+                            "output_tokens": token_usage.output_tokens,
+                            "cached_tokens": token_usage.cached_tokens,
+                            "cache_creation_tokens": token_usage.cache_creation_tokens,
+                        },
                     )
                 return history
             else:
