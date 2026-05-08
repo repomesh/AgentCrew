@@ -234,7 +234,7 @@ class OpenCodeService(CustomLLMService):
             assistant_response or " ",
             tool_uses,
             TokenUsage(
-                input_tokens=input_tokens,
+                input_tokens=input_tokens - cached_tokens,
                 output_tokens=output_tokens,
                 cached_tokens=cached_tokens,
             ),

@@ -195,14 +195,14 @@ class GithubCopilotService(CustomLLMService):
                 and chunk.usage.prompt_tokens_details
             ):
                 if hasattr(chunk.usage.prompt_tokens_details, "cached_tokens"):
-                    cached_tokens = chunk.usage.prompt_tokens_details.cached_tokens
+                    cached_tokens = chunk.usage.prompt_tokens_details.cached_tokens or 0
 
         if (not chunk.choices) or (len(chunk.choices) == 0):
             return (
                 assistant_response or " ",
                 tool_uses,
                 TokenUsage(
-                    input_tokens=input_tokens,
+                    input_tokens=input_tokens - cached_tokens,
                     output_tokens=output_tokens,
                     cached_tokens=cached_tokens,
                 ),
@@ -240,7 +240,7 @@ class GithubCopilotService(CustomLLMService):
             assistant_response or " ",
             tool_uses,
             TokenUsage(
-                input_tokens=input_tokens,
+                input_tokens=input_tokens - cached_tokens,
                 output_tokens=output_tokens,
                 cached_tokens=cached_tokens,
             ),

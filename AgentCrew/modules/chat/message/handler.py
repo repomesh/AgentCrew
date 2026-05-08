@@ -572,7 +572,7 @@ class MessageHandler(Observable):
         except GeneratorExit:
             return assistant_response, token_usage
         except Exception as e:
-            from openai import BadRequestError, InternalServerError
+            from openai import BadRequestError, APIError
 
             if isinstance(e, BadRequestError):
                 if (
@@ -589,7 +589,7 @@ class MessageHandler(Observable):
                         self.agent.input_tokens_usage = max_token
                         return await self.get_assistant_response()
             # retry if internal server error from provider
-            elif isinstance(e, InternalServerError):
+            elif isinstance(e, APIError) and str(e) == "Internal server error":
                 return await self.get_assistant_response()
             if self.current_user_input:
                 self.conversation_manager.store_conversation_turn(

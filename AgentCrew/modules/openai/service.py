@@ -130,6 +130,8 @@ class OpenAIService(BaseLLMService):
                             chunk.usage.prompt_tokens_details.cached_tokens or 0
                         )
 
+        if cached_tokens:
+            input_tokens = input_tokens - cached_tokens
         total_cost = self.calculate_cost(input_tokens, output_tokens, cached_tokens)
 
         logger.info("\nToken Usage Statistics:")
@@ -309,7 +311,7 @@ class OpenAIService(BaseLLMService):
                 and chunk.usage.prompt_tokens_details
             ):
                 if hasattr(chunk.usage.prompt_tokens_details, "cached_tokens"):
-                    cached_tokens = chunk.usage.prompt_tokens_details.cached_tokens
+                    cached_tokens = chunk.usage.prompt_tokens_details.cached_tokens or 0
 
         # Handle tool call chunks
         if len(chunk.choices) > 0 and hasattr(chunk.choices[0].delta, "tool_calls"):
@@ -376,7 +378,7 @@ class OpenAIService(BaseLLMService):
                     assistant_response or " ",
                     tool_uses,
                     TokenUsage(
-                        input_tokens=input_tokens,
+                        input_tokens=input_tokens - cached_tokens,
                         output_tokens=output_tokens,
                         cached_tokens=cached_tokens,
                     ),
@@ -388,7 +390,7 @@ class OpenAIService(BaseLLMService):
             assistant_response or " ",
             tool_uses,
             TokenUsage(
-                input_tokens=input_tokens,
+                input_tokens=input_tokens - cached_tokens,
                 output_tokens=output_tokens,
                 cached_tokens=cached_tokens,
             ),
@@ -429,6 +431,8 @@ class OpenAIService(BaseLLMService):
         ):
             if hasattr(response.usage.prompt_tokens_details, "cached_tokens"):
                 cached_tokens = response.usage.prompt_tokens_details.cached_tokens or 0
+        if cached_tokens:
+            input_tokens = input_tokens - cached_tokens
         total_cost = self.calculate_cost(input_tokens, output_tokens, cached_tokens)
 
         logger.info("\nSpec Validation Token Usage:")

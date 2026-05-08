@@ -164,6 +164,8 @@ class OpenAIResponseService(BaseLLMService):
                             input_tokens_details, "cached_tokens", 0
                         )
 
+        if cached_tokens:
+            input_tokens = input_tokens - cached_tokens
         total_cost = self.calculate_cost(input_tokens, output_tokens, cached_tokens)
 
         logger.info("\nResponse API Token Usage Statistics:")
@@ -501,7 +503,7 @@ class OpenAIResponseService(BaseLLMService):
             assistant_response or "",
             tool_uses,
             TokenUsage(
-                input_tokens=input_tokens,
+                input_tokens=input_tokens - cached_tokens,
                 output_tokens=output_tokens,
                 cached_tokens=cached_tokens,
             ),
@@ -583,6 +585,8 @@ class OpenAIResponseService(BaseLLMService):
         input_tokens_details = getattr(response, "input_tokens_details", None)
         if input_tokens_details:
             cached_tokens = getattr(input_tokens_details, "cached_tokens", 0)
+        if cached_tokens:
+            input_tokens = input_tokens - cached_tokens
         total_cost = self.calculate_cost(input_tokens, output_tokens, cached_tokens)
 
         logger.info("\nResponse API Spec Validation Token Usage:")

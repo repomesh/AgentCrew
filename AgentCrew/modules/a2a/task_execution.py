@@ -298,13 +298,13 @@ class TaskExecutionEngine:
         except Exception as e:
             if isinstance(e, TaskCanceledException):
                 raise
-            from openai import BadRequestError
+            from openai import BadRequestError, APIError
 
             if isinstance(e, BadRequestError):
                 if (
                     e.code == "model_max_prompt_tokens_exceeded"
-                    and retried_count[0] < 5
-                ):
+                    or e.message.find("This endpoint's maximum context length is") >= 0
+                ) and retried_count[0] < 5:
                     from AgentCrew.modules.agents import LocalAgent as _LocalAgent
                     from AgentCrew.modules.llm.model_registry import ModelRegistry
 
@@ -320,6 +320,20 @@ class TaskExecutionEngine:
                             retried_count,
                             token_usage,
                         )
+            elif (
+                isinstance(e, APIError)
+                and str(e) == "InternalServerError"
+                and retried_count[0] < 5
+            ):
+                return await self._process_task(
+                    agent,
+                    task,
+                    task_history,
+                    artifacts,
+                    retried_count,
+                    token_usage,
+                )
+
             raise
 
     async def _handle_streaming_chunk(
