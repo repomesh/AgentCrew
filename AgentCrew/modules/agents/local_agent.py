@@ -460,9 +460,9 @@ class LocalAgent(BaseAgent):
         _tool_uses = []
         _token_usage = TokenUsage()
         # Ensure the first message is a system message with the agent's prompt
+        self._clean_shrinkable_tool_result(messages or self.history)
         final_messages = messages[:] if messages else self.history[:]
         self._enhance_agent_context_messages(final_messages)
-        self._clean_shrinkable_tool_result(final_messages)
         try:
             async with await self.llm.stream_assistant_response(
                 copy.deepcopy(

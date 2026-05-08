@@ -7,7 +7,7 @@ from loguru import logger
 if TYPE_CHECKING:
     from .local_agent import LocalAgent
 
-SHRINK_LENGTH_THRESHOLD = int(os.getenv("AGENTCREW_CONTEXT_SHRINK_THREASHOLD", 10))
+SHRINK_LENGTH_THRESHOLD = 10
 
 
 class AgentContextManager:
@@ -221,9 +221,9 @@ Skip evaluation for: simple one-sentence answers, or when the request matches "w
         from AgentCrew.modules.llm.model_registry import ModelRegistry
 
         agent = self._agent
-        shrink_context_threshold = (
-            ModelRegistry.get_model_limit(agent.get_model()) * 0.85
-        )
+        shrink_context_threshold = int(
+            os.getenv("AGENTCREW_DEFAULT_MAX_CONTEXT", "")
+        ) or (ModelRegistry.get_model_limit(agent.get_model()) * 0.85)
 
         unique_tool_indices = []
         agent_manager = agent.services.get("agent_manager", None)
@@ -231,11 +231,18 @@ Skip evaluation for: simple one-sentence answers, or when the request matches "w
         is_shrinkable = (
             agent_manager.context_shrink_enabled if agent_manager else False
         ) and agent.token_usage.total_input_tokens > shrink_context_threshold
-        shrink_threshold = len(final_messages) - SHRINK_LENGTH_THRESHOLD
+        shrink_threshold = len(final_messages) - int(
+            os.getenv("AGENTCREW_CONTEXT_SHRINK_THRESHOLD", SHRINK_LENGTH_THRESHOLD)
+        )
         shrink_excluded = set(
             agent_manager.shrink_excluded_list if agent_manager else []
         )
         shrink_excluded.add("activate_skill")
+        shrink_excluded.add("search_memory")
+        last_agent_tool_calls = -1
+        tool_result_needed_rearrange: Dict[int, List[int]] = {}
+        tool_result_id_needed_rearrange: List[str] = []
+        tool_result_id_needed_shrink: List[str] = []
 
         for i, msg in enumerate(final_messages):
             content = None
@@ -245,16 +252,21 @@ Skip evaluation for: simple one-sentence answers, or when the request matches "w
                     continue
 
                 if is_shrinkable and i < shrink_threshold:
+                    last_agent_tool_calls = i
+
+                    for tool_call in msg.get("tool_calls", []):
+                        if tool_call.get("id", None):
+                            if tool_call.get("name") in shrink_excluded:
+                                tool_result_id_needed_rearrange.append(
+                                    tool_call.get("id")
+                                )
+                                continue
+                            tool_result_id_needed_shrink.append(tool_call.get("id"))
                     msg["tool_calls"] = [
                         t
                         for t in msg.get("tool_calls", [])
                         if t.get("name", "") in shrink_excluded
                     ]
-                    # for tool_call in msg.get("tool_calls", []):
-                    #     if tool_call.get("name") in shrink_excluded:
-                    #         continue
-                    #     for k, _ in tool_call["arguments"].items():
-                    #         tool_call["arguments"][k] = "..."
                     if len(msg["tool_calls"]) == 0:
                         msg.pop("tool_calls", None)
 
@@ -283,10 +295,14 @@ Skip evaluation for: simple one-sentence answers, or when the request matches "w
                         unique_tool_indices.append(i)
                         continue
 
-                if tool_name in shrink_excluded:
+                if msg.get("tool_call_id", None) in tool_result_id_needed_rearrange:
+                    if tool_result_needed_rearrange.get(last_agent_tool_calls, None):
+                        tool_result_needed_rearrange[last_agent_tool_calls].append(i)
+                    else:
+                        tool_result_needed_rearrange[last_agent_tool_calls] = [i]
                     continue
 
-                if is_shrinkable and i < shrink_threshold:
+                if msg.get("tool_call_id", None) in tool_result_id_needed_shrink:
                     msg["content"] = [
                         {
                             "text": f"{msg.get('agent', 'Agent')} called function `{tool_name}` but it has been truncated.",
@@ -296,7 +312,7 @@ Skip evaluation for: simple one-sentence answers, or when the request matches "w
                     msg.pop("tool_name", None)
                     msg.pop("tool_call_id", None)
                     msg.pop("is_rejected", None)
-                    msg["role"] = "user"
+                    msg["role"] = "assistant"
                     continue
                 # else:
                 #     disclaimer = "Generate a concise note of what you found from the results in your next message, the tool results will disappear soon."
@@ -326,3 +342,17 @@ Skip evaluation for: simple one-sentence answers, or when the request matches "w
                         ):
                             content_item["content"] = "[INVALIDATED]"
                             break
+
+        for assistant_idx, tool_result_indices in sorted(
+            tool_result_needed_rearrange.items(), reverse=True
+        ):
+            if assistant_idx < 0 or not tool_result_indices:
+                continue
+
+            tool_results = [final_messages[idx] for idx in tool_result_indices]
+
+            for idx in sorted(tool_result_indices, reverse=True):
+                final_messages.pop(idx)
+
+            for offset, tool_result in enumerate(tool_results):
+                final_messages.insert(assistant_idx + 1 + offset, tool_result)
