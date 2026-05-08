@@ -45,7 +45,7 @@ class ToolDisplayHandlers:
             "adapt": "🧠",
             "retrieve_memory": "💭",
             "forget_memory_topic": "🗑️",
-            "read_repo": "📂",
+            "analyze_repo": "📂",
             "get_file": "📄",
         }
         return tool_icons.get(tool_name, "🔧")

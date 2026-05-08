@@ -23,12 +23,12 @@ def get_code_analysis_tool_definition() -> Dict[str, Any]:
     Returns:
         Dict containing the tool definition
     """
-    description = "Reads the structure of source code files within a repository, creating a structural map. This identifies key code elements, enabling code understanding and project organization insights."
+    description = "Analyzes the structure of source code files within a repository, creating a structural map. This identifies key code elements, enabling code understanding and project organization insights."
 
     tool_arguments = {
         "path": {
             "type": "string",
-            "description": "The root directory to read_repo. Use './' to read all source files in the current directory, or specify a subdirectory (e.g., 'src') to read files within that directory. Choose the path that will provide the most relevant information for the task at hand.",
+            "description": "The root directory to analyze_repo. Use './' to analyze all source files in the current directory, or specify a subdirectory (e.g., 'src') to analyze files within that directory. Choose the path that will provide the most relevant information for the task at hand.",
         },
         "exclude_patterns": {
             "type": "array",
@@ -49,7 +49,7 @@ def get_code_analysis_tool_definition() -> Dict[str, Any]:
     return {
         "type": "function",
         "function": {
-            "name": "read_repo",
+            "name": "analyze_repo",
             "description": description,
             "parameters": {
                 "type": "object",
@@ -555,7 +555,7 @@ def register(service_instance=None, agent=None):
     Register code analysis, file search, and grep text tools with the central registry or directly with an agent.
 
     This function registers all available tools from the code_analysis module:
-    - read_repo: Analyze code structure and create structural maps
+    - analyze_repo: Analyze code structure and create structural maps
     - get_file: Retrieve file content or specific line ranges
     - find_files: Search for files by pattern
     - grep_text: Search for text patterns within file contents
