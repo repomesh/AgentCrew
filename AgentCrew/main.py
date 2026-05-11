@@ -404,7 +404,6 @@ def acp_agent(
         agent_config=agent_config,
         mcp_config=mcp_config,
         memory_llm=memory_llm,
-        memory_path=memory_path,
         agent=agent,
     )
 
