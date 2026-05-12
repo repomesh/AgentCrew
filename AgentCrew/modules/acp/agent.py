@@ -168,6 +168,7 @@ class AgentCrewAcpAgent(Agent):
         return NewSessionResponse(
             session_id=session_id,
             modes=self._model_controller.build_modes(agent_name),
+            models=self._model_controller.build_models(model_id or ""),
             config_options=self._model_controller.build_config_options(
                 agent_name, state.model_id, state.thought_level
             ),
