@@ -62,7 +62,11 @@ class MCPListPanel(QWidget):
         """Load MCP servers from config dict into the list."""
         self.mcps_list.clear()
         for server_id, server_config in mcps_config.items():
-            config_dict = server_config.to_dict() if hasattr(server_config, "to_dict") else server_config
+            config_dict = (
+                server_config.to_dict()
+                if hasattr(server_config, "to_dict")
+                else server_config
+            )
             self.add_server(server_id, config_dict)
         self.mcps_list.setCurrentRow(0)
 

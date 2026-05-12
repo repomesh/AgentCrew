@@ -278,9 +278,10 @@ async def _normalize_behavior(
     import re
 
     try:
-        existing_section = "\n".join(
-            f"{bid}: {btext}" for bid, btext in existing_behaviors.items()
-        ) or "(none)"
+        existing_section = (
+            "\n".join(f"{bid}: {btext}" for bid, btext in existing_behaviors.items())
+            or "(none)"
+        )
         prompt = f"""You are a behavior normalizer. Clean up, deduplicate, and merge adaptive behavior rules.
 
 EXISTING BEHAVIORS:

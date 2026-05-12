@@ -4,10 +4,8 @@ from loguru import logger
 import yaml
 
 
-SKILL_SCAN_DIRS = [
-    ".claude/skills",
-    ".agents/skills",
-]
+SKILL_SCAN_DIRS = [".claude/skills", ".agents/skills", ".od-skills", ".codex/skills"]
+
 
 _SKIP_DIRS = {".git", "node_modules", "__pycache__", ".venv", "venv", ".tox"}
 
@@ -18,6 +16,13 @@ class SkillsService:
         self._discover()
 
     def _discover(self) -> None:
+        home = os.path.expanduser("~")
+        for rel_dir in SKILL_SCAN_DIRS:
+            base = os.path.join(home, rel_dir)
+            if not os.path.isdir(base):
+                continue
+            self._scan_dir(base, scope="user")
+
         cwd = os.getcwd()
         for rel_dir in SKILL_SCAN_DIRS:
             base = os.path.join(cwd, rel_dir)

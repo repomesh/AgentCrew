@@ -12,7 +12,12 @@ import os
 from PySide6.QtCore import Qt, Signal
 
 from AgentCrew.modules.config import ConfigManagement
-from AgentCrew.modules.config.agents_config import AgentsConfig, AgentsFileConfig, LocalAgentConfig, RemoteAgentConfig
+from AgentCrew.modules.config.agents_config import (
+    AgentsConfig,
+    AgentsFileConfig,
+    LocalAgentConfig,
+    RemoteAgentConfig,
+)
 from AgentCrew.modules.agents import AgentManager
 from AgentCrew.modules.memory.context_persistent import ContextPersistenceService
 
