@@ -66,6 +66,9 @@ class AgentCrewAcpAgent(Agent):
         client_info=None,
         **kwargs,
     ):
+        logger.debug(
+            f"initialize:  {protocol_version}, {client_info}, {client_capabilities}, {kwargs}"
+        )
         self._tool_manager.update_capabilities(client_capabilities)
         from acp import PROTOCOL_VERSION
         from acp.schema import (
@@ -141,6 +144,7 @@ class AgentCrewAcpAgent(Agent):
         mcp_servers: list[Any] | None = None,
         **kwargs,
     ):
+        logger.debug(f"new session:  {cwd}, {additional_directories}, {kwargs}")
         session_id = f"agentcrew-{uuid.uuid4().hex}"
         agent_name = self._model_controller.resolve_agent_name(self.default_agent_name)
         model_id = self._model_controller.current_agent_model_id(agent_name)
@@ -160,6 +164,7 @@ class AgentCrewAcpAgent(Agent):
         await self._session_lifecycle._persist_session(session_id, state)
         from acp.schema import NewSessionResponse
 
+        logger.debug("complete new session")
         return NewSessionResponse(
             session_id=session_id,
             modes=self._model_controller.build_modes(agent_name),
@@ -176,6 +181,9 @@ class AgentCrewAcpAgent(Agent):
         mcp_servers: list[Any] | None = None,
         **kwargs,
     ):
+        logger.debug(
+            f"load session: {session_id}, {cwd}, {additional_directories}, {kwargs}"
+        )
         stored = await self.session_store.load_session(session_id)
         if stored is None:
             raise RequestError.resource_not_found(f"session:{session_id}")
@@ -209,6 +217,7 @@ class AgentCrewAcpAgent(Agent):
         )
 
     async def close_session(self, session_id: str, **kwargs):
+        logger.debug(f"close session: {session_id}, {kwargs}")
         from acp.schema import CloseSessionResponse
 
         state = self._sessions.pop(session_id, None)
@@ -227,6 +236,7 @@ class AgentCrewAcpAgent(Agent):
         return CloseSessionResponse()
 
     async def set_session_mode(self, mode_id: str, session_id: str, **kwargs):
+        logger.debug(f"set session mode: {mode_id}, {session_id}, {kwargs}")
         from acp.schema import SetSessionModeResponse
 
         state = self._sessions.get(session_id)
@@ -246,6 +256,9 @@ class AgentCrewAcpAgent(Agent):
         cwd: str | None = None,
         **kwargs,
     ):
+        logger.debug(
+            f"list sessions: {cursor}, {cwd}, {additional_directories}, {kwargs}"
+        )
         from acp.schema import ListSessionsResponse, SessionInfo
 
         normalized_cwd = os.path.abspath(os.path.expanduser(cwd)) if cwd else None
@@ -276,6 +289,10 @@ class AgentCrewAcpAgent(Agent):
         mcp_servers: list[Any] | None = None,
         **kwargs,
     ):
+
+        logger.debug(
+            f"resume session: {session_id}, {cwd}, {additional_directories}, {kwargs}"
+        )
         state = self._sessions.get(session_id)
         if state is None:
             stored = await self.session_store.load_session(session_id)
@@ -316,6 +333,9 @@ class AgentCrewAcpAgent(Agent):
         mcp_servers: list[Any] | None = None,
         **kwargs,
     ):
+        logger.debug(
+            f"fork session: {session_id}, {cwd}, {additional_directories}, {kwargs}"
+        )
         source = self._sessions.get(session_id)
         stored = None if source else await self.session_store.load_session(session_id)
         new_session_id = f"agentcrew-{uuid.uuid4().hex}"
@@ -363,13 +383,15 @@ class AgentCrewAcpAgent(Agent):
         )
 
     async def set_session_model(self, model_id: str, session_id: str, **kwargs):
-        raise RequestError.invalid_params(
-            {
-                "sessionId": session_id,
-                "modelId": model_id,
-                "reason": "ACP model switching is not supported by AgentCrew yet.",
-            }
-        )
+        logger.info(f"Set Session Model: {session_id}, {model_id}, {kwargs}")
+        from acp.schema import SetSessionModelResponse
+
+        state = self._sessions.get(session_id)
+        if state is None:
+            raise RequestError.resource_not_found(f"session:{session_id}")
+        await self._model_controller.switch_session_model(state, model_id)
+        await self._session_lifecycle._persist_session(session_id, state)
+        return SetSessionModelResponse()
 
     async def set_config_option(
         self,
@@ -378,6 +400,8 @@ class AgentCrewAcpAgent(Agent):
         value: str | bool,
         **kwargs,
     ):
+
+        logger.debug(f"Set Config Option: {session_id}, {config_id}, {kwargs}")
         state = self._sessions.get(session_id)
         if state is None:
             raise RequestError.resource_not_found(f"session:{session_id}")
@@ -417,6 +441,8 @@ class AgentCrewAcpAgent(Agent):
         message_id: str | None = None,
         **kwargs,
     ):
+
+        logger.debug(f"Prompt: {session_id}, {prompt}, {message_id}, {kwargs}")
         from .message_extraction import prompt_to_text
 
         state = self._sessions.get(session_id)
@@ -479,6 +505,7 @@ class AgentCrewAcpAgent(Agent):
             await self._session_lifecycle._persist_session(session_id, state)
 
     async def cancel(self, session_id: str, **kwargs):
+        logger.debug(f"Cancel: {session_id}, {kwargs}")
         state = self._sessions.get(session_id)
         if state is None:
             return
@@ -491,6 +518,7 @@ class AgentCrewAcpAgent(Agent):
             state.current_task.cancel()
 
     async def ext_method(self, method: str, params: dict[str, Any]):
+        logger.debug(f"Extension method: {method}, {params}")
         return {"error": f"Unsupported extension method: {method}"}
 
     async def ext_notification(self, method: str, params: dict[str, Any]):
@@ -502,4 +530,7 @@ async def run_acp_agent(
 ):
     from acp import run_agent
 
-    await run_agent(AgentCrewAcpAgent(agent_manager, default_agent_name))
+    await run_agent(
+        AgentCrewAcpAgent(agent_manager, default_agent_name),
+        use_unstable_protocol=True,
+    )
