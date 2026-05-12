@@ -54,40 +54,38 @@ class ServiceManager:
     # Lazy import factory methods
     def _create_anthropic_service(self) -> BaseLLMService:
         """Lazy import and create Anthropic service."""
-        if os.getenv("ANTHROPIC_API_KEY"):
-            from AgentCrew.modules.anthropic import AnthropicService
+        from AgentCrew.modules.anthropic import AnthropicService
 
-            return AnthropicService()
-        raise RuntimeError("API key for Anthropic not found.")
+        return AnthropicService()
 
     def _create_opencode_anthropic_service(self) -> BaseLLMService:
-        if os.getenv("OPENCODE_API_KEY"):
-            from AgentCrew.modules.anthropic import AnthropicService
+        if not os.getenv("OPENCODE_API_KEY"):
+            logger.error("API key for OpenCode not found.")
+        from AgentCrew.modules.anthropic import AnthropicService
 
-            llm = AnthropicService(
-                os.getenv("OPENCODE_API_KEY"),
-                "https://opencode.ai/zen/go",
-                provider_name="opencode_go",
-            )
-            llm.model = "minimax-m2.7"
-            return llm
-        raise RuntimeError("API key for Anthropic not found.")
+        llm = AnthropicService(
+            os.getenv("OPENCODE_API_KEY", ""),
+            "https://opencode.ai/zen/go",
+            provider_name="opencode_go",
+        )
+        llm.model = "minimax-m2.7"
+        return llm
 
     def _create_openai_service(self) -> BaseLLMService:
         """Lazy import and create OpenAI Chat Completions service."""
-        if os.getenv("OPENAI_API_KEY"):
-            from AgentCrew.modules.openai.service import OpenAIService
+        if not os.getenv("OPENAI_API_KEY"):
+            logger.error("API key for OpenAI not found.")
+        from AgentCrew.modules.openai.service import OpenAIService
 
-            return OpenAIService()
-        raise RuntimeError("API key for OpenAI not found.")
+        return OpenAIService()
 
     def _create_openai_response_service(self) -> BaseLLMService:
         """Lazy import and create OpenAI Response API service."""
-        if os.getenv("OPENAI_API_KEY"):
-            from AgentCrew.modules.openai import OpenAIResponseService
+        if not os.getenv("OPENAI_API_KEY"):
+            logger.error("API key for OpenAI not found.")
+        from AgentCrew.modules.openai import OpenAIResponseService
 
-            return OpenAIResponseService()
-        raise RuntimeError("API key for OpenAI not found.")
+        return OpenAIResponseService()
 
     def _create_openai_codex_service(self) -> BaseLLMService:
         """Lazy import and create OpenAI Codex service using ChatGPT subscription OAuth."""
@@ -97,72 +95,72 @@ class ServiceManager:
 
     def _create_google_service(self) -> BaseLLMService:
         """Lazy import and create Google AI service."""
-        if os.getenv("GEMINI_API_KEY"):
-            from AgentCrew.modules.google import GoogleAINativeService
+        if not os.getenv("GEMINI_API_KEY"):
+            logger.error("API key for Google AI not found.")
+        from AgentCrew.modules.google import GoogleAINativeService
 
-            return GoogleAINativeService()
-        raise RuntimeError("API key for Google AI not found.")
+        return GoogleAINativeService()
 
     def _create_deepinfra_service(self) -> BaseLLMService:
         """Lazy import and create DeepInfra service."""
-        if os.getenv("DEEPINFRA_API_KEY"):
-            from AgentCrew.modules.custom_llm import DeepInfraService
+        if not os.getenv("DEEPINFRA_API_KEY"):
+            logger.error("API key for DeepInfra not found.")
+        from AgentCrew.modules.custom_llm import DeepInfraService
 
-            return DeepInfraService()
-        raise RuntimeError("API key for DeepInfra not found.")
+        return DeepInfraService()
 
     def _create_together_service(self) -> BaseLLMService:
         """Lazy import and create Together service."""
-        if os.getenv("TOGETHER_API_KEY"):
-            from AgentCrew.modules.together import TogetherAIService
+        if not os.getenv("TOGETHER_API_KEY"):
+            logger.error("API key for Together not found.")
+        from AgentCrew.modules.together import TogetherAIService
 
-            return TogetherAIService()
-        raise RuntimeError("API key for Together not found.")
+        return TogetherAIService()
 
     def _create_opencode_go_service(self) -> BaseLLMService:
         """Lazy import and create OpenCode Go service."""
         from AgentCrew.modules.custom_llm import OpenCodeService
 
-        api_key = os.getenv("OPENCODE_API_KEY")
-        if api_key:
-            llm = OpenCodeService(
-                base_url="https://opencode.ai/zen/go/v1",
-                api_key=api_key,
-                provider_name="opencode_go",
-            )
-            llm.model = "glm-5.1"
-            return llm
-        raise RuntimeError("API key for OpenCode Go not found.")
+        api_key = os.getenv("OPENCODE_API_KEY", "")
+        if not api_key:
+            logger.error("API key for OpenCode Go not found.")
+        llm = OpenCodeService(
+            base_url="https://opencode.ai/zen/go/v1",
+            api_key=api_key,
+            provider_name="opencode_go",
+        )
+        llm.model = "glm-5.1"
+        return llm
 
     def _create_github_copilot_service(
         self, api_key: str | None = None, provider_name: str = "github_copilot"
     ) -> BaseLLMService:
         """Lazy import and create GitHub Copilot service."""
-        if os.getenv("GITHUB_COPILOT_API_KEY"):
-            from AgentCrew.modules.custom_llm import GithubCopilotService
+        if not os.getenv("GITHUB_COPILOT_API_KEY"):
+            logger.error("API key for GitHub Copilot not found.")
+        from AgentCrew.modules.custom_llm import GithubCopilotService
 
-            return GithubCopilotService(api_key=api_key, provider_name=provider_name)
-        raise RuntimeError("API key for GitHub Copilot not found.")
+        return GithubCopilotService(api_key=api_key, provider_name=provider_name)
 
     def _create_copilot_response_service(
         self, api_key: str | None = None, provider_name: str = "github_copilot"
     ) -> BaseLLMService:
         """Lazy import and create Copilot Response service."""
-        if os.getenv("GITHUB_COPILOT_API_KEY"):
-            from AgentCrew.modules.custom_llm import GithubCopilotResponseService
+        if not os.getenv("GITHUB_COPILOT_API_KEY"):
+            logger.error("API key for GitHub Copilot not found.")
+        from AgentCrew.modules.custom_llm import GithubCopilotResponseService
 
-            return GithubCopilotResponseService(
-                api_key=api_key, provider_name=provider_name
-            )
-        raise RuntimeError("API key for GitHub Copilot not found.")
+        return GithubCopilotResponseService(
+            api_key=api_key, provider_name=provider_name
+        )
 
     def _create_fireworks_service(self) -> BaseLLMService:
         """Lazy import and create Fireworks AI service."""
-        if os.getenv("FIREWORKS_API_KEY"):
-            from AgentCrew.modules.custom_llm import FireworksService
+        if not os.getenv("FIREWORKS_API_KEY"):
+            logger.error("API key for Fireworks not found.")
+        from AgentCrew.modules.custom_llm import FireworksService
 
-            return FireworksService()
-        raise RuntimeError("API key for Fireworks not found.")
+        return FireworksService()
 
     def _create_custom_llm_service(
         self,

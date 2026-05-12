@@ -16,7 +16,7 @@ class GithubCopilotResponseService(OpenAIResponseService):
             load_dotenv()
             api_key = os.getenv("GITHUB_COPILOT_API_KEY")
             if not api_key:
-                raise ValueError(
+                logger.error(
                     "GITHUB_COPILOT_API_KEY not found in environment variables"
                 )
         super().__init__(

@@ -13,7 +13,7 @@ class CustomLLMService(OpenAIService):
     def __init__(
         self,
         base_url: str,
-        api_key: str,
+        api_key: str | None,
         provider_name: str,
         extra_headers: dict[str, str] | None = None,
     ):

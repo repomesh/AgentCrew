@@ -16,7 +16,7 @@ class OpenAICodexService(OpenAIResponseService):
 
         access_token = self._oauth.get_valid_access_token()
         if not access_token:
-            raise ValueError(
+            logger.error(
                 "No valid OpenAI Codex OAuth token found. "
                 "Run 'agentcrew chatgpt-auth' to authenticate with your ChatGPT subscription."
             )

@@ -15,7 +15,7 @@ class FireworksService(CustomLLMService):
         load_dotenv()
         api_key = os.getenv("FIREWORKS_API_KEY")
         if not api_key:
-            raise ValueError("FIREWORKS_API_KEY not found in environment variables")
+            logger.error("FIREWORKS_API_KEY not found in environment variables")
         super().__init__(
             api_key=api_key,
             base_url="https://api.fireworks.ai/inference/v1",

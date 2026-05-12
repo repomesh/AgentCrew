@@ -280,7 +280,8 @@ class AgentCrewApplication:
             if provider is None:
                 provider = self.setup.detect_provider()
                 if provider is None:
-                    raise ValueError(
+                    provider = "opencode_go"
+                    logger.error(
                         "No LLM API key found. Please set either ANTHROPIC_API_KEY, GEMINI_API_KEY, OPENAI_API_KEY, DEEPINFRA_API_KEY, TOGETHER_API_KEY, or OPENCODE_API_KEY"
                     )
 

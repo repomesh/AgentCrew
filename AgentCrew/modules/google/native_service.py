@@ -72,7 +72,7 @@ class GoogleAINativeService(BaseLLMService):
         api_key = api_key or os.getenv("GEMINI_API_KEY")
         base_url = base_url or os.getenv("GEMINI_BASE_URL")
         if not api_key:
-            raise ValueError("GEMINI_API_KEY not found in environment variables")
+            logger.error("GEMINI_API_KEY not found in environment variables")
 
         # Initialize the Google GenAI client
         http_options = types.HttpOptions(base_url=base_url) if base_url else None

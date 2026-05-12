@@ -12,7 +12,7 @@ class DeepInfraService(CustomLLMService):
         load_dotenv()
         api_key = os.getenv("DEEPINFRA_API_KEY")
         if not api_key:
-            raise ValueError("DEEPINFRA_API_KEY not found in environment variables")
+            logger.error("DEEPINFRA_API_KEY not found in environment variables")
         super().__init__(
             api_key=api_key,
             base_url="https://api.deepinfra.com/v1/openai",

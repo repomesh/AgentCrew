@@ -19,7 +19,7 @@ class TogetherAIService(BaseLLMService):
         load_dotenv()
         self.api_key = api_key or os.getenv("TOGETHER_API_KEY")
         if not self.api_key:
-            raise ValueError("TOGETHER_API_KEY not found in environment variables")
+            logger.error("TOGETHER_API_KEY not found in environment variables")
         self.base_url = os.getenv("TOGETHER_BASE_URL")
         self.client = AsyncTogether(api_key=self.api_key)
         self.model = "deepseek-ai/DeepSeek-V3.1"
