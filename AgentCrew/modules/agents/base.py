@@ -4,7 +4,9 @@ from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING
 from enum import Enum
 
+
 if TYPE_CHECKING:
+    from AgentCrew.modules.llm.base import BaseLLMService
     from typing import AsyncGenerator, Any, Callable, Union
 
 
@@ -24,7 +26,7 @@ class BaseAgent(ABC):
         self.history = []
         self.is_active = False
         self.shared_context_pool: dict[str, list[int]] = {}
-        self.llm = None
+        self.llm: BaseLLMService | None = None
 
     @abstractmethod
     def activate(self) -> bool:

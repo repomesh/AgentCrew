@@ -305,9 +305,12 @@ Skip evaluation for: simple one-sentence answers, or when the request matches "w
                     continue
 
                 if msg.get("tool_call_id", None) in tool_result_id_needed_shrink:
-                    msg["content"] = (
-                        f"[{msg.get('agent', 'Agent')} has used function_call `{tool_name}` but it has been truncated.]"
-                    )
+                    msg["content"] = [
+                        {
+                            "text": f"[{msg.get('agent', 'Agent')} has used function_call `{tool_name}` but it has been truncated.]",
+                            "type": "text",
+                        }
+                    ]
                     msg.pop("tool_name", None)
                     msg.pop("tool_call_id", None)
                     msg.pop("is_rejected", None)
