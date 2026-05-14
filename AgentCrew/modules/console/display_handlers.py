@@ -592,6 +592,10 @@ class DisplayHandlers:
                 style=RICH_STYLE_YELLOW,
             ),
             Text(
+                "Use '/usage' to show current provider usage limits.",
+                style=RICH_STYLE_YELLOW,
+            ),
+            Text(
                 "Use '/jump <turn_number>' to rewind the conversation to a previous turn.",
                 style=RICH_STYLE_YELLOW,
             ),

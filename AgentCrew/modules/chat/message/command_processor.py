@@ -44,6 +44,8 @@ class CommandProcessor:
             return self.utility_commands.handle_debug(user_input)
         elif user_input.lower().startswith("/think"):
             return self.utility_commands.handle_think(user_input)
+        elif user_input.lower().startswith("/usage"):
+            return await self.utility_commands.handle_usage(user_input)
         elif user_input.lower().startswith("/consolidate"):
             return await self.conversation_commands.handle_consolidate(user_input)
         elif user_input.lower().startswith("/evolve"):

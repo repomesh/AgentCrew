@@ -1,6 +1,7 @@
 from AgentCrew.modules.llm.model_registry import ModelRegistry
 from .service import CustomLLMService
 import os
+import httpx
 from dotenv import load_dotenv
 from loguru import logger
 from typing import Any, Tuple
@@ -98,6 +99,178 @@ class GithubCopilotService(CustomLLMService):
             if host and host.endswith(".githubcopilot.com"):
                 return True
         return False
+
+    @staticmethod
+    def _window_label(name: str, window_seconds: Any = None) -> str:
+        if window_seconds == 18000:
+            return "5h"
+        if window_seconds == 604800:
+            return "weekly"
+        normalized = name.replace("_limit", "").replace("-limit", "")
+        if normalized in {"session", "weekly", "monthly"}:
+            return normalized
+        if isinstance(window_seconds, (int, float)) and window_seconds > 0:
+            minutes = int((window_seconds + 59) // 60)
+            if minutes % 1440 == 0:
+                return f"{minutes // 1440}d"
+            if minutes % 60 == 0:
+                return f"{minutes // 60}h"
+            return f"{minutes}m"
+        return normalized or "unknown"
+
+    @classmethod
+    def _normalize_window(cls, name: str, window: Any) -> dict[str, Any] | None:
+        if not isinstance(window, dict):
+            return None
+        used_percent = (
+            window.get("used_percent")
+            or window.get("usedPercent")
+            or window.get("percentage")
+        )
+        if (
+            used_percent is None
+            and window.get("used") is not None
+            and window.get("total")
+        ):
+            try:
+                used_percent = (float(window["used"]) / float(window["total"])) * 100
+            except (TypeError, ValueError, ZeroDivisionError):
+                used_percent = None
+        try:
+            used_percent_value = (
+                float(used_percent) if used_percent is not None else None
+            )
+        except (TypeError, ValueError):
+            used_percent_value = None
+        window_seconds = window.get("limit_window_seconds") or window.get(
+            "limitWindowSeconds"
+        )
+        return {
+            "name": cls._window_label(name, window_seconds),
+            "used_percent": used_percent_value,
+            "remaining_percent": max(0.0, 100.0 - used_percent_value)
+            if used_percent_value is not None
+            else None,
+            "window_seconds": window_seconds,
+            "reset_at": window.get("reset_at")
+            or window.get("resetAt")
+            or window.get("next_reset_at")
+            or window.get("nextResetAt"),
+            "reset_after_seconds": window.get("reset_after_seconds")
+            or window.get("resetAfterSeconds"),
+        }
+
+    @classmethod
+    def _extract_usage_limits(cls, payload: Any) -> list[dict[str, Any]]:
+        if not isinstance(payload, dict):
+            return []
+        candidates = [
+            "session_limit",
+            "session",
+            "weekly_limit",
+            "weekly",
+            "monthly_limit",
+            "monthly",
+            "usage",
+            "rate_limit",
+            "rateLimit",
+        ]
+        limits = []
+        for key in candidates:
+            window = cls._normalize_window(key, payload.get(key))
+            if window:
+                limits.append(window)
+        nested_limits = payload.get("limits")
+        if isinstance(nested_limits, list):
+            for index, item in enumerate(nested_limits):
+                window = cls._normalize_window(
+                    item.get("name") or item.get("type") or f"limit_{index + 1}", item
+                )
+                if window:
+                    limits.append(window)
+        quota_snapshots = payload.get("quota_snapshots")
+        if isinstance(quota_snapshots, dict):
+            premium_interactions = cls._normalize_quota_snapshot(
+                "premium_interactions", quota_snapshots.get("premium_interactions")
+            )
+            if premium_interactions:
+                limits.append(premium_interactions)
+        return limits
+
+    @staticmethod
+    def _parse_reset_at(value: Any) -> Any:
+        if value in (None, 0, "0"):
+            return None
+        return value
+
+    @classmethod
+    def _normalize_quota_snapshot(
+        cls, name: str, snapshot: Any
+    ) -> dict[str, Any] | None:
+        if not isinstance(snapshot, dict):
+            return None
+        percent_remaining = snapshot.get("percent_remaining")
+        try:
+            remaining_percent = (
+                float(percent_remaining) if percent_remaining is not None else None
+            )
+        except (TypeError, ValueError):
+            remaining_percent = None
+        used_percent = (
+            max(0.0, 100.0 - remaining_percent)
+            if remaining_percent is not None
+            else None
+        )
+        return {
+            "name": name.replace("_", " "),
+            "used_percent": used_percent,
+            "remaining_percent": remaining_percent,
+            "window_seconds": None,
+            "reset_at": cls._parse_reset_at(snapshot.get("quota_reset_at")),
+            "reset_after_seconds": None,
+            "remaining": snapshot.get("remaining"),
+            "entitlement": snapshot.get("entitlement"),
+            "unlimited": snapshot.get("unlimited"),
+        }
+
+    async def get_usage(self) -> dict[str, Any]:
+        if not self.api_key or not str(self.api_key).startswith("gh"):
+            return {
+                "supported": False,
+                "provider": self.provider_name,
+                "model": self.model,
+                "message": "Usage not supported for this provider",
+                "limits": [],
+            }
+
+        async with httpx.AsyncClient(timeout=30) as client:
+            response = await client.get(
+                "https://api.github.com/copilot_internal/user",
+                headers={
+                    "Authorization": f"Bearer {self.api_key}",
+                    "Accept": "application/json",
+                    "Content-Type": "application/json",
+                },
+            )
+            response.raise_for_status()
+            payload = response.json()
+
+        limits = self._extract_usage_limits(payload)
+        message = None
+        if not limits:
+            message = "Usage data returned but no known limit windows could be parsed. Raw provider payload is available in logs."
+            logger.debug(f"Unparsed GitHub Copilot usage payload: {payload}")
+
+        return {
+            "supported": True,
+            "provider": self.provider_name,
+            "model": self.model,
+            "plan_type": payload.get("plan_type") or payload.get("planType"),
+            "message": message,
+            "limits": limits,
+            "credits": payload.get("premium_requests") or payload.get("credits"),
+            "raw": payload,
+        }
 
     def _convert_internal_format(self, messages: list[dict[str, Any]]):
         thinking_block = None

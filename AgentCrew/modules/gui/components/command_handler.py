@@ -52,6 +52,7 @@ class CommandHandler:
             user_input.startswith("/mcp")
             or user_input.startswith("/model")
             or user_input.startswith("/think")
+            or user_input.startswith("/usage")
             or user_input.startswith("/toggle_transfer")
             or user_input.startswith("/agent_mode")
             or user_input.startswith("/file")

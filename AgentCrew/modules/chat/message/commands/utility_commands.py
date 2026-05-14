@@ -1,6 +1,9 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from datetime import datetime
+from typing import Any, TYPE_CHECKING
+
+from loguru import logger
 
 from AgentCrew.modules.chat.message.commands.base import CommandResult
 
@@ -64,6 +67,88 @@ class UtilityCommands:
             self.message_handler._notify(
                 "error", "Invalid budget value. Please provide a number."
             )
+        return CommandResult(handled=True, clear_flag=True)
+
+    @staticmethod
+    def _format_usage_percent(value: Any) -> str:
+        if value is None:
+            return "unknown"
+        try:
+            numeric = float(value)
+        except (TypeError, ValueError):
+            return "unknown"
+        if numeric.is_integer():
+            return f"{int(numeric)}%"
+        return f"{numeric:.1f}%"
+
+    @staticmethod
+    def _format_reset_time(value: Any) -> str | None:
+        if value is None:
+            return None
+        try:
+            timestamp = float(value)
+        except (TypeError, ValueError):
+            return str(value)
+        if timestamp > 10_000_000_000:
+            timestamp = timestamp / 1000
+        return datetime.fromtimestamp(timestamp).strftime("%Y-%m-%d %H:%M")
+
+    @classmethod
+    def _format_usage_message(cls, usage: dict[str, Any]) -> str:
+        provider = usage.get("provider", "unknown")
+        model = usage.get("model", "unknown")
+        if not usage.get("supported"):
+            return usage.get("message") or "Usage not supported for this provider"
+
+        lines = [f"Usage for {provider} / {model}"]
+        plan_type = usage.get("plan_type")
+        if plan_type:
+            lines.append(f"Plan: {plan_type}")
+
+        limits = usage.get("limits") or []
+        for limit in limits:
+            name = str(limit.get("name") or "unknown")
+            used = cls._format_usage_percent(limit.get("used_percent"))
+            remaining = cls._format_usage_percent(limit.get("remaining_percent"))
+            line = f"{name} limit: {used} used, {remaining} left"
+            reset_at = cls._format_reset_time(limit.get("reset_at"))
+            if reset_at:
+                line += f", resets at {reset_at}"
+            elif limit.get("reset_after_seconds") is not None:
+                line += f", resets in {limit.get('reset_after_seconds')}s"
+            lines.append(line)
+
+        credits = usage.get("credits")
+        if isinstance(credits, dict):
+            balance = credits.get("balance")
+            if balance is not None:
+                lines.append(f"Credits balance: {balance}")
+            elif credits.get("used") is not None and credits.get("total") is not None:
+                lines.append(
+                    f"Premium requests: {credits.get('used')} / {credits.get('total')}"
+                )
+
+        if len(lines) == 1:
+            message = usage.get("message")
+            if message:
+                lines.append(message)
+            else:
+                lines.append("Usage data returned, but no limit windows were found.")
+
+        return "\n".join(lines)
+
+    async def handle_usage(self, user_input: str) -> CommandResult:
+        try:
+            llm = self.message_handler.agent.llm
+            if not llm:
+                logger.error("LLM of agent is not initialized")
+                return CommandResult(handled=True, clear_flag=True)
+            usage = await llm.get_usage()
+            message = self._format_usage_message(usage)
+            self.message_handler._notify("system_message", message)
+        except Exception as e:
+            logger.debug(f"Usage retrieval failed: {e}")
+            self.message_handler._notify("error", f"Failed to retrieve usage: {str(e)}")
         return CommandResult(handled=True, clear_flag=True)
 
     async def handle_copy(self, user_input: str) -> CommandResult:

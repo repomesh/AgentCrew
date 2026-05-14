@@ -145,6 +145,7 @@ class GuiCommandCompleter:
             "/copy",
             "/debug",
             "/think",
+            "/usage",
             "/consolidate",
             "/unconsolidate",
             "/jump",

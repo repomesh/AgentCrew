@@ -253,6 +253,16 @@ class BaseLLMService(ABC):
         """Close the underlying HTTP client and release connections."""
         pass
 
+    async def get_usage(self) -> dict[str, Any]:
+        """Return provider usage/limit information when supported."""
+        return {
+            "supported": False,
+            "provider": self.provider_name,
+            "model": self.model,
+            "message": "Usage not supported for this provider",
+            "limits": [],
+        }
+
     async def execute_tool(self, tool_name, tool_params) -> Any:
         """
         Execute a registered tool with the given parameters.

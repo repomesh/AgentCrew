@@ -1,5 +1,6 @@
 from AgentCrew.modules.llm.model_registry import ModelRegistry
 import os
+import httpx
 from dotenv import load_dotenv
 from loguru import logger
 from datetime import datetime
@@ -74,6 +75,51 @@ class GithubCopilotResponseService(OpenAIResponseService):
             if host and host.endswith(".githubcopilot.com"):
                 return True
         return False
+
+    async def get_usage(self) -> dict:
+        if not self.api_key or not str(self.api_key).startswith("gh"):
+            return {
+                "supported": False,
+                "provider": self.provider_name,
+                "model": self.model,
+                "message": "Usage not supported for this provider",
+                "limits": [],
+            }
+
+        async with httpx.AsyncClient(timeout=30) as client:
+            response = await client.get(
+                "https://api.github.com/copilot_internal/user",
+                headers={
+                    "Authorization": f"Bearer {self.api_key}",
+                    "Accept": "application/json",
+                    "Content-Type": "application/json",
+                },
+            )
+            response.raise_for_status()
+            payload = response.json()
+
+        from AgentCrew.modules.custom_llm.github_copilot_service import (
+            GithubCopilotService,
+        )
+
+        limits = GithubCopilotService._extract_usage_limits(payload)
+        message = None
+        if not limits:
+            message = "Usage data returned but no known limit windows could be parsed. Raw provider payload is available in logs."
+            logger.debug(f"Unparsed GitHub Copilot usage payload: {payload}")
+
+        return {
+            "supported": True,
+            "provider": self.provider_name,
+            "model": self.model,
+            "plan_type": payload.get("copilot_plan")
+            or payload.get("plan_type")
+            or payload.get("planType"),
+            "message": message,
+            "limits": limits,
+            "credits": None,
+            "raw": payload,
+        }
 
     async def process_message(self, prompt: str, temperature: float = 0) -> str:
         if self._is_github_provider():

@@ -254,6 +254,7 @@ class ChatCompleter(Completer):
                 "Show debug info (usage: /debug [agent|chat])",
             ),
             ("/think", "Show or set thinking budget (usage: /think [budget])"),
+            ("/usage", "Show current provider usage limits"),
             (
                 "/consolidate",
                 "Consolidate conversation messages (usage: /consolidate [count])",
