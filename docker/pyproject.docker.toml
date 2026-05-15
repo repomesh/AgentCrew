@@ -27,7 +27,7 @@ dependencies = [
   "pillow==12.2.0",
   "chromadb==1.5.8",
   "openai==2.32.0",
-  "mcp==1.27.0",
+  "mcp==1.27.1",
   "google-genai==1.73.1",
   "markdown==3.10.2",
   "tree-sitter-language-pack==1.6.2",

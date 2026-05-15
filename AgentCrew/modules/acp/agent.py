@@ -116,7 +116,7 @@ class AgentCrewAcpAgent(Agent):
             protocol_version=PROTOCOL_VERSION,
             agent_capabilities=AgentCapabilities(
                 load_session=True,
-                mcp_capabilities=McpCapabilities(http=False, sse=False),
+                mcp_capabilities=McpCapabilities(http=True, sse=True),
                 prompt_capabilities=PromptCapabilities(embedded_context=True),
                 session_capabilities=SessionCapabilities(
                     close=SessionCloseCapabilities(),

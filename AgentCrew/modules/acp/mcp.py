@@ -20,26 +20,44 @@ def normalize_acp_mcp_servers(
     for index, server in enumerate(mcp_servers):
         command = _field(server, "command")
         url = _field(server, "url")
-        server_type = _field(server, "type")
+        server_type = str(_field(server, "type") or "").lower()
         raw_name = str(_field(server, "name") or f"server_{index + 1}")
-
-        if not command or url or server_type in {"http", "sse"}:
-            logger.warning(
-                f"ACP MCP server '{raw_name}' ignored: only stdio mcpServers are supported"
-            )
-            continue
-
         safe_name = _unique_server_name(session_id, raw_name, index)
-        configs.append(
-            MCPServerConfig(
-                name=safe_name,
-                command=str(command),
-                args=[str(arg) for arg in (_field(server, "args") or [])],
-                env=_normalize_env(_field(server, "env")),
-                enabledForAgents=[agent_name],
-                streaming_server=False,
+
+        if server_type in {"http", "sse"}:
+            if not url:
+                logger.warning(
+                    f"ACP MCP server '{raw_name}' ignored: http/sse server missing url"
+                )
+                continue
+            configs.append(
+                MCPServerConfig(
+                    name=safe_name,
+                    command="",
+                    args=[],
+                    env=None,
+                    enabledForAgents=[agent_name],
+                    streaming_server=True,
+                    url=str(url),
+                    headers=_normalize_headers(_field(server, "headers")),
+                )
             )
-        )
+        else:
+            if not command:
+                logger.warning(
+                    f"ACP MCP server '{raw_name}' ignored: stdio server missing command"
+                )
+                continue
+            configs.append(
+                MCPServerConfig(
+                    name=safe_name,
+                    command=str(command),
+                    args=[str(arg) for arg in (_field(server, "args") or [])],
+                    env=_normalize_env(_field(server, "env")),
+                    enabledForAgents=[agent_name],
+                    streaming_server=False,
+                )
+            )
 
     return configs
 
@@ -60,6 +78,26 @@ def _normalize_env(env: Any) -> dict[str, str] | None:
     if isinstance(env, list):
         normalized: dict[str, str] = {}
         for item in env:
+            name = _field(item, "name")
+            value = _field(item, "value")
+            if name is None or value is None:
+                continue
+            normalized[str(name)] = str(value)
+        return normalized or None
+
+    return None
+
+
+def _normalize_headers(headers: Any) -> dict[str, str] | None:
+    if not headers:
+        return None
+
+    if isinstance(headers, dict):
+        return {str(key): str(value) for key, value in headers.items()}
+
+    if isinstance(headers, list):
+        normalized: dict[str, str] = {}
+        for item in headers:
             name = _field(item, "name")
             value = _field(item, "value")
             if name is None or value is None:
