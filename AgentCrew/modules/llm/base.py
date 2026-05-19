@@ -347,6 +347,13 @@ class BaseLLMService(ABC):
         """
         pass
 
+    def get_system_prompt(self) -> str:
+        """
+        Get the system prompt for the LLM service.
+
+        """
+        return getattr(self, "system_prompt", "")
+
     @abstractmethod
     def clear_tools(self):
         """

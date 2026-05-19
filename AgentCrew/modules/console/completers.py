@@ -251,7 +251,7 @@ class ChatCompleter(Completer):
             ),
             (
                 "/debug",
-                "Show debug info (usage: /debug [agent|chat])",
+                "Show debug info (usage: /debug [agent|chat|system])",
             ),
             ("/think", "Show or set thinking budget (usage: /think [budget])"),
             ("/usage", "Show current provider usage limits"),

@@ -202,13 +202,16 @@ class UtilityCommands:
             /debug         - Show both agent and chat messages
             /debug agent   - Show only agent messages
             /debug chat    - Show only chat/streamline messages
+            /debug system  - Show the current LLM system prompt
         """
         parts = user_input.lower().split()
         filter_type = parts[1] if len(parts) > 1 else None
+        valid_filters = ("agent", "chat", "system")
 
-        if filter_type and filter_type not in ("agent", "chat"):
+        if filter_type and filter_type not in valid_filters:
             self.message_handler._notify(
-                "error", f"Invalid filter '{filter_type}'. Use 'agent' or 'chat'."
+                "error",
+                f"Invalid filter '{filter_type}'. Use 'agent', 'chat', or 'system'.",
             )
             return CommandResult(handled=True, clear_flag=True)
 
@@ -222,6 +225,15 @@ class UtilityCommands:
             self.message_handler._notify(
                 "debug_requested",
                 {"type": "chat", "messages": self.message_handler.streamline_messages},
+            )
+
+        if filter_type == "system" and self.message_handler.agent.llm:
+            self.message_handler._notify(
+                "debug_requested",
+                {
+                    "type": "system",
+                    "system_prompt": self.message_handler.agent.llm.get_system_prompt(),
+                },
             )
 
         return CommandResult(handled=True, clear_flag=True)

@@ -44,7 +44,7 @@ class CommandHandler:
 
         # Debug command
         elif user_input.startswith("/debug"):
-            self.display_debug_info()
+            self.chat_window.llm_worker.process_request.emit(user_input)
             self.chat_window.ui_state_manager.set_input_controls_enabled(True)
             return True
 
@@ -379,8 +379,12 @@ class CommandHandler:
             return True
 
         elif event == "debug_requested":
-            if isinstance(data, dict) and "type" in data and "messages" in data:
-                # New format with type and messages
+            if isinstance(data, dict) and data.get("type") == "system":
+                self.chat_window.chat_components.add_system_message(
+                    "DEBUG - System Prompt:\n\n"
+                    f"```text\n{data.get('system_prompt') or ''}\n```"
+                )
+            elif isinstance(data, dict) and "type" in data and "messages" in data:
                 msg_type = data["type"]
                 messages = data["messages"]
                 title = "Agent Messages" if msg_type == "agent" else "Chat Messages"

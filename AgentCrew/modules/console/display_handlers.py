@@ -142,17 +142,20 @@ class DisplayHandlers:
             debug_info: Either a dict with 'type' and 'messages' keys (new format)
                        or a raw list of messages (legacy format)
         """
+        if isinstance(debug_info, dict) and debug_info.get("type") == "system":
+            self.console.print(Text("\nSystem Prompt:", style=RICH_STYLE_YELLOW))
+            self.console.print(debug_info.get("system_prompt") or "")
+            return
+
         if (
             isinstance(debug_info, dict)
             and "type" in debug_info
             and "messages" in debug_info
         ):
-            # New format with type and messages
             msg_type = debug_info["type"]
             messages = debug_info["messages"]
             title = "Agent Messages" if msg_type == "agent" else "Chat Messages"
         else:
-            # Legacy format - just raw messages
             title = "Messages"
             messages = debug_info
 
@@ -593,6 +596,10 @@ class DisplayHandlers:
             ),
             Text(
                 "Use '/usage' to show current provider usage limits.",
+                style=RICH_STYLE_YELLOW,
+            ),
+            Text(
+                "Use '/debug [agent|chat|system]' to show debug information.",
                 style=RICH_STYLE_YELLOW,
             ),
             Text(
