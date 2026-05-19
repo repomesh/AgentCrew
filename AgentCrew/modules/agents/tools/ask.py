@@ -66,13 +66,9 @@ def ask_tool_prompt() -> str:
     return """
 <Ask_Tool_Instruction>
   <Purpose>
-    Use the `ask` tool when you need additional information or clarification from the user
-    to complete their request effectively. This tool helps you gather specific details
-    through structured questioning with guided answer options.
-
-    When the user presents a plan, design, architecture, or proposal, use the `ask` tool
-    to stress-test it through a focused interview until every important branch of the
-    decision tree is resolved and both sides reach a shared understanding.
+    Use the `ask` tool when you need additional information or clarification from the user to complete their request effectively.
+    This tool helps you gather specific details through structured questioning with guided answer options.
+    When the user presents a plan, design, architecture, or proposal, use the `ask` tool to stress-test it through a focused interview until every important branch of the decision tree is resolved and both sides reach a shared understanding.
   </Purpose>
 
   <When_To_Use>

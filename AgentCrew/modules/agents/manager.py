@@ -516,12 +516,10 @@ When system access is requested:
   </When_To_Delegate>
 
   <Parallel_Delegation>
-    To delegate to multiple agents simultaneously, call the delegate tool
-    multiple times with parallel tool calls. All delegations execute concurrently
-    and you receive all results before your next response.
+    To delegate to multiple agents simultaneously, call the delegate tool multiple times with parallel tool calls. 
+    All delegations execute concurrently and you receive all results before your next response.
 
-    Example: To research 3 topics, emit 3 delegate calls in one turn —
-    each targeting the appropriate agent with its specific task.
+    Example: To research 3 topics, emit 3 delegate calls in one turn — each targeting the appropriate agent with its specific task.
   </Parallel_Delegation>
 
   <Rules>
@@ -542,20 +540,15 @@ When system access is requested:
   <Max_Context_Length>{max_context_token} tokens</Max_Context_Length>
 
   <Tool_Result_Retention>
-    Tool results may be truncated or removed from context later to stay within
-    the token limit. After each tool call, your next assistant message must
-    include a short brief summary of the key findings from that tool result.
-    Write this summary in your response text — do not rely on the tool result
-    remaining visible in future turns.
+    Tool results may be truncated or removed from context later to stay within the token limit. 
+    After each tool call, your next assistant message must include a short brief summary in 10-20 words of the key findings from that tool result.
+    Write this summary in your response text — do not rely on the tool result remaining visible in future turns.
   </Tool_Result_Retention>
 
   <Guidelines>
-    - Summarize the essential output of every tool call in the immediately
-      following assistant message.
-    - Keep summaries factual and concise — enough to reconstruct the key
-      information without re-running the tool.
-    - When context is approaching the limit, prioritize retaining your own
-      summaries over raw tool output blocks.
+    - Summarize the essential output of every tool call in the immediately following assistant message.
+    - Keep summaries factual and concise — enough to reconstruct the key information without re-running the tool.
+    - When context is approaching the limit, prioritize retaining your own summaries over raw tool output blocks.
   </Guidelines>
 </Context_Awareness_Instruction>"""
 
@@ -568,19 +561,15 @@ When system access is requested:
         """
         transfer_prompt = """<Transfer_Tool_Instruction>
   <Decision_Rule>
-    When a specialist agent from <Transferable_Agents> is better suited for the user's request,
-    transfer immediately using the `transfer` tool. Stay engaged only if no better-suited
-    specialist exists or the task is squarely within your own expertise.
+    When a specialist agent from <Transferable_Agents> is better suited for the user's request, transfer immediately using the `transfer` tool.
+    Stay engaged only if no better-suited specialist exists or the task is squarely within your own expertise.
   </Decision_Rule>
 
   <Transfer_Execution>
     When transferring:
     1. Tell the user why you are transferring and what the target agent will deliver.
-    2. Write a precise task_description: start with an action verb, include all deliverables,
-       constraints, and a full summary of any tool/function call results (they are omitted
-       during transfer and must be summarised in the description).
-    3. Set post_action when a logical next step exists (e.g. "transfer back to [agent] for implementation").
-       Omit if the transfer is the final step.
+    2. Write a precise task_description: start with an action verb, include all deliverables, constraints, and a full summary of any tool/function call results (they are omitted during transfer and must be summarised in the description).
+    3. Set post_action when a logical next step exists (e.g. "transfer back to [agent] for implementation"). Omit if the transfer is the final step.
   </Transfer_Execution>
 
   <Tool_Usage>
