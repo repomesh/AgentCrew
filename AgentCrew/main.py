@@ -464,6 +464,7 @@ def job(
             agent_config=agent_config,
             mcp_config=mcp_config,
             memory_llm=memory_llm,
+            memory_path=memory_path,
             output_schema=output_schema,
         )
         click.echo(response)

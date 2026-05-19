@@ -383,6 +383,7 @@ class AgentCrewApplication:
         agent_config: str | None = None,
         mcp_config: str | None = None,
         memory_llm: str | None = None,
+        memory_path: str | None = None,
         output_schema: str | None = None,
     ) -> str:
         from AgentCrew.modules.agents.agent_runner import run_agent_loop
@@ -398,10 +399,12 @@ class AgentCrewApplication:
                         "No LLM API key found. Please set either ANTHROPIC_API_KEY, GEMINI_API_KEY, OPENAI_API_KEY, DEEPINFRA_API_KEY, TOGETHER_API_KEY, or OPENCODE_API_KEY"
                     )
 
+            need_memory = bool(memory_path)
+
             services = self.setup.setup_services(
                 provider,
                 memory_llm,
-                need_memory=True,
+                need_memory=need_memory,
                 model_id=model_id,
             )
 

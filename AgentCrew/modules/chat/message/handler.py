@@ -1,4 +1,5 @@
-from typing import Tuple
+from __future__ import annotations
+from typing import Tuple, TYPE_CHECKING
 import asyncio
 import os
 import re
@@ -9,7 +10,6 @@ from loguru import logger
 from AgentCrew.modules.agents.base import MessageType
 from AgentCrew.modules.chat.history import ChatHistoryManager
 from AgentCrew.modules.agents import AgentManager
-from AgentCrew.modules.utils.file_handler import FileHandler
 
 from AgentCrew.modules.memory import (
     BaseMemoryService,
@@ -23,6 +23,9 @@ from .base import Observable
 from .prompt_evolution_coordinator import PromptEvolutionCoordinator
 from AgentCrew.modules.chat.stream_session import StreamSession
 from AgentCrew.modules.llm.token_usage import TokenUsage
+
+if TYPE_CHECKING:
+    from AgentCrew.modules.utils.file_handler import FileHandler
 
 
 _AT_AGENT_RE = re.compile(r"@([\.\w-]+)")
@@ -300,20 +303,15 @@ class MessageHandler(Observable):
             self.conversation_manager.store_conversation_turn(
                 self.current_user_input, self.current_user_input_idx
             )
-            if store_memory and self.memory_service:
-                assistant_messages = self._extract_assistant_messages_for_memory(
-                    messages_for_this_turn
-                )
 
-                try:
-                    self.memory_service.store_conversation(
+            if store_memory:
+                from AgentCrew.modules.agents.local_agent import LocalAgent
+
+                if isinstance(self.agent, LocalAgent):
+                    self.agent.store_memory_if_available(
                         self._extract_user_text(self.current_user_input),
-                        assistant_messages,
-                        self.agent.name,
-                    )
-                except Exception as e:
-                    self._notify(
-                        "error", f"Failed to store conversation in memory: {str(e)}"
+                        messages_for_this_turn,
+                        "",
                     )
             self.current_user_input = None
             self.current_user_input_idx = -1
@@ -664,18 +662,6 @@ class MessageHandler(Observable):
 
     def get_recent_agent_responses(self) -> list:
         return self.streamline_messages[self.last_assisstant_response_idx :]
-
-    def _extract_assistant_messages_for_memory(self, messages: list[dict]) -> list[str]:
-        assistant_messages: list[str] = []
-        for message in messages:
-            if not isinstance(message, dict) or message.get("role") != "assistant":
-                continue
-            content = message.get("content", "")
-            if isinstance(content, str):
-                normalized = content.strip()
-                if normalized:
-                    assistant_messages.append(normalized)
-        return assistant_messages
 
     # Delegate conversation management methods
     def list_conversations(self):

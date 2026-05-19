@@ -540,7 +540,7 @@ When system access is requested:
   <Tool_Result_Retention>
     Tool results may be truncated or removed from context later to stay within
     the token limit. After each tool call, your next assistant message must
-    include a brief summary of the key findings from that tool result.
+    include a short brief summary of the key findings from that tool result.
     Write this summary in your response text — do not rely on the tool result
     remaining visible in future turns.
   </Tool_Result_Retention>

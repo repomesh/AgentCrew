@@ -91,6 +91,15 @@ class TurnExecutor:
             await self.execute_tools(session_id, state, agent, tool_uses)
             if not state.cancelled and state.pending_ask_tool is None:
                 await self.run_turn(session_id, state, conn)
+            return
+
+        user_message = agent._extract_last_user_message_for_memory(state.history)
+        agent.store_memory_if_available(
+            user_message,
+            state.history,
+            current_response,
+            session_id=session_id,
+        )
 
     async def execute_tools(
         self,

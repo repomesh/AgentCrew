@@ -454,6 +454,80 @@ class LocalAgent(BaseAgent):
     ) -> None:
         self._context_manager.shrink_tool_results(final_messages)
 
+    def _extract_last_user_message_for_memory(self, messages: list[dict]) -> str:
+        for message in reversed(messages):
+            if not isinstance(message, dict) or message.get("role") != "user":
+                continue
+            content = message.get("content", [])
+            if isinstance(content, str):
+                normalized = content.strip()
+                if normalized:
+                    return normalized
+                continue
+            text_parts: list[str] = []
+            for part in content:
+                if isinstance(part, str):
+                    normalized = part.strip()
+                    if normalized:
+                        text_parts.append(normalized)
+                elif isinstance(part, dict) and part.get("type") == "text":
+                    normalized = str(part.get("text", "")).strip()
+                    if normalized:
+                        text_parts.append(normalized)
+            if text_parts:
+                return " ".join(text_parts)
+        return ""
+
+    def _extract_assistant_messages_for_memory(
+        self, messages: list[dict], current_response: str = ""
+    ) -> list[str]:
+        assistant_messages: list[str] = []
+        last_user_idx = -1
+        for index, message in enumerate(messages):
+            if isinstance(message, dict) and message.get("role") == "user":
+                last_user_idx = index
+
+        for message in messages[last_user_idx + 1 :]:
+            if not isinstance(message, dict) or message.get("role") != "assistant":
+                continue
+            content = message.get("content", "")
+            if isinstance(content, str):
+                normalized = content.strip()
+                if normalized:
+                    assistant_messages.append(normalized)
+        normalized_current_response = current_response.strip()
+        if normalized_current_response and (
+            not assistant_messages
+            or assistant_messages[-1] != normalized_current_response
+        ):
+            assistant_messages.append(normalized_current_response)
+        return assistant_messages
+
+    def store_memory_if_available(
+        self,
+        user_message: str,
+        messages: list[dict],
+        current_response: str,
+        session_id: str | None = None,
+    ) -> None:
+        from AgentCrew.modules.memory.base_service import BaseMemoryService
+
+        memory_service = self.services.get("memory")
+        if not memory_service or not isinstance(memory_service, BaseMemoryService):
+            return
+        assistant_messages = self._extract_assistant_messages_for_memory(
+            messages, current_response
+        )
+        try:
+            memory_service.store_conversation(
+                user_message,
+                assistant_messages,
+                self.name,
+                session_id=session_id,
+            )
+        except Exception as e:
+            logger.warning(f"Failed to store conversation in memory: {e}")
+
     async def process_messages(
         self,
         messages: list[dict[str, Any]] | None = None,

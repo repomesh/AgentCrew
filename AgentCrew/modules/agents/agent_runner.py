@@ -41,6 +41,8 @@ async def run_agent_loop(
                 thinking_signature += signature
 
     if not tool_uses:
+        user_message = agent._extract_last_user_message_for_memory(history)
+        agent.store_memory_if_available(user_message, history, current_response)
         return current_response
 
     if tool_filter:
@@ -49,6 +51,8 @@ async def run_agent_loop(
         filtered = tool_uses
 
     if not filtered:
+        user_message = agent._extract_last_user_message_for_memory(history)
+        agent.store_memory_if_available(user_message, history, current_response)
         return current_response
 
     thinking_data = (thinking_content, thinking_signature) if thinking_content else None

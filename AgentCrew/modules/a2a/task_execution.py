@@ -20,7 +20,6 @@ from AgentCrew.modules.tools.parallel_executor import (
 )
 from .adapters import convert_agent_response_to_a2a_artifact
 from .exceptions import TaskCanceledException
-from AgentCrew.modules.memory import BaseMemoryService
 from AgentCrew.modules.llm.token_usage import TokenUsage
 
 
@@ -39,68 +38,17 @@ if TYPE_CHECKING:
 
 
 class TaskExecutionEngine:
-    def _extract_assistant_messages_for_memory(
-        self, task_history: list[dict], current_response: str
-    ) -> list[str]:
-        assistant_messages: list[str] = []
-        last_user_idx = -1
-        for index, message in enumerate(task_history):
-            if isinstance(message, dict) and message.get("role") == "user":
-                last_user_idx = index
-
-        for message in task_history[last_user_idx + 1 :]:
-            if not isinstance(message, dict) or message.get("role") != "assistant":
-                continue
-            content = message.get("content", "")
-            if isinstance(content, str):
-                normalized = content.strip()
-                if normalized:
-                    assistant_messages.append(normalized)
-        normalized_current_response = current_response.strip()
-        if normalized_current_response and (
-            not assistant_messages
-            or assistant_messages[-1] != normalized_current_response
-        ):
-            assistant_messages.append(normalized_current_response)
-        return assistant_messages
-
-    def _extract_last_user_message_for_memory(self, task_history: list[dict]) -> str:
-        for message in reversed(task_history):
-            if not isinstance(message, dict) or message.get("role") != "user":
-                continue
-            content = message.get("content", [])
-            if isinstance(content, str):
-                normalized = content.strip()
-                if normalized:
-                    return normalized
-                continue
-            text_parts: list[str] = []
-            for part in content:
-                if isinstance(part, str):
-                    normalized = part.strip()
-                    if normalized:
-                        text_parts.append(normalized)
-                elif isinstance(part, dict) and part.get("type") == "text":
-                    normalized = str(part.get("text", "")).strip()
-                    if normalized:
-                        text_parts.append(normalized)
-            if text_parts:
-                return " ".join(text_parts)
-        return ""
-
     def __init__(
         self,
         store: TaskStore,
         streaming: TaskStreamingManager,
         cancellation: TaskCancellationManager,
         interaction: TaskInteractionHandler,
-        memory_service: BaseMemoryService | None = None,
     ) -> None:
         self.store = store
         self.streaming = streaming
         self.cancellation = cancellation
         self.interaction = interaction
-        self.memory_service = memory_service
 
     async def run(self, agent: LocalAgent, task: Task) -> None:
         if task.status.state in {
@@ -520,17 +468,13 @@ class TaskExecutionEngine:
                 await self.store.append_task_history_message(
                     task.context_id, assistant_message
                 )
-            if self.memory_service:
-                user_message = self._extract_last_user_message_for_memory(task_history)
-                assistant_messages = self._extract_assistant_messages_for_memory(
-                    task_history, current_response
-                )
-                self.memory_service.store_conversation(
-                    user_message,
-                    assistant_messages,
-                    agent.name,
-                    session_id=task.context_id,
-                )
+            user_message = agent._extract_last_user_message_for_memory(task_history)
+            agent.store_memory_if_available(
+                user_message,
+                task_history,
+                current_response,
+                session_id=task.context_id,
+            )
 
         final_artifact = convert_agent_response_to_a2a_artifact(
             current_response, artifact_id=f"artifact_{task.id}_final"

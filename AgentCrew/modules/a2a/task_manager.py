@@ -67,8 +67,6 @@ class AgentTaskManager(TaskManager):
         if self.agent is None or not isinstance(self.agent, LocalAgent):
             raise ValueError(f"Agent {agent_name} not found or is not a LocalAgent")
 
-        memory_service = self.agent.services.get("memory", None)
-
         self.cancellation = TaskCancellationManager()
         self.streaming = TaskStreamingManager(store)
         self.interaction = TaskInteractionHandler()
@@ -77,7 +75,6 @@ class AgentTaskManager(TaskManager):
             self.streaming,
             self.cancellation,
             self.interaction,
-            memory_service,
         )
 
     def _is_terminal_state(self, state: TaskState) -> bool:
