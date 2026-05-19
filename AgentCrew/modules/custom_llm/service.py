@@ -255,15 +255,6 @@ class CustomLLMService(OpenAIService):
     def _convert_internal_format(self, messages: list[dict[str, Any]]):
         for msg in messages:
             msg.pop("agent", None)
-            if "tool_calls" in msg and msg.get("tool_calls", []):
-                normalized_tool_calls = []
-                for raw_tool_call in msg["tool_calls"]:
-                    normalized_tool_call = self._normalize_tool_call_for_request(
-                        raw_tool_call
-                    )
-                    if normalized_tool_call:
-                        normalized_tool_calls.append(normalized_tool_call)
-                msg["tool_calls"] = normalized_tool_calls
             if msg.get("role") == "consolidated":
                 msg["role"] = "user"
                 msg.pop("metadata", None)
@@ -289,6 +280,18 @@ class CustomLLMService(OpenAIService):
                                     f"<think>{assistant_content.get('thinking', '')}</think>"
                                 )
                                 assistant_content.pop("thinking", None)
+            elif msg.get("role") == "user":
+                msg.pop("tool_call_id", None)
+
+            if "tool_calls" in msg and msg.get("tool_calls", []):
+                normalized_tool_calls = []
+                for raw_tool_call in msg["tool_calls"]:
+                    normalized_tool_call = self._normalize_tool_call_for_request(
+                        raw_tool_call
+                    )
+                    if normalized_tool_call:
+                        normalized_tool_calls.append(normalized_tool_call)
+                msg["tool_calls"] = normalized_tool_calls
 
         return messages
 

@@ -92,6 +92,16 @@ class OpenAIResponseService(BaseLLMService):
             if role == "consolidated":
                 msg["role"] = "user"
                 msg.pop("metadata", None)
+            elif role == "tool":
+                msg.pop("role", None)
+                msg.pop("tool_name", None)
+                msg.pop("is_rejected", None)
+                msg["type"] = "function_call_output"
+                msg["call_id"] = msg.pop("tool_call_id", None)
+                msg["output"] = json.dumps(msg.pop("content", []))
+            elif role == " user":
+                msg.pop("tool_call_id", None)
+
             if isinstance(msg.get("content", ""), list):
                 for part in msg["content"]:
                     if part.get("type") == "text":
@@ -113,13 +123,6 @@ class OpenAIResponseService(BaseLLMService):
                         part.pop("content", None)
             if "tool_calls" in msg:
                 tool_call_list[i] = msg.pop("tool_calls")
-            if role == "tool":
-                msg.pop("role", None)
-                msg.pop("tool_name", None)
-                msg.pop("is_rejected", None)
-                msg["type"] = "function_call_output"
-                msg["call_id"] = msg.pop("tool_call_id", None)
-                msg["output"] = json.dumps(msg.pop("content", []))
         for idx, tool_calls in tool_call_list.items():
             for i, tool_call in enumerate(tool_calls):
                 messages.insert(

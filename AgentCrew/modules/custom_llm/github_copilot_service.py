@@ -280,7 +280,7 @@ class GithubCopilotService(CustomLLMService):
             if msg.get("role") == "consolidated":
                 msg["role"] = "user"
                 msg.pop("metadata", None)
-            if msg.get("role") == "assistant":
+            elif msg.get("role") == "assistant":
                 if thinking_block:
                     msg["reasoning_text"] = thinking_block.get("thinking", "")
                     msg["reasoning_opaque"] = thinking_block.get("signature", "")
@@ -297,17 +297,7 @@ class GithubCopilotService(CustomLLMService):
                     )
                     msg["content"] = []
 
-            if "tool_calls" in msg and msg.get("tool_calls", []):
-                normalized_tool_calls = []
-                for raw_tool_call in msg["tool_calls"]:
-                    normalized_tool_call = self._normalize_tool_call_for_request(
-                        raw_tool_call
-                    )
-                    if normalized_tool_call:
-                        normalized_tool_calls.append(normalized_tool_call)
-                msg["tool_calls"] = normalized_tool_calls
-
-            if msg.get("role") == "tool":
+            elif msg.get("role") == "tool":
                 # Special treatment for GitHub Copilot GPT-4.1 model
                 # At the the time of writing, GitHub Copilot GPT-4.1 model cannot read tool results with array content
                 msg.pop("tool_name", None)
@@ -340,6 +330,18 @@ class GithubCopilotService(CustomLLMService):
                         )
                 elif isinstance(msg.get("content", ""), str):
                     msg["content"] = [{"type": "text", "text": msg["content"]}]
+            elif msg.get("role") == "user":
+                msg.pop("tool_call_id", None)
+
+            if "tool_calls" in msg and msg.get("tool_calls", []):
+                normalized_tool_calls = []
+                for raw_tool_call in msg["tool_calls"]:
+                    normalized_tool_call = self._normalize_tool_call_for_request(
+                        raw_tool_call
+                    )
+                    if normalized_tool_call:
+                        normalized_tool_calls.append(normalized_tool_call)
+                msg["tool_calls"] = normalized_tool_calls
 
         return messages
 

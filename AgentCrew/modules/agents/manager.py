@@ -278,6 +278,10 @@ class AgentManager:
                         processing_content = msg["content"]
                         if msg.get("role", "") == "tool":
                             continue
+                        if msg.get("role", "") == "user" and msg.get(
+                            "tool_call_id", ""
+                        ):
+                            continue
                         if isinstance(processing_content, str):
                             content = msg.get("content", "")
                         elif (

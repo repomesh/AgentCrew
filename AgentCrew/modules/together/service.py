@@ -67,31 +67,13 @@ class TogetherAIService(BaseLLMService):
         for raw_msg in messages:
             msg = dict(raw_msg)
             msg.pop("agent", None)
-            if msg.get("role") == "consolidated":
-                msg["role"] = "user"
-                msg.pop("metadata", None)
-            if "tool_calls" in msg and msg.get("tool_calls", []):
-                converted_tool_calls = []
-                for raw_tool_call in msg["tool_calls"]:
-                    tool_call = dict(raw_tool_call)
-                    converted_tool_calls.append(
-                        {
-                            "id": tool_call.get("id"),
-                            "type": tool_call.get("type", "function"),
-                            "function": {
-                                "name": tool_call.get("name", ""),
-                                "arguments": json.dumps(tool_call.get("arguments", {})),
-                            },
-                        }
-                    )
-                msg["tool_calls"] = converted_tool_calls
-
             role = msg.get("role", "")
             content = msg.get("content", "")
 
-            # Normalize content to string for Together AI compatibility
-            # Together AI doesn't support array content format like OpenAI/Claude
-            if role == "tool":
+            if role == "consolidated":
+                msg["role"] = "user"
+                msg.pop("metadata", None)
+            elif role == "tool":
                 msg.pop("tool_name", None)
                 msg.pop("is_rejected", None)
                 if isinstance(content, list):
@@ -148,6 +130,7 @@ class TogetherAIService(BaseLLMService):
 
             elif role == "user":
                 # Handle user message content arrays
+                msg.pop("tool_call_id", None)
                 if isinstance(content, list):
                     cleaned_content = []
                     for item in content:
@@ -163,6 +146,22 @@ class TogetherAIService(BaseLLMService):
                     msg["content"] = "\n".join(c for c in cleaned_content if c)
                 elif not isinstance(content, str):
                     msg["content"] = str(content) if content is not None else ""
+
+            if "tool_calls" in msg and msg.get("tool_calls", []):
+                converted_tool_calls = []
+                for raw_tool_call in msg["tool_calls"]:
+                    tool_call = dict(raw_tool_call)
+                    converted_tool_calls.append(
+                        {
+                            "id": tool_call.get("id"),
+                            "type": tool_call.get("type", "function"),
+                            "function": {
+                                "name": tool_call.get("name", ""),
+                                "arguments": json.dumps(tool_call.get("arguments", {})),
+                            },
+                        }
+                    )
+                msg["tool_calls"] = converted_tool_calls
 
             converted_messages.append(msg)
         return converted_messages

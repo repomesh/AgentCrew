@@ -312,21 +312,9 @@ Skip evaluation for: simple one-sentence answers, or when the request matches "w
                         }
                     ]
                     msg.pop("tool_name", None)
-                    msg.pop("tool_call_id", None)
                     msg.pop("is_rejected", None)
                     msg["role"] = "user"
                     continue
-                # else:
-                #     disclaimer = "Generate a concise note of what you found from the results in your next message, the tool results will disappear soon."
-                #     if isinstance(msg["content"], list):
-                #         msg["content"].append(
-                #             {
-                #                 "type": "text",
-                #                 "text": disclaimer,
-                #             }
-                #         )
-                #     else:
-                #         msg["content"] += disclaimer
 
         if len(unique_tool_indices) > 1:
             for i in unique_tool_indices[:-1]:

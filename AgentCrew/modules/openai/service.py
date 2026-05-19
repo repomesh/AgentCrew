@@ -81,6 +81,8 @@ class OpenAIService(BaseLLMService):
             if msg.get("role") == "consolidated":
                 msg["role"] = "user"
                 msg.pop("metadata", None)
+            elif msg.get("role") == "user":
+                msg.pop("tool_call_id", None)
 
             if "tool_calls" in msg and msg.get("tool_calls", []):
                 for tool_call in msg["tool_calls"]:
