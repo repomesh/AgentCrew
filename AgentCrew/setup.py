@@ -81,6 +81,7 @@ class ApplicationSetup:
         keys_to_check = [
             "ANTHROPIC_API_KEY",
             "GEMINI_API_KEY",
+            "CROFAI_API_KEY",
             "OPENAI_API_KEY",
             "DEEPINFRA_API_KEY",
             "TOGETHER_API_KEY",

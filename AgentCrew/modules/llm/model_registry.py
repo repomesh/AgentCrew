@@ -12,6 +12,7 @@ PROVIDER_API_KEY_MAP: dict[str, str] = {
     "openai_response": "OPENAI_API_KEY",
     "google": "GEMINI_API_KEY",
     "deepinfra": "DEEPINFRA_API_KEY",
+    "crofai": "CROFAI_API_KEY",
     "together": "TOGETHER_API_KEY",
     "opencode_go": "OPENCODE_API_KEY",
     "opencode_anthropic": "OPENCODE_API_KEY",

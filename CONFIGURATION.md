@@ -48,6 +48,8 @@ Add your API keys to connect AgentCrew with AI providers:
 
 **Optional Keys:**
 
+- `CROFAI_API_KEY` - For CrofAI's OpenAI-compatible LLM provider
+- `CROFAI_BASE_URL` - Optional CrofAI endpoint override (defaults to `https://crof.ai/v1`)
 - `TAVILY_API_KEY` - For web search capabilities
 - `VOYAGE_API_KEY` - For alternative embedding provider
 - `ELEVENLABS_API_KEY` - For voice synthesis
@@ -59,9 +61,30 @@ Add your API keys to connect AgentCrew with AI providers:
 - Google Gemini: <https://aistudio.google.com/apikey>
 - GitHub Copilot: Authenticate using `agentcrew copilot-auth`
 - DeepInfra: <https://deepinfra.com/dash/api_keys>
+- CrofAI: <https://crof.ai/>
 - Tavily: <https://tavily.com/>
 - Voyage AI: <https://www.voyageai.com/>
 - ElevenLabs: <https://elevenlabs.io/>
+
+### CrofAI
+
+CrofAI is available as a built-in OpenAI-compatible provider. Set the API key in
+`.env` or your shell environment:
+
+```bash
+CROFAI_API_KEY="your-api-key"
+```
+
+AgentCrew uses `https://crof.ai/v1` by default. To point at another compatible
+CrofAI endpoint, set:
+
+```bash
+CROFAI_BASE_URL="https://crof.ai/v1"
+```
+
+The `/usage` command calls CrofAI's account usage endpoint at `/usage_api/` and
+shows remaining daily requests plus account credit balance when available. This
+account usage is separate from per-call token usage reported by chat responses.
 
 ### Custom LLM Providers
 

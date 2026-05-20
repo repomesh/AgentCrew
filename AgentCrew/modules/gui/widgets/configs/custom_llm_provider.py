@@ -230,7 +230,10 @@ class ModelEditorDialog(QDialog):
         force_params = data.get("force_sample_params")
         if force_params and isinstance(force_params, dict):
             self.force_sample_group.setChecked(True)
-            if "temperature" in force_params and force_params["temperature"] is not None:
+            if (
+                "temperature" in force_params
+                and force_params["temperature"] is not None
+            ):
                 self.sample_temperature.setValue(force_params["temperature"])
             if "top_p" in force_params and force_params["top_p"] is not None:
                 self.sample_top_p.setValue(force_params["top_p"])
@@ -242,7 +245,9 @@ class ModelEditorDialog(QDialog):
                 "frequency_penalty" in force_params
                 and force_params["frequency_penalty"] is not None
             ):
-                self.sample_frequency_penalty.setValue(force_params["frequency_penalty"])
+                self.sample_frequency_penalty.setValue(
+                    force_params["frequency_penalty"]
+                )
             if (
                 "presence_penalty" in force_params
                 and force_params["presence_penalty"] is not None
@@ -252,7 +257,9 @@ class ModelEditorDialog(QDialog):
                 "repetition_penalty" in force_params
                 and force_params["repetition_penalty"] is not None
             ):
-                self.sample_repetition_penalty.setValue(force_params["repetition_penalty"])
+                self.sample_repetition_penalty.setValue(
+                    force_params["repetition_penalty"]
+                )
         # Model.provider is set by self.provider_name
         # Model.default is not directly edited here, assumed False for models within a custom provider list
 
@@ -278,7 +285,10 @@ class ModelEditorDialog(QDialog):
         if self.force_sample_group.isChecked():
             force_sample_params = {}
             temp = self.sample_temperature.value()
-            if self.sample_temperature.text() != self.sample_temperature.specialValueText():
+            if (
+                self.sample_temperature.text()
+                != self.sample_temperature.specialValueText()
+            ):
                 force_sample_params["temperature"] = temp
             top_p = self.sample_top_p.value()
             if self.sample_top_p.text() != self.sample_top_p.specialValueText():
@@ -290,13 +300,22 @@ class ModelEditorDialog(QDialog):
             if self.sample_top_k.text() != self.sample_top_k.specialValueText():
                 force_sample_params["top_k"] = top_k
             freq_p = self.sample_frequency_penalty.value()
-            if self.sample_frequency_penalty.text() != self.sample_frequency_penalty.specialValueText():
+            if (
+                self.sample_frequency_penalty.text()
+                != self.sample_frequency_penalty.specialValueText()
+            ):
                 force_sample_params["frequency_penalty"] = freq_p
             pres_p = self.sample_presence_penalty.value()
-            if self.sample_presence_penalty.text() != self.sample_presence_penalty.specialValueText():
+            if (
+                self.sample_presence_penalty.text()
+                != self.sample_presence_penalty.specialValueText()
+            ):
                 force_sample_params["presence_penalty"] = pres_p
             rep_p = self.sample_repetition_penalty.value()
-            if self.sample_repetition_penalty.text() != self.sample_repetition_penalty.specialValueText():
+            if (
+                self.sample_repetition_penalty.text()
+                != self.sample_repetition_penalty.specialValueText()
+            ):
                 force_sample_params["repetition_penalty"] = rep_p
             if not force_sample_params:
                 force_sample_params = None
