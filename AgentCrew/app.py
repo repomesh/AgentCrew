@@ -96,6 +96,9 @@ class AgentCrewApplication:
                         "No LLM API key found. Please set either ANTHROPIC_API_KEY, GEMINI_API_KEY, OPENAI_API_KEY, DEEPINFRA_API_KEY, TOGETHER_API_KEY, or OPENCODE_API_KEY"
                     )
 
+            if not model_id:
+                model_id = self.setup.detect_model_id()
+
             services = self.setup.setup_services(
                 provider, memory_llm, with_voice=with_voice, model_id=model_id
             )
@@ -152,6 +155,9 @@ class AgentCrewApplication:
                     config_window.tab_widget.setCurrentIndex(3)
                     config_window.show()
                     sys.exit(app.exec())
+
+            if not model_id:
+                model_id = self.setup.detect_model_id()
 
             services = self.setup.setup_services(
                 provider, memory_llm, with_voice=with_voice, model_id=model_id
@@ -226,6 +232,9 @@ class AgentCrewApplication:
                         "No LLM API key found. Please set either ANTHROPIC_API_KEY, GEMINI_API_KEY, OPENAI_API_KEY, DEEPINFRA_API_KEY, TOGETHER_API_KEY, or OPENCODE_API_KEY"
                     )
 
+            if not model_id:
+                model_id = self.setup.detect_model_id()
+
             need_memory = bool(memory_path)
             services = self.setup.setup_services(
                 provider, memory_llm, need_memory=need_memory, model_id=model_id
@@ -284,6 +293,9 @@ class AgentCrewApplication:
                     logger.error(
                         "No LLM API key found. Please set either ANTHROPIC_API_KEY, GEMINI_API_KEY, OPENAI_API_KEY, DEEPINFRA_API_KEY, TOGETHER_API_KEY, or OPENCODE_API_KEY"
                     )
+
+            if not model_id:
+                model_id = self.setup.detect_model_id()
 
             services = self.setup.setup_services(
                 provider, memory_llm, model_id=model_id
@@ -398,6 +410,9 @@ class AgentCrewApplication:
                     raise ValueError(
                         "No LLM API key found. Please set either ANTHROPIC_API_KEY, GEMINI_API_KEY, OPENAI_API_KEY, DEEPINFRA_API_KEY, TOGETHER_API_KEY, or OPENCODE_API_KEY"
                     )
+
+            if not model_id:
+                model_id = self.setup.detect_model_id()
 
             need_memory = bool(memory_path)
 

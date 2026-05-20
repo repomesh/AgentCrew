@@ -97,6 +97,14 @@ class ApplicationSetup:
                 os.environ[key_name] = str(api_keys_config[key_name]).strip()
 
     def detect_provider(self) -> str | None:
+        env_provider = os.getenv("AGENTCREW_PROVIDER")
+        if env_provider:
+            if env_provider in PROVIDER_LIST:
+                return env_provider
+            custom_providers = GlobalConfig().read_custom_llm_providers_config()
+            if any(p["name"] == env_provider for p in custom_providers):
+                return env_provider
+
         try:
             last_provider = GlobalConfig().get_last_used_provider()
             if last_provider:
@@ -150,6 +158,9 @@ class ApplicationSetup:
                 return custom_providers[0]["name"]
 
         return None
+
+    def detect_model_id(self) -> str | None:
+        return os.getenv("AGENTCREW_MODEL_ID")
 
     def setup_services(
         self,
@@ -334,7 +345,7 @@ class ApplicationSetup:
         except ValueError:
             self.agent_manager.agent_mode = AgentMode.TRANSFER
 
-        llm_service = services["llm"]
+        default_llm_service = services["llm"]
 
         if config_uri:
             config_uri = os.path.expanduser(config_uri)
@@ -382,6 +393,7 @@ tools = ["memory", "browser", "web_search", "code_analysis"]
             click.echo(f"Created default agent configuration at {config_uri}")
             agent_definitions = AgentManager.load_agents_from_config(config_uri)
 
+        standalone_llm_service = None
         for agent_def in agent_definitions:
             if agent_def.get("base_url", ""):
                 try:
@@ -404,34 +416,43 @@ tools = ["memory", "browser", "web_search", "code_analysis"]
                     if model_id:
                         model = registry.get_model(model_id)
                         if model:
-                            llm_service = (
+                            standalone_llm_service = (
                                 llm_manager.initialize_standalone_service_for_model(
                                     model
                                 )
                             )
-                            llm_manager.apply_model_defaults(llm_service, model)
+                            llm_manager.apply_model_defaults(
+                                standalone_llm_service, model
+                            )
                         else:
-                            llm_service = llm_manager.initialize_standalone_service(
+                            standalone_llm_service = (
+                                llm_manager.initialize_standalone_service(
+                                    standalone_provider
+                                )
+                            )
+                            standalone_llm_service.model = model_id
+                    else:
+                        standalone_llm_service = (
+                            llm_manager.initialize_standalone_service(
                                 standalone_provider
                             )
-                            llm_service.model = model_id
-                    else:
-                        llm_service = llm_manager.initialize_standalone_service(
-                            standalone_provider
                         )
 
                 agent_model_id = agent_def.get("model_id")
+                agent_dedicated_llm = None
                 resolved_llm = (
                     AgentManager.resolve_llm_service_from_config(agent_def)
                     if agent_model_id
                     else None
                 )
                 if resolved_llm:
-                    llm_service = resolved_llm
+                    agent_dedicated_llm = resolved_llm
                 agent = LocalAgent(
                     name=agent_def["name"],
                     description=agent_def["description"],
-                    llm_service=llm_service,
+                    llm_service=agent_dedicated_llm
+                    or standalone_llm_service
+                    or default_llm_service,
                     services=services,
                     tools=agent_def["tools"],
                     temperature=agent_def.get("temperature", None),
