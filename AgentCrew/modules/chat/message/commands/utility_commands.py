@@ -110,7 +110,15 @@ class UtilityCommands:
             name = str(limit.get("name") or "unknown")
             used = cls._format_usage_percent(limit.get("used_percent"))
             remaining = cls._format_usage_percent(limit.get("remaining_percent"))
-            line = f"{name} limit: {used} used, {remaining} left"
+            remaining_raw = limit.get("remaining")
+            if remaining_raw is not None and limit.get("remaining_percent") is None and limit.get("used_percent") is None:
+                line = f"{name} limit: {remaining_raw} remaining"
+            else:
+                line = f"{name} limit: {used} used, {remaining} left"
+            if limit.get("window_seconds") == 86400:
+                name_lower = name.lower()
+                if "hour" not in name_lower:
+                    line += " (daily)"
             reset_at = cls._format_reset_time(limit.get("reset_at"))
             if reset_at:
                 line += f", resets at {reset_at}"

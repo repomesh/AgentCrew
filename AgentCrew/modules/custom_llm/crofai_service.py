@@ -68,12 +68,12 @@ class CrofAIService(CustomLLMService):
                     "name": "daily requests",
                     "used_percent": None,
                     "remaining_percent": None,
-                    "window_seconds": None,
+                    "window_seconds": 86400,
                     "reset_at": None,
                     "reset_after_seconds": None,
                     "remaining": usable_requests,
                     "entitlement": None,
-                    "unlimited": usable_requests is None,
+                    "unlimited": False,
                 }
             )
 
