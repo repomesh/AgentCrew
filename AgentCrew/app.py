@@ -13,7 +13,6 @@ from AgentCrew.setup import ApplicationSetup, PROVIDER_LIST
 from AgentCrew.modules.config import ConfigManagement
 from AgentCrew.modules.config.global_config import GlobalConfig
 from AgentCrew.modules.llm.service_manager import ServiceManager
-from AgentCrew.modules.agents.local_agent import LocalAgent
 
 nest_asyncio.apply()
 
@@ -448,10 +447,6 @@ class AgentCrewApplication:
                 raise ValueError("Agent manager is not initialized")
 
             self.agent_manager.update_llm_service(llm_service)
-
-            for local_agent in self.agent_manager.agents.values():
-                if isinstance(local_agent, LocalAgent):
-                    local_agent.is_remoting_mode = True
 
             self.agent_manager.enforce_transfer = False
             self.agent_manager.one_turn_process = True

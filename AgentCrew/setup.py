@@ -33,6 +33,7 @@ PROVIDER_LIST = [
     "openai",
     "openai_codex",
     "google",
+    "crofai",
     "deepinfra",
     "together",
     "opencode_go",
