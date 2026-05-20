@@ -28,20 +28,6 @@ class AgentToolRegistrar:
         """
         agent = self._agent
 
-        from AgentCrew.modules.agents.tools.ask import (
-            register as register_ask,
-            ask_tool_prompt,
-        )
-
-        register_ask(agent)
-        agent.tool_prompts.append(ask_tool_prompt())
-
-        skills_service = agent.services.get("skills")
-        if skills_service and skills_service.has_skills():
-            from AgentCrew.modules.skills.tool import register as register_skills
-
-            register_skills(skills_service, agent)
-
         voice_service = agent.services.get("voice")
         if voice_service and getattr(agent, "voice_enabled", "disabled") != "disabled":
             from AgentCrew.modules.voice.tool import (
@@ -51,52 +37,6 @@ class AgentToolRegistrar:
 
             register_speak(voice_service, agent)
             agent.tool_prompts.append(speak_tool_prompt())
-
-        if agent.services.get("agent_manager"):
-            from AgentCrew.modules.llm.model_registry import ModelRegistry
-
-            max_ctx = os.getenv(
-                "AGENTCREW_DEFAULT_MAX_CONTEXT",
-                ModelRegistry.get_model_limit(agent.get_model()),
-            )
-            agent.tool_prompts.append(
-                agent.services["agent_manager"].get_context_awareness_prompt(max_ctx)
-            )
-
-            from AgentCrew.modules.agents.manager import AgentMode
-
-            mode = agent.services["agent_manager"].agent_mode
-            if not agent.is_remoting_mode and mode == AgentMode.TRANSFER:
-                from AgentCrew.modules.agents.tools.transfer import (
-                    register as register_transfer,
-                    transfer_tool_prompt,
-                )
-
-                agent.tool_prompts.append(
-                    agent.services["agent_manager"].get_agents_list_prompt()
-                )
-                register_transfer(agent.services["agent_manager"], agent)
-                agent.tool_prompts.append(
-                    transfer_tool_prompt(agent.services["agent_manager"])
-                )
-                agent._colaboration_mode = AgentMode.TRANSFER
-            elif (
-                mode != AgentMode.NONE
-                and len(agent.services["agent_manager"].agents) > 1
-            ):  # DELEGATE MODE for remoting mode also
-                from AgentCrew.modules.agents.tools.delegate import (
-                    register as register_delegate,
-                    delegate_tool_prompt,
-                )
-
-                agent.tool_prompts.append(
-                    agent.services["agent_manager"].get_agents_list_prompt()
-                )
-                register_delegate(agent.services["agent_manager"], agent)
-                agent.tool_prompts.append(
-                    delegate_tool_prompt(agent.services["agent_manager"])
-                )
-                agent._colaboration_mode = AgentMode.DELEGATE
 
         for tool_name in agent.tools:
             if agent.services and tool_name in agent.services:
@@ -161,6 +101,66 @@ class AgentToolRegistrar:
                 logger.warning(
                     f"⚠️ Service {tool_name} not available for tool registration"
                 )
+
+        from AgentCrew.modules.agents.tools.ask import (
+            register as register_ask,
+            ask_tool_prompt,
+        )
+
+        register_ask(agent)
+        agent.tool_prompts.append(ask_tool_prompt())
+
+        skills_service = agent.services.get("skills")
+        if skills_service and skills_service.has_skills():
+            from AgentCrew.modules.skills.tool import register as register_skills
+
+            register_skills(skills_service, agent)
+
+        if agent.services.get("agent_manager"):
+            from AgentCrew.modules.agents.manager import AgentMode
+
+            mode = agent.services["agent_manager"].agent_mode
+            if not agent.is_remoting_mode and mode == AgentMode.TRANSFER:
+                from AgentCrew.modules.agents.tools.transfer import (
+                    register as register_transfer,
+                    transfer_tool_prompt,
+                )
+
+                agent.tool_prompts.append(
+                    agent.services["agent_manager"].get_agents_list_prompt()
+                )
+                register_transfer(agent.services["agent_manager"], agent)
+                agent.tool_prompts.append(
+                    transfer_tool_prompt(agent.services["agent_manager"])
+                )
+                agent._colaboration_mode = AgentMode.TRANSFER
+            elif (
+                mode != AgentMode.NONE
+                and len(agent.services["agent_manager"].agents) > 1
+            ):  # DELEGATE MODE for remoting mode also
+                from AgentCrew.modules.agents.tools.delegate import (
+                    register as register_delegate,
+                    delegate_tool_prompt,
+                )
+
+                agent.tool_prompts.append(
+                    agent.services["agent_manager"].get_agents_list_prompt()
+                )
+                register_delegate(agent.services["agent_manager"], agent)
+                agent.tool_prompts.append(
+                    delegate_tool_prompt(agent.services["agent_manager"])
+                )
+                agent._colaboration_mode = AgentMode.DELEGATE
+
+            from AgentCrew.modules.llm.model_registry import ModelRegistry
+
+            max_ctx = os.getenv(
+                "AGENTCREW_DEFAULT_MAX_CONTEXT",
+                ModelRegistry.get_model_limit(agent.get_model()),
+            )
+            agent.tool_prompts.append(
+                agent.services["agent_manager"].get_context_awareness_prompt(max_ctx)
+            )
 
     def register_tool(
         self,
