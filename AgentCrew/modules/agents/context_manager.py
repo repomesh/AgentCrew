@@ -24,20 +24,12 @@ class AgentContextManager:
 
     def build_adaptive_context(self) -> dict[str, Any]:
         """Build the adaptive behavior dict (cwd, git branch, open files, etc.)."""
-        from AgentCrew.modules.memory.context_persistent import (
-            ContextPersistenceService,
-        )
 
         agent = self._agent
         adaptive_messages: dict[str, Any] = {
             "role": "user",
             "content": [],
         }
-
-        if "context_persistent" not in agent.services or not isinstance(
-            agent.services["context_persistent"], ContextPersistenceService
-        ):
-            return adaptive_messages
 
         if (
             agent.services.get("agent_manager")
@@ -47,9 +39,37 @@ class AgentContextManager:
                 {
                     "type": "text",
                     "text": """My next request is single-turn conversation.
-You must analyze then execute it with your available tools and give answer without asking for confirmation or clarification.""",
+You must analyze then execute it with your available tools and execute then give the results without asking for confirmation or clarification.""",
                 }
             )
+
+        skills_service = agent.services.get("skills")
+        if skills_service and skills_service.has_skills():
+            catalog = skills_service.get_catalog()
+            skills_xml = "\n".join(
+                f"  <skill><name>{s['name']}</name><description>{s['description']}</description></skill>"
+                for s in catalog
+            )
+            adaptive_messages["content"].append(
+                {
+                    "type": "text",
+                    "text": (
+                        f"<available_skills>\n{skills_xml}\n</available_skills>\n"
+                        "When a task matches a skill's description, call the "
+                        "`activate_skill` tool with the skill's name to load its "
+                        "full instructions before proceeding."
+                    ),
+                }
+            )
+
+        from AgentCrew.modules.memory.context_persistent import (
+            ContextPersistenceService,
+        )
+
+        if "context_persistent" not in agent.services or not isinstance(
+            agent.services["context_persistent"], ContextPersistenceService
+        ):
+            return adaptive_messages
 
         adaptive_text = []
         adaptive_behaviors = agent.services[
@@ -92,25 +112,6 @@ Apply matching behaviors from <Adaptive_Behaviors> immediately, overriding defau
 <Adaptive_Behaviors>
 {"  \n".join(adaptive_text)}
 </Adaptive_Behaviors>""",
-                }
-            )
-
-        skills_service = agent.services.get("skills")
-        if skills_service and skills_service.has_skills():
-            catalog = skills_service.get_catalog()
-            skills_xml = "\n".join(
-                f"  <skill><name>{s['name']}</name><description>{s['description']}</description></skill>"
-                for s in catalog
-            )
-            adaptive_messages["content"].append(
-                {
-                    "type": "text",
-                    "text": (
-                        f"<available_skills>\n{skills_xml}\n</available_skills>\n"
-                        "When a task matches a skill's description, call the "
-                        "`activate_skill` tool with the skill's name to load its "
-                        "full instructions before proceeding."
-                    ),
                 }
             )
 
