@@ -1,8 +1,9 @@
+from __future__ import annotations
 import asyncio
 import os
 import re
 import sys
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import tomllib
 from loguru import logger
@@ -21,6 +22,9 @@ from AgentCrew.modules.agents.agent_runner import run_agent_loop
 from AgentCrew.modules.agents.local_agent import LocalAgent
 from AgentCrew.modules.config.agents_config import AgentsConfig
 from AgentCrew.modules.web_search.tool import register as register_web_search
+
+if TYPE_CHECKING:
+    from AgentCrew.modules.llm.base import BaseLLMService
 
 _ONBOARDING_SYSTEM_PROMPT = """
 ## Agent Identity
@@ -213,7 +217,7 @@ class OnboardingService:
 
     def __init__(
         self,
-        llm_service: Any,
+        llm_service: BaseLLMService,
         agents_config: AgentsConfig | None = None,
         services: dict[str, Any] | None = None,
     ):
@@ -474,11 +478,12 @@ class OnboardingService:
             tools=[],
             temperature=1.0,
         )
-        onboarding_agent.llm.set_system_prompt(_ONBOARDING_SYSTEM_PROMPT)
+        if onboarding_agent.llm:
+            onboarding_agent.llm.set_system_prompt(_ONBOARDING_SYSTEM_PROMPT)
         search_service = self.services.get("web_search")
         if search_service:
             register_web_search(search_service, onboarding_agent)
-            onboarding_agent._register_tools_with_llm()
+            onboarding_agent.resync_tools_to_llm()
         return onboarding_agent
 
     async def _generate_onboarding_response(

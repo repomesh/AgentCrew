@@ -38,23 +38,30 @@ class AgentContextManager:
             adaptive_messages["content"].append(
                 {
                     "type": "text",
-                    "text": """My next request is single-turn conversation.
+                    "text": """User request is single-turn conversation.
 You must analyze then execute it with your available tools and execute then give the results without asking for confirmation or clarification.""",
+                }
+            )
+
+        mcp_resources_prompt = self._build_mcp_resources_prompt()
+        if mcp_resources_prompt:
+            adaptive_messages["content"].append(
+                {
+                    "type": "text",
+                    "text": mcp_resources_prompt,
                 }
             )
 
         skills_service = agent.services.get("skills")
         if skills_service and skills_service.has_skills():
             catalog = skills_service.get_catalog()
-            skills_xml = "\n".join(
-                f"  <skill><name>{s['name']}</name><description>{s['description']}</description></skill>"
-                for s in catalog
-            )
+            skill_lines = [f"- **{s['name']}**: {s['description']}" for s in catalog]
             adaptive_messages["content"].append(
                 {
                     "type": "text",
                     "text": (
-                        f"<available_skills>\n{skills_xml}\n</available_skills>\n"
+                        "## Available Skills\n"
+                        f"{'\n'.join(skill_lines)}\n\n"
                         "When a task matches a skill's description, call the "
                         "`activate_skill` tool with the skill's name to load its "
                         "full instructions before proceeding."
@@ -71,51 +78,83 @@ You must analyze then execute it with your available tools and execute then give
         ):
             return adaptive_messages
 
-        adaptive_text = []
-        adaptive_behaviors = agent.services[
-            "context_persistent"
-        ].get_adaptive_behaviors(agent.name)
-
-        if len(adaptive_behaviors.keys()) > 0:
-            adaptive_text.extend(
-                [
-                    f"<Global_Behavior id='{key}'>{value}</Global_Behavior>"
-                    for key, value in adaptive_behaviors.items()
-                ]
-            )
-
-        local_adaptive_behaviors = agent.services[
-            "context_persistent"
-        ].get_adaptive_behaviors(agent.name, is_local=True)
-        if len(local_adaptive_behaviors.keys()) > 0:
-            adaptive_text.extend(
-                [
-                    f"<Project_Behavior id='{key}'>{value}</Project_Behavior>"
-                    for key, value in local_adaptive_behaviors.items()
-                ]
-            )
-
-        adaptive_text.extend(
-            [
-                "<Global_Behavior id='transfer'>When working on my request, consider whether if any other agents is more suitable, if yes, transfer to that agent.</Global_Behavior>",
-                "<Global_Behavior id='good-to-say-no'>When encountering tasks that you have no data in the context and you don't know the anwser, say I don't know and ask user for helping you find the solution.</Global_Behavior>",
-            ]
+        global_behaviors = dict(
+            agent.services["context_persistent"].get_adaptive_behaviors(agent.name)
+        )
+        global_behaviors.update(
+            {
+                "transfer": "When working on user request, consider whether if any other agents is more suitable, if yes, transfer to that agent.",
+                "good-to-say-no": "When encountering tasks that you have no data in the context and you don't know the anwser, say I don't know and ask user for helping you find the solution.",
+            }
+        )
+        project_behaviors = agent.services["context_persistent"].get_adaptive_behaviors(
+            agent.name, is_local=True
         )
 
-        if len(adaptive_text) > 0:
+        adaptive_sections = []
+        if global_behaviors:
+            adaptive_sections.append(
+                "### Global Behaviors\n"
+                + "\n".join(
+                    f"- `{key}`: {value}" for key, value in global_behaviors.items()
+                )
+            )
+        if project_behaviors:
+            adaptive_sections.append(
+                "### Project Behaviors\n"
+                + "\n".join(
+                    f"- `{key}`: {value}" for key, value in project_behaviors.items()
+                )
+            )
+
+        if adaptive_sections:
             adaptive_messages["content"].append(
                 {
                     "type": "text",
-                    "text": f"""---
-Apply matching behaviors from <Adaptive_Behaviors> immediately, overriding default instructions.
-<Project_Behavior> has higher priority than <Global_Behavior>.
-<Adaptive_Behaviors>
-{"  \n".join(adaptive_text)}
-</Adaptive_Behaviors>""",
+                    "text": (
+                        "---\n"
+                        "## Adaptive Behaviors\n"
+                        "Apply matching behaviors immediately, overriding default instructions.\n"
+                        "Project behaviors have higher priority than global behaviors.\n\n"
+                        f"{'\n\n'.join(adaptive_sections)}"
+                    ),
                 }
             )
 
         return adaptive_messages
+
+    def _build_mcp_resources_prompt(self) -> str:
+        agent = self._agent
+        mcp_resources = getattr(agent, "mcp_resources", None)
+        if not mcp_resources:
+            return ""
+
+        server_blocks = []
+        for server_name, resources in mcp_resources.items():
+            resource_blocks = []
+            for resource in resources:
+                fields = []
+                for key in ("uri", "name", "title", "description", "mimeType", "size"):
+                    value = resource.get(key)
+                    if value is not None and value != "":
+                        fields.append(f"  - **{key}**: {value}")
+                if fields:
+                    resource_blocks.append("- Resource\n" + "\n".join(fields))
+            if resource_blocks:
+                tool_name = f"{server_name}__get_resource"
+                server_blocks.append(
+                    f"### Server: `{server_name}`\n"
+                    f"Get resource tool: `{tool_name}`\n\n" + "\n".join(resource_blocks)
+                )
+
+        if not server_blocks:
+            return ""
+
+        return (
+            "## MCP Resources\n"
+            "Available MCP resources are listed by server. To fetch a resource, call the matching server-scoped get_resource tool with the exact uri.\n\n"
+            f"{'\n\n'.join(server_blocks)}"
+        )
 
     def _get_directory_structure(self) -> str:
         try:
@@ -178,7 +217,7 @@ Apply matching behaviors from <Adaptive_Behaviors> immediately, overriding defau
                     adaptive_messages["content"].append(
                         {
                             "type": "text",
-                            "text": f"Our last recent conversations:\n- {'\n - '.join(memory_headers)}\n---\n If this is a new or different topic from our current conversation, call search_memory before responding.\n --- End of current context ---\n --- Start user request ---",
+                            "text": f"Our last recent conversations:\n- {'\n - '.join(memory_headers)}\n---\n If this is a new or different topic from our current conversation, call search_memory before responding.",
                         }
                     )
 
@@ -189,13 +228,13 @@ Apply matching behaviors from <Adaptive_Behaviors> immediately, overriding defau
                 from AgentCrew.modules.agents.manager import AgentMode
 
                 if agent._colaboration_mode == AgentMode.TRANSFER:
-                    eval_text = """Before processing my request, quickly evaluate inside <agent_evaluation> tags:
+                    eval_text = """Before processing user request, quickly evaluate inside <agent_evaluation> tags:
 - Plan out the tool call strategy for this request: which tools to call, in what order, and what inputs each needs.
 - Is another agent better suited? If yes, transfer immediately.
 Then execute your plan.
 Skip evaluation for: simple one-sentence answers, or when the request matches "when [condition], [action]" — call `learn_behavior` directly instead."""
                 elif agent._colaboration_mode == AgentMode.DELEGATE:
-                    eval_text = """Before processing my request, quickly evaluate inside <agent_evaluation> tags:
+                    eval_text = """Before processing user request, quickly evaluate inside <agent_evaluation> tags:
 - Plan out the tool call strategy for this request: which tools to call, in what order, and what inputs each needs.
 - Can any sub-tasks be delegated to specialist agents? If yes, delegate them.
 - Can multiple sub-tasks run in parallel? If yes, emit multiple delegate calls in one turn.
@@ -214,6 +253,9 @@ Skip evaluation for: simple one-sentence answers, or when the request matches "w
                     )
 
         if len(adaptive_messages["content"]) > 0:
+            adaptive_messages["content"].append(
+                {"type": "text", "text": "--- Begin user request ---"}
+            )
             final_messages.insert(last_user_index, adaptive_messages)
 
     def shrink_tool_results(self, final_messages: list[dict[str, Any]]) -> None:
