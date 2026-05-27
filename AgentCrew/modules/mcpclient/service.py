@@ -458,10 +458,15 @@ class MCPService:
                     raise ValueError(
                         f"Cannot read resource: Server '{server_name}' is not connected"
                     )
-                if not any(
-                    resource.get("uri") == resource_uri
-                    for resource in self.server_resources.get(server_name, [])
-                ):
+                resource = next(
+                    (
+                        res
+                        for res in self.server_resources.get(server_name, [])
+                        if res.get("uri") == resource_uri
+                    ),
+                    None,
+                )
+                if not resource:
                     raise ValueError(
                         f"Resource URI is not available on MCP server '{server_name}': {resource_uri}"
                     )
@@ -469,7 +474,9 @@ class MCPService:
                 resource_link = ResourceLink(
                     type="resource_link",
                     uri=AnyUrl(resource_uri),
-                    name=resource_uri,
+                    name=resource.get("name", resource_uri),
+                    description=resource.get("description"),
+                    mimeType=resource.get("mimeType"),
                 )
                 return self._format_resource_link(
                     resource_link, self.sessions[combined_server_id]
