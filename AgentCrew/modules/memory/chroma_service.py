@@ -82,14 +82,6 @@ class ChromaMemoryService(BaseMemoryService):
                 model_name="voyage-3.5",
             )
             self.embedding_function = voyage_ef
-        elif os.getenv("GITHUB_COPILOT_API_KEY"):
-            from .github_copilot_ef import GithubCopilotEmbeddingFunction
-
-            github_copilot_ef = GithubCopilotEmbeddingFunction(
-                api_key=os.getenv("GITHUB_COPILOT_API_KEY"),
-                model_name="text-embedding-3-small",
-            )
-            self.embedding_function = github_copilot_ef
         elif os.getenv("OPENAI_API_KEY"):
             openai_ef = embedding_functions.OpenAIEmbeddingFunction(
                 api_key=os.getenv("OPENAI_API_KEY"),
