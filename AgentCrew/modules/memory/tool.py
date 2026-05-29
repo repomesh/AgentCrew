@@ -313,11 +313,6 @@ def get_learn_behavior_tool_handler(
             )
             behavior = f"when {condition}, do run following steps: {steps_joined}"
 
-        if context.llm_service:
-            await persistence_service.clean_adaptive_behaviors(
-                context.agent_name, context.llm_service
-            )
-
         try:
             success = persistence_service.store_adaptive_behavior(
                 context.agent_name,
