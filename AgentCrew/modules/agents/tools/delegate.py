@@ -107,6 +107,9 @@ def get_delegate_tool_handler(agent_manager: AgentManager) -> Callable:
 
         registry = ModelRegistry.get_instance()
         model = registry.get_model(target_agent.get_model())
+        if not target_agent.llm:
+            raise ValueError("LLM of Agent not found")
+
         service_name = (
             model.resolved_service_name() if model else target_agent.llm.provider_name
         )
@@ -134,7 +137,7 @@ def get_delegate_tool_handler(agent_manager: AgentManager) -> Callable:
                 }
             ]
 
-            response = await run_agent_loop(
+            response, _ = await run_agent_loop(
                 agent=clone,
                 history=delegate_history,
                 tool_filter=lambda t: t["name"] not in ["transfer", "delegate"],

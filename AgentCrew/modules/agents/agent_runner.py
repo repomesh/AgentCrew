@@ -14,7 +14,7 @@ async def run_agent_loop(
     history: list[dict[str, Any]],
     *,
     tool_filter: Callable[[dict[str, Any]], bool] | None = None,
-) -> str:
+) -> tuple[str, TokenUsage]:
     current_response = ""
     thinking_content = ""
     thinking_signature = ""
@@ -43,7 +43,7 @@ async def run_agent_loop(
     if not tool_uses:
         user_message = agent._extract_last_user_message_for_memory(history)
         agent.store_memory_if_available(user_message, history, current_response)
-        return current_response
+        return current_response, token_usage
 
     if tool_filter:
         filtered = [t for t in tool_uses if tool_filter(t)]
@@ -53,7 +53,7 @@ async def run_agent_loop(
     if not filtered:
         user_message = agent._extract_last_user_message_for_memory(history)
         agent.store_memory_if_available(user_message, history, current_response)
-        return current_response
+        return current_response, token_usage
 
     thinking_data = (thinking_content, thinking_signature) if thinking_content else None
     thinking_message = agent.format_message(

@@ -490,7 +490,8 @@ class OnboardingService:
         self, onboarding_agent: LocalAgent, prompt: str
     ) -> str | None:
         history = [{"role": "user", "content": [{"type": "text", "text": prompt}]}]
-        return await run_agent_loop(onboarding_agent, history)
+        response, _ = await run_agent_loop(onboarding_agent, history)
+        return response
 
     def _copy_llm_attribute(self, name: str) -> Any:
         value = getattr(self.llm_service, name, None)

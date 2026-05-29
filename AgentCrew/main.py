@@ -425,6 +425,12 @@ def acp_agent(
     default=None,
     help="JSON schema (file path or JSON string) to enforce structured output format",
 )
+@click.option(
+    "--token-usage-file",
+    default=None,
+    type=click.Path(),
+    help="Write token usage as JSON to this file",
+)
 @click.argument(
     "task",
     nargs=1,
@@ -444,6 +450,7 @@ def job(
     memory_llm,
     memory_path,
     output_schema,
+    token_usage_file,
     task,
     files,
 ):
@@ -466,6 +473,7 @@ def job(
             memory_llm=memory_llm,
             memory_path=memory_path,
             output_schema=output_schema,
+            token_usage_file=token_usage_file,
         )
         click.echo(response)
     except Exception as e:

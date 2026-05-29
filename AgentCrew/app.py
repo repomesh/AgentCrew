@@ -397,6 +397,7 @@ class AgentCrewApplication:
         memory_llm: str | None = None,
         memory_path: str | None = None,
         output_schema: str | None = None,
+        token_usage_file: str | None = None,
     ) -> str:
         from AgentCrew.modules.agents.agent_runner import run_agent_loop
         from AgentCrew.modules.agents.base import MessageType
@@ -503,10 +504,11 @@ class AgentCrewApplication:
                 max_attempts = 4
                 attempt = 0
                 response = None
+                token_usage = None
 
                 while attempt < max_attempts:
                     attempt += 1
-                    response = asyncio.run(
+                    response, token_usage = asyncio.run(
                         run_agent_loop(
                             agent=current_agent,
                             history=history,
@@ -544,6 +546,14 @@ class AgentCrewApplication:
                                     ],
                                 }
                             )
+
+                if token_usage_file and token_usage:
+                    from dataclasses import asdict
+
+                    token_usage_path = os.path.expanduser(token_usage_file)
+                    os.makedirs(os.path.dirname(token_usage_path) or ".", exist_ok=True)
+                    with open(token_usage_path, "w") as f:
+                        json.dump(asdict(token_usage), f, indent=2)
 
                 MCPSessionManager.get_instance().cleanup()
                 return self._clean_json_response(response).strip() if response else ""
