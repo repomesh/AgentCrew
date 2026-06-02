@@ -518,7 +518,7 @@ class AgentCrewApplication:
                     if not output_schema or not schema_dict:
                         break
 
-                    if response is None:
+                    if response is None or response.strip() == "":
                         history.append(
                             {
                                 "role": "user",
