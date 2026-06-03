@@ -108,33 +108,29 @@ class FileEditingService:
                 file_path, result["new_content"]
             )
 
-            if not syntax_result.is_valid:
-                if backup_path and os.path.exists(backup_path):
-                    shutil.copy2(backup_path, file_path)
-
-                return {
-                    "status": "syntax_error",
-                    "errors": [
-                        {
-                            "line": err.line,
-                            "column": err.column,
-                            "message": err.message,
-                            "severity": err.severity,
-                        }
-                        for err in syntax_result.errors
-                    ],
-                    "language": syntax_result.language,
-                    "suggestion": "Fix syntax errors and retry. File has been restored from backup.",
-                    "backup_restored": backup_path is not None,
-                }
-
             self._atomic_write(file_path, result["new_content"])
+
+            syntax_warnings = None
+            if not syntax_result.is_valid:
+                syntax_warnings = [
+                    {
+                        "line": err.line,
+                        "column": err.column,
+                        "message": err.message,
+                        "severity": err.severity,
+                    }
+                    for err in syntax_result.errors
+                ]
 
             return {
                 "status": "success",
                 "file_path": file_path,
                 "changes_applied": result.get("blocks_applied", 1),
-                "syntax_check": {"is_valid": True, "language": syntax_result.language},
+                "syntax_check": {
+                    "is_valid": syntax_result.is_valid,
+                    "language": syntax_result.language,
+                    "warnings": syntax_warnings,
+                },
                 "backup_created": backup_path is not None,
             }
 

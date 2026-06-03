@@ -126,28 +126,25 @@ def get_file_write_or_edit_tool_handler(
         if result["status"] == "success":
             parts = [f"{result['file_path']}"]
             parts.append(f"{result.get('changes_applied', 1)} change(s)")
-            if result.get("syntax_check", {}).get("is_valid"):
+            syntax = result.get("syntax_check", {})
+            if syntax.get("is_valid"):
+                parts.append(f"syntax OK ({syntax.get('language', '?')})")
+            elif syntax.get("warnings"):
+                warnings = "\n".join(
+                    f"  L{w['line']}:C{w['column']} {w['message']}"
+                    for w in syntax["warnings"][:5]
+                )
+                extra = (
+                    f"\n  +{len(syntax['warnings']) - 5} more"
+                    if len(syntax["warnings"]) > 5
+                    else ""
+                )
                 parts.append(
-                    f"syntax OK ({result['syntax_check'].get('language', '?')})"
+                    f"syntax WARNING ({syntax.get('language', '?')}):\n{warnings}{extra}"
                 )
             if result.get("backup_created"):
                 parts.append("backup OK")
             return " | ".join(parts)
-
-        elif result["status"] == "syntax_error":
-            errors = "\n".join(
-                [
-                    f"L{e['line']}:C{e['column']} {e['message']}"
-                    for e in result.get("errors", [])[:5]
-                ]
-            )
-            extra = (
-                f"\n+{len(result['errors']) - 5} more"
-                if len(result.get("errors", [])) > 5
-                else ""
-            )
-            restore = " | Backup restored" if result.get("backup_restored") else ""
-            return f"Syntax ({result.get('language', '?')}):\n{errors}{extra}{restore}"
 
         elif result["status"] in ["no_match", "ambiguous"]:
             return f"{result['status'].title()}: {result.get('error', '?')} (block {result.get('block_index', '?')})"

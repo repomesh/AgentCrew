@@ -200,8 +200,22 @@ async def _local_write_file(file_path: str, blocks: list[dict[str, str]]) -> str
     if result["status"] == "success":
         parts = [f"{result['file_path']}"]
         parts.append(f"{result.get('changes_applied', 1)} change(s)")
-        if result.get("syntax_check", {}).get("is_valid"):
+        syntax = result.get("syntax_check", {})
+        if syntax.get("is_valid"):
             parts.append("Syntax check passed.")
+        elif syntax.get("warnings"):
+            warnings = "\n".join(
+                f"  L{w['line']}:C{w['column']} {w['message']}"
+                for w in syntax["warnings"][:5]
+            )
+            extra = (
+                f"\n  +{len(syntax['warnings']) - 5} more"
+                if len(syntax["warnings"]) > 5
+                else ""
+            )
+            parts.append(
+                f"Syntax WARNING ({syntax.get('language', '?')}):\n{warnings}{extra}"
+            )
         return " ".join(parts)
     return f"Error writing file: {result.get('error', 'Unknown error')}"
 
