@@ -18,8 +18,7 @@ from rich.panel import Panel
 from rich.text import Text
 from rich.markdown import Markdown
 
-from AgentCrew.modules.agents.agent_runner import run_agent_loop
-from AgentCrew.modules.agents.local_agent import LocalAgent
+from AgentCrew.modules.agents import run_agent_loop, LocalAgent
 from AgentCrew.modules.config.agents_config import AgentsConfig
 from AgentCrew.modules.web_search.tool import register as register_web_search
 

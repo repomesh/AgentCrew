@@ -232,8 +232,8 @@ def job(
     try:
         app = AgentCrewApplication()
         response = app.run_job(
-            agent=agent,
             task=task,
+            agent=agent,
             files=list(files) if files else None,
             provider=provider,
             model_id=model_id,

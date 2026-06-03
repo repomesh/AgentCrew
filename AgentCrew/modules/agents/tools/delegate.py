@@ -1,7 +1,6 @@
 from typing import Any, Callable
 
-from AgentCrew.modules.agents import AgentManager
-from AgentCrew.modules.agents.agent_runner import run_agent_loop
+from AgentCrew.modules.agents import AgentManager, run_agent_loop
 
 
 def get_delegate_tool_definition() -> dict[str, Any]:

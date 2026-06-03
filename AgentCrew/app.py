@@ -388,8 +388,8 @@ class AgentCrewApplication:
 
     def run_job(
         self,
-        agent: str,
         task: str,
+        agent: str | None = None,
         files: list[str] | None = None,
         provider: str | None = None,
         model_id: str | None = None,
@@ -400,7 +400,7 @@ class AgentCrewApplication:
         output_schema: str | None = None,
         token_usage_file: str | None = None,
     ) -> str:
-        from AgentCrew.modules.agents.agent_runner import run_agent_loop
+        from AgentCrew.modules.agents import run_agent_loop, LocalAgent
         from AgentCrew.modules.agents.base import MessageType
         from AgentCrew.modules.mcpclient import MCPSessionManager
         from AgentCrew.modules.llm.model_registry import ModelRegistry
@@ -454,9 +454,17 @@ class AgentCrewApplication:
             self.agent_manager.enforce_transfer = False
             self.agent_manager.one_turn_process = True
 
-            current_agent = self.agent_manager.get_local_agent(agent)
+            if agent:
+                current_agent = self.agent_manager.get_local_agent(agent)
+            else:
+                last_agent = (
+                    GlobalConfig().get_last_used_agent()
+                    or list(self.agent_manager.agents.keys())[0]
+                )
 
-            if current_agent and current_agent.llm:
+                current_agent = self.agent_manager.get_local_agent(last_agent)
+
+            if isinstance(current_agent, LocalAgent) and current_agent.llm:
                 schema_dict = None
                 if output_schema:
                     schema_prompt, schema_dict = self._parse_output_schema(
