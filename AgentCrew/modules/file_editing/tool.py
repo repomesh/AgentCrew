@@ -109,7 +109,11 @@ def get_file_write_or_edit_tool_handler(
         full_content_mode = is_full_content_mode(blocks)
 
         if full_content_mode:
-            content = blocks[0].get("replace", "")
+            content = blocks[0].get("replace", None)
+            if content is None:
+                raise ValueError(
+                    "Error: text_or_search_replace_blocks must be an array of search/replace objects."
+                )
             result = file_editing_service.write_or_edit_file(
                 file_path=file_path,
                 is_search_replace=False,
