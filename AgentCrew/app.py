@@ -435,6 +435,9 @@ class AgentCrewApplication:
             llm_manager = ServiceManager.get_instance()
             registry = ModelRegistry.get_instance()
 
+            if self.agent_manager is None:
+                raise ValueError("Agent manager is not initialized")
+
             if model_id:
                 model = registry.get_model(f"{provider}/{model_id}")
                 if model:
@@ -443,13 +446,7 @@ class AgentCrewApplication:
                 else:
                     llm_service = llm_manager.get_service_for_provider(provider)
                     llm_service.model = model_id
-            else:
-                llm_service = llm_manager.get_service_for_provider(provider)
-
-            if self.agent_manager is None:
-                raise ValueError("Agent manager is not initialized")
-
-            self.agent_manager.update_llm_service(llm_service)
+                self.agent_manager.update_llm_service(llm_service)
 
             self.agent_manager.enforce_transfer = False
             self.agent_manager.one_turn_process = True
