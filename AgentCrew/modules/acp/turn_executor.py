@@ -119,6 +119,7 @@ class TurnExecutor:
             if isinstance(e, APIError):
                 if (
                     e.code == "model_max_prompt_tokens_exceeded"
+                    or e.code == "context_length_exceeded"
                     or e.message.find("This endpoint's maximum context length is") >= 0
                     or e.message.find(
                         "Your input exceeds the context window of this model."
