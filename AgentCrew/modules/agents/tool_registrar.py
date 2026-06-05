@@ -102,14 +102,6 @@ class AgentToolRegistrar:
                     f"⚠️ Service {tool_name} not available for tool registration"
                 )
 
-        from AgentCrew.modules.agents.tools.ask import (
-            register as register_ask,
-            ask_tool_prompt,
-        )
-
-        register_ask(agent)
-        agent.tool_prompts.append(ask_tool_prompt())
-
         skills_service = agent.services.get("skills")
         if skills_service and skills_service.has_skills():
             from AgentCrew.modules.skills.tool import register as register_skills
@@ -151,6 +143,15 @@ class AgentToolRegistrar:
                     delegate_tool_prompt(agent.services["agent_manager"])
                 )
                 agent._colaboration_mode = AgentMode.DELEGATE
+
+            if not agent.services["agent_manager"].one_turn_process:
+                from AgentCrew.modules.agents.tools.ask import (
+                    register as register_ask,
+                    ask_tool_prompt,
+                )
+
+                register_ask(agent)
+                agent.tool_prompts.append(ask_tool_prompt())
 
             from AgentCrew.modules.llm.model_registry import ModelRegistry
 

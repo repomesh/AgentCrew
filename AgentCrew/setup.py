@@ -12,12 +12,6 @@ from AgentCrew.modules.config import ConfigManagement
 from AgentCrew.modules.config.global_config import GlobalConfig
 from AgentCrew.modules.llm.model_registry import ModelRegistry
 from AgentCrew.modules.llm.service_manager import ServiceManager
-from AgentCrew.modules.memory.chroma_service import ChromaMemoryService
-from AgentCrew.modules.memory.context_persistent import ContextPersistenceService
-from AgentCrew.modules.clipboard import ClipboardService
-from AgentCrew.modules.web_search import TavilySearchService
-from AgentCrew.modules.code_analysis import CodeAnalysisService
-from AgentCrew.modules.browser_automation import BrowserAutomationService
 from AgentCrew.modules.agents import AgentManager, LocalAgent, RemoteAgent
 from AgentCrew.modules.agents.example import (
     DEFAULT_NAME,
@@ -219,14 +213,24 @@ class ApplicationSetup:
         memory_service = None
         context_service = None
         if need_memory:
+            from AgentCrew.modules.memory.chroma_service import ChromaMemoryService
+            from AgentCrew.modules.memory.context_persistent import (
+                ContextPersistenceService,
+            )
+
             memory_provider = memory_llm or provider
             memory_llm_svc = llm_manager.initialize_standalone_service(memory_provider)
             memory_service = ChromaMemoryService(llm_service=memory_llm_svc)
 
             context_service = ContextPersistenceService()
+
+        from AgentCrew.modules.clipboard import ClipboardService
+
         clipboard_service = ClipboardService()
 
         try:
+            from AgentCrew.modules.web_search import TavilySearchService
+
             search_service = TavilySearchService()
         except ValueError as e:
             click.echo(
@@ -243,6 +247,8 @@ class ApplicationSetup:
             search_service = None
 
         try:
+            from AgentCrew.modules.code_analysis import CodeAnalysisService
+
             code_analysis_llm = llm_manager.initialize_standalone_service(provider)
             code_analysis_service = CodeAnalysisService(llm_service=code_analysis_llm)
         except Exception as e:
@@ -250,6 +256,8 @@ class ApplicationSetup:
             code_analysis_service = None
 
         try:
+            from AgentCrew.modules.browser_automation import BrowserAutomationService
+
             browser_automation_service = BrowserAutomationService()
         except Exception as e:
             click.echo(
@@ -318,20 +326,9 @@ class ApplicationSetup:
             "skills": skills_service,
             "voice": voice_service,
         }
-        return self.services
 
-    def setup_agents(
-        self,
-        services: dict[str, Any],
-        config_uri: str | None = None,
-        standalone_provider: str | None = None,
-        model_id: str | None = None,
-    ) -> AgentManager:
         self.agent_manager = AgentManager.get_instance()
-        llm_manager = ServiceManager.get_instance()
-        registry = ModelRegistry.get_instance()
-
-        services["agent_manager"] = self.agent_manager
+        self.services["agent_manager"] = self.agent_manager
 
         global_config = GlobalConfig().read()
         self.agent_manager.context_shrink_enabled = global_config.get(
@@ -350,6 +347,20 @@ class ApplicationSetup:
             self.agent_manager.agent_mode = AgentMode(agent_mode_str)
         except ValueError:
             self.agent_manager.agent_mode = AgentMode.TRANSFER
+
+        return self.services
+
+    def setup_agents(
+        self,
+        services: dict[str, Any],
+        config_uri: str | None = None,
+        standalone_provider: str | None = None,
+        model_id: str | None = None,
+    ) -> AgentManager:
+        if self.agent_manager is None:
+            raise ValueError("Agent manager is not initialized")
+        llm_manager = ServiceManager.get_instance()
+        registry = ModelRegistry.get_instance()
 
         default_llm_service = services["llm"]
 

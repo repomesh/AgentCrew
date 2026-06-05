@@ -430,13 +430,30 @@ class AgentCrewApplication:
 
             os.environ["AGENTCREW_DISABLE_GUI"] = "true"
 
-            self.setup.setup_agents(services, agent_config)
-
             llm_manager = ServiceManager.get_instance()
             registry = ModelRegistry.get_instance()
 
             if self.agent_manager is None:
                 raise ValueError("Agent manager is not initialized")
+
+            self.agent_manager.enforce_transfer = False
+            self.agent_manager.one_turn_process = True
+
+            if agent:
+                self.setup.setup_agents(services, agent_config)
+                current_agent = self.agent_manager.get_local_agent(agent)
+            else:
+                llm_service = services["llm"]
+                llm_service.clear_tools()
+                current_agent = LocalAgent(
+                    name="job",
+                    description="Lightweight job agent",
+                    llm_service=llm_service,
+                    services=services,
+                    tools=[],
+                )
+                current_agent.set_system_prompt("you are a helpful AI assistant.")
+                self.agent_manager.register_agent(current_agent)
 
             if model_id:
                 model = registry.get_model(f"{provider}/{model_id}")
@@ -447,19 +464,6 @@ class AgentCrewApplication:
                     llm_service = llm_manager.get_service_for_provider(provider)
                     llm_service.model = model_id
                 self.agent_manager.update_llm_service(llm_service)
-
-            self.agent_manager.enforce_transfer = False
-            self.agent_manager.one_turn_process = True
-
-            if agent:
-                current_agent = self.agent_manager.get_local_agent(agent)
-            else:
-                last_agent = (
-                    GlobalConfig().get_last_used_agent()
-                    or list(self.agent_manager.agents.keys())[0]
-                )
-
-                current_agent = self.agent_manager.get_local_agent(last_agent)
 
             if isinstance(current_agent, LocalAgent) and current_agent.llm:
                 schema_dict = None
