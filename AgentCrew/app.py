@@ -513,7 +513,7 @@ class AgentCrewApplication:
 
                 max_attempts = 4
                 attempt = 0
-                response = None
+                response = ""
                 token_usage = None
 
                 while attempt < max_attempts:
@@ -527,7 +527,7 @@ class AgentCrewApplication:
                     if not output_schema or not schema_dict:
                         break
 
-                    if response is None or response.strip() == "":
+                    if response.strip() == "":
                         history.append(
                             {
                                 "role": "user",
@@ -566,6 +566,9 @@ class AgentCrewApplication:
                         json.dump(asdict(token_usage), f, indent=2)
 
                 MCPSessionManager.get_instance().cleanup()
+
+                if not output_schema or not schema_dict:
+                    return response.strip()
                 return self._clean_json_response(response).strip() if response else ""
             else:
                 raise ValueError(f"Agent '{agent}' not found")

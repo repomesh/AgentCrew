@@ -45,6 +45,11 @@ async def run_agent_loop(
     if not tool_uses:
         user_message = agent._extract_last_user_message_for_memory(history)
         agent.store_memory_if_available(user_message, history, current_response)
+        # Prevent agent loop exit with empty response
+        if current_response.strip() == "":
+            return await run_agent_loop(
+                agent, history, tool_filter=tool_filter, prior_token_usage=token_usage
+            )
         return current_response, token_usage
 
     if tool_filter:
