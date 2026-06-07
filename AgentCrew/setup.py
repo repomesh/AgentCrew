@@ -199,6 +199,7 @@ class ApplicationSetup:
                     f"{default_model.provider}/{default_model.id}"
                 )
                 llm_service = llm_manager.get_service_for_model(default_model)
+                llm_manager.set_model_for_llm(default_model)
             else:
                 llm_service = llm_manager.get_service_for_provider(provider)
 
