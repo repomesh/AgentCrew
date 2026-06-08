@@ -3,7 +3,7 @@ import os
 from dotenv import load_dotenv
 from loguru import logger
 from typing import Tuple, Any
-import ast
+
 from AgentCrew.modules.llm.token_usage import TokenUsage
 
 
@@ -124,15 +124,6 @@ class DeepInfraService(CustomLLMService):
                     )
                     if tool_call_index is None:
                         continue
-
-                    parsed_input = tool_uses[tool_call_index].get("input", {})
-                    if isinstance(parsed_input, dict):
-                        for key, value in parsed_input.items():
-                            if isinstance(value, str):
-                                try:
-                                    parsed_input[key] = ast.literal_eval(value)
-                                except Exception:
-                                    pass
 
         return (
             assistant_response or " ",

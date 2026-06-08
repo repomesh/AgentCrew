@@ -3,6 +3,7 @@ from AgentCrew.modules.openai import OpenAIService
 from AgentCrew.modules.llm.base import AsyncIterator
 from AgentCrew.modules.llm.token_usage import TokenUsage
 from typing import Any, Tuple
+import ast
 import json
 from loguru import logger
 
@@ -52,6 +53,38 @@ class CustomLLMService(OpenAIService):
                 return {}
         return {}
 
+    @staticmethod
+    def _normalize_tool_input_values(tool_input: dict[str, Any]) -> dict[str, Any]:
+        if not isinstance(tool_input, dict):
+            return tool_input
+        for key, value in list(tool_input.items()):
+            if not isinstance(value, str):
+                continue
+            stripped = value.strip()
+            if not stripped:
+                continue
+            if stripped.startswith(("[", "{")):
+                parsed = CustomLLMService._try_parse_container_literal(stripped)
+                if parsed is not None:
+                    tool_input[key] = parsed
+        return tool_input
+
+    @staticmethod
+    def _try_parse_container_literal(value: str) -> Any:
+        try:
+            parsed = json.loads(value)
+            if isinstance(parsed, (list, dict)):
+                return parsed
+        except json.JSONDecodeError:
+            pass
+        try:
+            parsed = ast.literal_eval(value)
+            if isinstance(parsed, (list, dict, tuple)):
+                return parsed
+        except (ValueError, SyntaxError):
+            pass
+        return None
+
     def _normalize_tool_call_for_request(
         self, raw_tool_call: dict[str, Any]
     ) -> dict[str, Any] | None:
@@ -83,14 +116,16 @@ class CustomLLMService(OpenAIService):
             )
             return False
 
+        tool_input = self._safe_json_loads(
+            getattr(function, "arguments", "") if function else ""
+        )
+        self._normalize_tool_input_values(tool_input)
         tool_uses.append(
             {
                 "id": getattr(tool_call, "id", None)
                 or f"toolu_{tool_name}_{len(tool_uses)}",
                 "name": tool_name,
-                "input": self._safe_json_loads(
-                    getattr(function, "arguments", "") if function else ""
-                ),
+                "input": tool_input,
                 "type": getattr(tool_call, "type", "function"),
                 "response": "",
             }
@@ -171,6 +206,7 @@ class CustomLLMService(OpenAIService):
                 try:
                     parsed_arguments = json.loads(tool_use["args_json"])
                     if isinstance(parsed_arguments, dict):
+                        self._normalize_tool_input_values(parsed_arguments)
                         tool_use["input"] = parsed_arguments
                 except json.JSONDecodeError:
                     pass
@@ -478,11 +514,13 @@ class CustomLLMService(OpenAIService):
 
                 try:
                     tool_data = json.loads(tool_call_content)
+                    tool_input = tool_data.get("arguments", {})
+                    self._normalize_tool_input_values(tool_input)
                     tool_uses.append(
                         {
                             "id": f"toolu_{len(tool_uses)}",  # Generate an ID
                             "name": tool_data.get("name", ""),
-                            "input": tool_data.get("arguments", {}),
+                            "input": tool_input,
                             "type": "function",
                             "response": "",
                         }

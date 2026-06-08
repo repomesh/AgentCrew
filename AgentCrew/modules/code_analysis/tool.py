@@ -164,6 +164,9 @@ def get_file_content_tool_handler(
         if not file_path:
             raise Exception("File path is required")
 
+        if not os.path.exists(file_path):
+            raise ValueError(f"File {file_path} not found.")
+
         if not os.path.isabs(file_path):
             abs_file_path = os.path.abspath(os.path.expanduser(file_path))
         else:
