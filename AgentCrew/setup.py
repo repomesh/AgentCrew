@@ -108,6 +108,7 @@ class ApplicationSetup:
                     api_key_map = {
                         "claude": "ANTHROPIC_API_KEY",
                         "google": "GEMINI_API_KEY",
+                        "crofai": "CROFAI_API_KEY",
                         "openai": "OPENAI_API_KEY",
                         "deepinfra": "DEEPINFRA_API_KEY",
                         "together": "TOGETHER_API_KEY",
@@ -147,6 +148,8 @@ class ApplicationSetup:
             return "together"
         elif os.getenv("OPENCODE_API_KEY"):
             return "opencode_go"
+        elif os.getenv("CROFAI_API_KEY"):
+            return "crofai"
         elif os.getenv("COMMAND_CODE_API_KEY"):
             return "commandcode"
         elif os.getenv("FIREWORKS_API_KEY"):

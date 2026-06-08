@@ -22,7 +22,7 @@ def common_options(func):
         "--provider",
         type=click.Choice(PROVIDER_LIST),
         default=None,
-        help="LLM provider to use (claude, openai, google, github_copilot, deepinfra, together, opencode_go, or commandcode)",
+        help="LLM provider to use (claude, openai, google, crofai, github_copilot, deepinfra, together, opencode_go, commandcode, or openai_codex)",
     )
     @click.option(
         "--agent-config",
@@ -40,6 +40,7 @@ def common_options(func):
                 "openai",
                 "openai_codex",
                 "google",
+                "crofai",
                 "deepinfra",
                 "together",
                 "opencode_go",
@@ -93,7 +94,7 @@ class AgentCrewApplication:
                 provider = self.setup.detect_provider()
                 if provider is None:
                     raise ValueError(
-                        "No LLM API key found. Please set either ANTHROPIC_API_KEY, GEMINI_API_KEY, OPENAI_API_KEY, DEEPINFRA_API_KEY, TOGETHER_API_KEY, or OPENCODE_API_KEY"
+                        "No LLM API key found. Please set either ANTHROPIC_API_KEY, GEMINI_API_KEY, OPENAI_API_KEY, CROFAI_API_KEY, DEEPINFRA_API_KEY, TOGETHER_API_KEY, or OPENCODE_API_KEY"
                     )
 
             if not model_id:
@@ -229,7 +230,7 @@ class AgentCrewApplication:
                 provider = self.setup.detect_provider()
                 if provider is None:
                     raise ValueError(
-                        "No LLM API key found. Please set either ANTHROPIC_API_KEY, GEMINI_API_KEY, OPENAI_API_KEY, DEEPINFRA_API_KEY, TOGETHER_API_KEY, or OPENCODE_API_KEY"
+                        "No LLM API key found. Please set either ANTHROPIC_API_KEY, GEMINI_API_KEY, OPENAI_API_KEY, CROFAI_API_KEY, DEEPINFRA_API_KEY, TOGETHER_API_KEY, or OPENCODE_API_KEY"
                     )
 
             if not model_id:
@@ -291,7 +292,7 @@ class AgentCrewApplication:
                 if provider is None:
                     provider = "opencode_go"
                     logger.error(
-                        "No LLM API key found. Please set either ANTHROPIC_API_KEY, GEMINI_API_KEY, OPENAI_API_KEY, DEEPINFRA_API_KEY, TOGETHER_API_KEY, or OPENCODE_API_KEY"
+                        "No LLM API key found. Please set either ANTHROPIC_API_KEY, GEMINI_API_KEY, OPENAI_API_KEY, CROFAI_API_KEY, DEEPINFRA_API_KEY, TOGETHER_API_KEY, or OPENCODE_API_KEY"
                     )
 
             if not model_id:
@@ -410,7 +411,7 @@ class AgentCrewApplication:
                 provider = self.setup.detect_provider()
                 if provider is None:
                     raise ValueError(
-                        "No LLM API key found. Please set either ANTHROPIC_API_KEY, GEMINI_API_KEY, OPENAI_API_KEY, DEEPINFRA_API_KEY, TOGETHER_API_KEY, or OPENCODE_API_KEY"
+                        "No LLM API key found. Please set either ANTHROPIC_API_KEY, GEMINI_API_KEY, OPENAI_API_KEY, CROFAI_API_KEY, DEEPINFRA_API_KEY, TOGETHER_API_KEY, or OPENCODE_API_KEY"
                     )
 
             if not model_id:

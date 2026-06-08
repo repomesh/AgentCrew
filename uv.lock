@@ -198,7 +198,7 @@ requires-dist = [
     { name = "sounddevice", specifier = "==0.5.5" },
     { name = "soundfile", specifier = "==0.13.1" },
     { name = "tavily-python", specifier = "==0.7.23" },
-    { name = "together", specifier = "==2.10.0" },
+    { name = "together", specifier = "==2.16.0" },
     { name = "tomli-w", specifier = "==1.2.0" },
     { name = "torch", marker = "sys_platform == 'darwin' and extra == 'cpu'", specifier = "==2.11.0", index = "https://pypi.org/simple/", conflict = { package = "agentcrew-ai", extra = "cpu" } },
     { name = "torch", marker = "sys_platform != 'darwin' and extra == 'cpu'", specifier = "==2.11.0", index = "https://download.pytorch.org/whl/cpu", conflict = { package = "agentcrew-ai", extra = "cpu" } },
@@ -7238,7 +7238,7 @@ wheels = [
 
 [[package]]
 name = "together"
-version = "2.10.0"
+version = "2.16.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "anyio" },
@@ -7258,9 +7258,9 @@ dependencies = [
     { name = "types-tqdm" },
     { name = "typing-extensions" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/9d/a5/555fc4c18d577d8cfe3b9388dd97367e4971dfc1ffecb6b4c6bc8ace515a/together-2.10.0.tar.gz", hash = "sha256:7535ad0ef09ff69b38007ece95aef4c5471a26e4b6259d48329ef7d4baf0c02d", size = 559035, upload-time = "2026-04-23T15:41:40.228Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/59/4d/b0dfd36f79bf21ceacd2293e8b66d977c1adccc440325512420c57d5abbd/together-2.16.0.tar.gz", hash = "sha256:92b0a1bebe285715feb72886030e8bb3d5743ec24f6ac6ee911d7920bb5593c3", size = 605742, upload-time = "2026-05-23T15:19:24.495Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/e0/65/94f9924135905685f77d7b2dbb22d7a9dd5935023661463051f30d033456/together-2.10.0-py3-none-any.whl", hash = "sha256:3e7295763532df04fcf022c9e04a76f88f2b91ae48a93e7df44ac4f4bb61e87e", size = 354406, upload-time = "2026-04-23T15:41:41.938Z" },
+    { url = "https://files.pythonhosted.org/packages/21/64/8b7b262febafab861f9c2bb10a33131a904e9152a7141b61197885851a09/together-2.16.0-py3-none-any.whl", hash = "sha256:cc01b67a97e88f023cd17789c0a3ff944fd33848aa7cbc90eb4f4537a2027558", size = 403968, upload-time = "2026-05-23T15:19:23.281Z" },
 ]
 
 [[package]]
