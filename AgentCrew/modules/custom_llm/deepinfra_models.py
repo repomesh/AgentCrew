@@ -124,6 +124,21 @@ DEEPINFRA_MODELS = [
         output_token_price_1m=2.6,
     ),
     Model(
+        id="Qwen/Qwen3.5-9B",
+        provider="deepinfra",
+        name="Qwen 3.5 9B",
+        description="Qwen3.5 is the latest generation of large language models in Qwen series, offering a comprehensive suite of dense and mixture-of-experts (MoE) models",
+        capabilities=["tool_use", "thinking", "vision", "stream", "structured_output"],
+        force_sample_params=SampleParam(
+            temperature=0.6,
+            top_p=0.95,
+            top_k=20,
+            repetition_penalty=1.0,
+        ),
+        input_token_price_1m=0.1,
+        output_token_price_1m=0.15,
+    ),
+    Model(
         id="moonshotai/Kimi-K2.5",
         provider="deepinfra",
         name="Kimi K2.5",

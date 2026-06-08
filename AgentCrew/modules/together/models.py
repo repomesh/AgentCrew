@@ -53,9 +53,9 @@ TOGETHER_MODELS = [
         provider="together",
         name="Qwen 3.5 9B FP8",
         description="Small and efficient Qwen chat model on Together AI",
-        capabilities=["tool_use", "stream", "structured_output"],
-        input_token_price_1m=0.1,
-        output_token_price_1m=0.15,
+        capabilities=["tool_use", "vision", "stream", "structured_output"],
+        input_token_price_1m=0.17,
+        output_token_price_1m=0.25,
     ),
     Model(
         id="google/gemma-4-31B-it",
