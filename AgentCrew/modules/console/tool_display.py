@@ -45,7 +45,7 @@ class ToolDisplayHandlers:
             "retrieve_memory": "💭",
             "forget_memory_topic": "🗑️",
             "analyze_repo": "📂",
-            "get_file": "📄",
+            "read_file": "📄",
         }
         return tool_icons.get(tool_name, "🔧")
 
@@ -91,16 +91,12 @@ class ToolDisplayHandlers:
 
         tool_parameters = tool_use.get("input") or tool_use.get("arguments")
 
-        if tool_use["name"] == "write_or_edit_file" and isinstance(
-            tool_parameters, dict
-        ):
+        if tool_use["name"] == "write_file" and isinstance(tool_parameters, dict):
             file_path = tool_parameters.get("file_path", "")
             text_or_blocks = tool_parameters.get("text_or_search_replace_blocks", "")
 
             if DiffDisplay.has_search_replace_blocks(text_or_blocks):
-                self._display_write_or_edit_file_use(
-                    tool_use, file_path, text_or_blocks
-                )
+                self._display_write_file_use(tool_use, file_path, text_or_blocks)
                 return
 
         if isinstance(tool_parameters, dict):
@@ -139,12 +135,12 @@ class ToolDisplayHandlers:
             )
         )
 
-    def _display_write_or_edit_file_use(self, tool_use: dict, file_path: str, blocks):
+    def _display_write_file_use(self, tool_use: dict, file_path: str, blocks):
         """Display write_or_edit_file tool with split diff view."""
         tool_icon = self.get_tool_icon(tool_use["name"])
 
         header = Text(f"{tool_icon} Tool: ", style=RICH_STYLE_GRAY)
-        header.append("write_or_edit_file", style=RICH_STYLE_GRAY)
+        header.append("write_file", style=RICH_STYLE_GRAY)
         header.append(f" → {file_path}", style=RICH_STYLE_BLUE)
 
         self.console.print(Panel(header, box=HORIZONTALS, title_align="left"))

@@ -140,7 +140,7 @@ def get_file_content_tool_definition():
     return {
         "type": "function",
         "function": {
-            "name": "get_file",
+            "name": "read_file",
             "description": tool_description,
             "parameters": {
                 "type": "object",
@@ -560,7 +560,7 @@ def register(service_instance=None, agent=None):
 
     This function registers all available tools from the code_analysis module:
     - analyze_repo: Analyze code structure and create structural maps
-    - get_file: Retrieve file content or specific line ranges
+    - read_file: Retrieve file content or specific line ranges
     - find_files: Search for files by pattern
     - grep_text: Search for text patterns within file contents
 

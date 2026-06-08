@@ -58,7 +58,7 @@ class ProjectNotesExtractor:
         rule_files_section = ""
         if found_rule_files:
             rule_files_section = f"""\n\nIMPORTANT: The following project rule/instruction files were detected in the repository:
-{chr(10).join(f"- {f}" for f in found_rule_files)}\n\nYou MUST read these files using the get_file tool to understand project-specific rules and conventions before making any changes."""
+{chr(10).join(f"- {f}" for f in found_rule_files)}\n\nYou MUST read these files using the read_file tool to understand project-specific rules and conventions before making any changes."""
 
         feature_scope_instruction = ""
         if feature_scope:
@@ -128,5 +128,5 @@ Keep it under 600 words."""
         if found_rule_files:
             notes += "\n\nIMPORTANT: The following project rule/instruction files were detected:\n"
             notes += chr(10).join(f"- {f}" for f in found_rule_files)
-            notes += "\n\nYou MUST read these files using the get_file tool before making any changes."
+            notes += "\n\nYou MUST read these files using the read_file tool before making any changes."
         return notes

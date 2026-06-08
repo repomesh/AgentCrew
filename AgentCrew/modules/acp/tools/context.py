@@ -21,7 +21,7 @@ class AcpSessionContext:
 def classify_tool_kind(tool_name: str) -> ToolKind:
     if (
         "read" in tool_name
-        or "get_file" in tool_name
+        or "read_file" in tool_name
         or "grep" in tool_name
         or "find" in tool_name
     ):

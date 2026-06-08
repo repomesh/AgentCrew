@@ -55,8 +55,6 @@ class CustomLLMService(OpenAIService):
 
     @staticmethod
     def _normalize_tool_input_values(tool_input: dict[str, Any]) -> dict[str, Any]:
-        if not isinstance(tool_input, dict):
-            return tool_input
         for key, value in list(tool_input.items()):
             if not isinstance(value, str):
                 continue

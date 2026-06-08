@@ -164,8 +164,8 @@ class ToolEventHandler:
             self._handle_ask_tool_confirmation(tool_use, confirmation_id)
             return
 
-        if tool_use["name"] == "write_or_edit_file":
-            self._handle_write_or_edit_file_confirmation(tool_use, confirmation_id)
+        if tool_use["name"] == "write_file":
+            self._handle_write_file_confirmation(tool_use, confirmation_id)
             return
 
         dialog = QMessageBox(self.chat_window)
@@ -294,7 +294,7 @@ class ToolEventHandler:
         self.chat_window.bubble_state.current_response_bubble = None
         self.chat_window.bubble_state.current_response_container = None
 
-    def _handle_write_or_edit_file_confirmation(self, tool_use, confirmation_id):
+    def _handle_write_file_confirmation(self, tool_use, confirmation_id):
         """Handle write_or_edit_file tool confirmation with diff view."""
         from PySide6.QtWidgets import QWidget, QHBoxLayout
 
@@ -419,23 +419,23 @@ class ToolEventHandler:
                 confirmation_id, {"action": "approve_all"}
             )
             self.chat_window.display_status_message(
-                "Approved all future write_or_edit_file calls"
+                "Approved all future write_file calls"
             )
 
         elif result["action"] == "approve_forever":
             from AgentCrew.modules.config.global_config import GlobalConfig
 
-            GlobalConfig().write_auto_approval_tools("write_or_edit_file", add=True)
+            GlobalConfig().write_auto_approval_tools("write_file", add=True)
 
             self.chat_window.message_handler.resolve_tool_confirmation(
                 confirmation_id, {"action": "approve_all"}
             )
             self.chat_window.display_status_message(
-                "write_or_edit_file will be auto-approved forever"
+                "write_file will be auto-approved forever"
             )
 
         else:
-            denial_reason = self.show_denial_reason_dialog("write_or_edit_file")
+            denial_reason = self.show_denial_reason_dialog("write_file")
 
             if denial_reason:
                 self.chat_window.message_handler.resolve_tool_confirmation(

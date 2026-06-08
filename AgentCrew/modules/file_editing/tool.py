@@ -77,7 +77,7 @@ Auto syntax check (30+ langs) with rollback on error
     return {
         "type": "function",
         "function": {
-            "name": "write_or_edit_file",
+            "name": "write_file",
             "description": tool_description,
             "parameters": {
                 "type": "object",

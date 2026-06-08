@@ -80,13 +80,13 @@ class AcpToolManager:
                 register as register_acp_fs,
             )
 
-            if can_read_files and "get_file" in agent.tool_definitions:
-                state.tool_state.acp_backup_tool_defs["get_file"] = (
-                    agent.tool_definitions.pop("get_file", None)
+            if can_read_files and "read_file" in agent.tool_definitions:
+                state.tool_state.acp_backup_tool_defs["read_file"] = (
+                    agent.tool_definitions.pop("read_file", None)
                 )
-            if can_write_files and "write_or_edit_file" in agent.tool_definitions:
-                state.tool_state.acp_backup_tool_defs["write_or_edit_file"] = (
-                    agent.tool_definitions.pop("write_or_edit_file", None)
+            if can_write_files and "write_file" in agent.tool_definitions:
+                state.tool_state.acp_backup_tool_defs["write_file"] = (
+                    agent.tool_definitions.pop("write_file", None)
                 )
             register_acp_fs(
                 agent=agent,

@@ -204,7 +204,7 @@ class ToolWidget(QWidget):
 
     def _should_show_diff_view(self) -> bool:
         """Check if this tool should display a diff view."""
-        if self.tool_name != "write_or_edit_file":
+        if self.tool_name != "write_file":
             return False
 
         arg_key = "input" if "input" in self.tool_data else "arguments"

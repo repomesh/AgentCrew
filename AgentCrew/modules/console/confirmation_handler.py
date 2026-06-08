@@ -47,15 +47,13 @@ class ConfirmationHandler:
             self._handle_ask_tool(tool_use, confirmation_id, message_handler)
             return
 
-        # Special handling for 'write_or_edit_file' tool with search/replace blocks
-        if tool_use["name"] == "write_or_edit_file":
+        # Special handling for 'write_file' tool with search/replace blocks
+        if tool_use["name"] == "write_file":
             file_path = tool_use["input"].get("file_path", "")
             text_or_blocks = tool_use["input"].get("text_or_search_replace_blocks", "")
 
             if DiffDisplay.has_search_replace_blocks(text_or_blocks):
-                self._display_write_or_edit_file_diff(
-                    tool_use, file_path, text_or_blocks
-                )
+                self._display_write_file_diff(tool_use, file_path, text_or_blocks)
                 self._get_and_handle_tool_response(
                     tool_use, confirmation_id, message_handler
                 )
@@ -127,7 +125,7 @@ class ConfirmationHandler:
 
         self.input_handler._start_input_thread()
 
-    def _display_write_or_edit_file_diff(self, tool_use, file_path, blocks):
+    def _display_write_file_diff(self, tool_use, file_path, blocks):
         """Display split diff view for write_or_edit_file tool."""
         header = Text("📝 File Edit ", style=RICH_STYLE_YELLOW)
         header.append(file_path, style=RICH_STYLE_BLUE_BOLD)
