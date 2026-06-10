@@ -426,9 +426,6 @@ class LocalAgent(BaseAgent):
 
         return True
 
-    def _build_adaptive_behavior_context(self) -> dict[str, Any]:
-        return self._context_manager.build_adaptive_context()
-
     def _get_directory_structure(self) -> str:
         return self._context_manager._get_directory_structure()
 

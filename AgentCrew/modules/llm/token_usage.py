@@ -29,9 +29,9 @@ class TokenUsage:
     def merge(self, other: TokenUsage) -> TokenUsage:
         """Return a new TokenUsage with fields summed from self and other."""
         return TokenUsage(
-            input_tokens=other.input_tokens,
-            output_tokens=other.output_tokens,
-            cached_tokens=other.cached_tokens,
+            input_tokens=other.input_tokens or self.input_tokens,
+            output_tokens=other.output_tokens or self.output_tokens,
+            cached_tokens=other.cached_tokens or self.cached_tokens,
             total_input_tokens=self.total_input_tokens
             + other.input_tokens
             + other.cached_tokens,
