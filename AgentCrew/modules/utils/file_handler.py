@@ -45,6 +45,52 @@ class FileHandler:
     def __init__(self):
         """Initialize the file handling service."""
         self.converter = None
+
+    def _guess_mime_by_extension(self, file_path: str) -> str | None:
+        extension = os.path.splitext(file_path)[1].lower().lstrip(".")
+        if extension in EXTENSION_MIME_MAPPING:
+            return EXTENSION_MIME_MAPPING[extension]
+        return None
+
+    def validate_file(self, file_path: str) -> bool:
+        """
+        Validate if the file is allowed based on MIME type and size.
+
+        Args:
+            file_path: Path to the file
+
+        Returns:
+            bool: True if file is valid, False otherwise
+        """
+        # Check if file exists
+        if not os.path.exists(file_path):
+            logger.warning(f"File does not exist: {file_path}")
+            return False
+
+        # Check file size
+        file_size = os.path.getsize(file_path)
+        if file_size > MAX_FILE_SIZE:
+            logger.warning(f"File too large: {file_path} ({file_size} bytes)")
+            return False
+
+        # Check MIME type
+        mime_type, _ = mimetypes.guess_type(file_path)
+        if not mime_type:
+            mime_type = self._guess_mime_by_extension(file_path)
+
+        if (
+            mime_type
+            and mime_type not in ALLOWED_MIME_TYPES
+            and not mime_type.startswith("text/")
+        ):
+            logger.warning(f"Unsupported MIME type: {mime_type} for {file_path}")
+            return False
+
+        return True
+
+    def initialize_docling_parser(self):
+        if self.converter is not None:
+            return self.converter
         if DOCLING_ENABLED:
             try:
                 from docling.datamodel.base_models import InputFormat
@@ -107,48 +153,6 @@ class FileHandler:
             except Exception as e:
                 logger.error(f"Failed to initialize Docling converter: {str(e)}")
 
-    def _guess_mime_by_extension(self, file_path: str) -> str | None:
-        extension = os.path.splitext(file_path)[1].lower().lstrip(".")
-        if extension in EXTENSION_MIME_MAPPING:
-            return EXTENSION_MIME_MAPPING[extension]
-        return None
-
-    def validate_file(self, file_path: str) -> bool:
-        """
-        Validate if the file is allowed based on MIME type and size.
-
-        Args:
-            file_path: Path to the file
-
-        Returns:
-            bool: True if file is valid, False otherwise
-        """
-        # Check if file exists
-        if not os.path.exists(file_path):
-            logger.warning(f"File does not exist: {file_path}")
-            return False
-
-        # Check file size
-        file_size = os.path.getsize(file_path)
-        if file_size > MAX_FILE_SIZE:
-            logger.warning(f"File too large: {file_path} ({file_size} bytes)")
-            return False
-
-        # Check MIME type
-        mime_type, _ = mimetypes.guess_type(file_path)
-        if not mime_type:
-            mime_type = self._guess_mime_by_extension(file_path)
-
-        if (
-            mime_type
-            and mime_type not in ALLOWED_MIME_TYPES
-            and not mime_type.startswith("text/")
-        ):
-            logger.warning(f"Unsupported MIME type: {mime_type} for {file_path}")
-            return False
-
-        return True
-
     def process_file(self, file_path: str) -> dict[str, Any] | None:
         """
         Process a file using Docling or fallback methods.
@@ -170,6 +174,7 @@ class FileHandler:
 
         # Use Docling for specific formats
         if DOCLING_ENABLED and self.converter and mime_type in DOCLING_FORMATS:
+            self.initialize_docling_parser()
             from docling.exceptions import ConversionError
 
             try:
