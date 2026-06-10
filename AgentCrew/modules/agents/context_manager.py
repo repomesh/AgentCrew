@@ -22,51 +22,37 @@ class AgentContextManager:
     def __init__(self, agent: "LocalAgent") -> None:
         self._agent = agent
 
-    def build_adaptive_context(self) -> dict[str, Any]:
+    def build_adaptive_context(self) -> list[str]:
         """Build the adaptive behavior dict (cwd, git branch, open files, etc.)."""
 
         agent = self._agent
-        adaptive_messages: dict[str, Any] = {
-            "role": "user",
-            "content": [],
-        }
+        adaptive_messages: list[str] = []
 
         if (
             agent.services.get("agent_manager")
             and agent.services["agent_manager"].one_turn_process
         ):
-            adaptive_messages["content"].append(
-                {
-                    "type": "text",
-                    "text": """User request is single-turn conversation.
-You must analyze then execute it with your available tools and execute then give the results without asking for confirmation or clarification.""",
-                }
+            adaptive_messages.append(
+                """User request is single-turn conversation.
+You must analyze and plan out the steps then execute it with your available tools and execute then give the results without asking for confirmation or clarification.""",
             )
 
         mcp_resources_prompt = self._build_mcp_resources_prompt()
         if mcp_resources_prompt:
-            adaptive_messages["content"].append(
-                {
-                    "type": "text",
-                    "text": mcp_resources_prompt,
-                }
-            )
+            adaptive_messages.append(mcp_resources_prompt)
 
         skills_service = agent.services.get("skills")
         if skills_service and skills_service.has_skills():
             catalog = skills_service.get_catalog()
             skill_lines = [f"- **{s['name']}**: {s['description']}" for s in catalog]
-            adaptive_messages["content"].append(
-                {
-                    "type": "text",
-                    "text": (
-                        "## Available Skills\n"
-                        f"{'\n'.join(skill_lines)}\n\n"
-                        "When a task matches a skill's description, call the "
-                        "`activate_skill` tool with the skill's name to load its "
-                        "full instructions before proceeding."
-                    ),
-                }
+            adaptive_messages.append(
+                (
+                    "## Available Skills\n"
+                    f"{'\n'.join(skill_lines)}\n\n"
+                    "When a task matches a skill's description, call the "
+                    "`activate_skill` tool with the skill's name to load its "
+                    "full instructions before proceeding."
+                )
             )
 
         from AgentCrew.modules.memory.context_persistent import (
@@ -108,17 +94,13 @@ You must analyze then execute it with your available tools and execute then give
             )
 
         if adaptive_sections:
-            adaptive_messages["content"].append(
-                {
-                    "type": "text",
-                    "text": (
-                        "---\n"
-                        "## Adaptive Behaviors\n"
-                        "Apply matching behaviors immediately, overriding default instructions.\n"
-                        "Project behaviors have higher priority than global behaviors.\n\n"
-                        f"{'\n\n'.join(adaptive_sections)}"
-                    ),
-                }
+            adaptive_messages.append(
+                (
+                    "## Adaptive Behaviors\n"
+                    "Apply matching behaviors immediately, overriding default instructions.\n"
+                    "Project behaviors have higher priority than global behaviors.\n\n"
+                    f"{'\n\n'.join(adaptive_sections)}"
+                )
             )
 
         return adaptive_messages
@@ -188,18 +170,9 @@ You must analyze then execute it with your available tools and execute then give
         last_user_index = len(final_messages) - 1 - last_user_index
 
         adaptive_messages = self.build_adaptive_context()
-
-        if last_user_index == 0:
-            dir_structure = self._get_directory_structure()
-            if dir_structure:
-                adaptive_messages["content"].append(
-                    {
-                        "type": "text",
-                        "text": f"current directory `{os.getcwd()}` has structure:\n{dir_structure}",
-                    }
-                )
-
-        if len(final_messages[last_user_index].get("content", [])) > 0 and (
+        is_user_request = len(
+            final_messages[last_user_index].get("content", [])
+        ) > 0 and (
             final_messages[last_user_index]["content"][0]
             .get("text", "")
             .find("<Transfer_Tool>")
@@ -208,59 +181,69 @@ You must analyze then execute it with your available tools and execute then give
             .get("text", "")
             .find("<Transfer_Post_Action_Reminder>")
             != 0
-        ):
+        )
+
+        if is_user_request:
             if agent.services.get("memory"):
                 memory_headers = agent.services["memory"].list_memory_headers(
                     agent_name=agent.name
                 )
                 if memory_headers:
-                    adaptive_messages["content"].append(
-                        {
-                            "type": "text",
-                            "text": f"Our last recent conversations:\n- {'\n - '.join(memory_headers)}\n---\n If this is a new or different topic from our current conversation, call search_memory before responding.",
-                        }
+                    adaptive_messages.append(
+                        f"## Recent conversations:\n- {'\n - '.join(memory_headers)}\n---\nIf the user request related to any recent conversations, call search_memory before responding."
                     )
 
-            if (
-                agent.services.get("agent_manager")
-                and agent.services["agent_manager"].agent_mode != "none"
-            ):
-                from AgentCrew.modules.agents.manager import AgentMode
+            dir_structure = self._get_directory_structure()
+            if dir_structure:
+                adaptive_messages.append(
+                    f"## Current directory `{os.getcwd()}` structure:\n{dir_structure}"
+                )
 
-                if agent._colaboration_mode == AgentMode.TRANSFER:
-                    eval_text = """Before processing user request, quickly evaluate the plan to fullfil user request inside <agent_evaluation> tags:
-- Plan out the tool call strategy for this request: which tools you should call, in what order, and what inputs each needs.
-- Sum up what you get from tool results in your next messages.
-- Is another agent better suited? If yes, transfer immediately.
-Then execute your plan.
-Skip evaluation for: simple one-sentence answers, or when the request matches "when [condition], [action]" — call `learn_behavior` directly instead."""
-                elif agent._colaboration_mode == AgentMode.DELEGATE:
-                    eval_text = """Before processing user request, quickly evaluate the plan to fullfil user request inside <agent_evaluation> tags:
-- Plan out the tool call strategy for this request: which tools you should call, in what order, and what inputs each needs.
-- Sum up what you get from tool results in your next messages.
-- Can this request break into multiple sub-tasks and be delegated to specialist agents? If yes, delegate them.
-- Can multiple sub-tasks run in parallel? If yes, emit multiple delegate calls in one turn.
-Then execute your plan.
-Skip evaluation for: simple one-sentence answers, or when the request matches "when [condition], [action]" — call `learn_behavior` directly instead."""
-                else:
-                    eval_text = """"Before processing user request, quickly evaluate the plan to fullfil user request inside <agent_evaluation> tags:
-- Plan out the tool call strategy for this request: which tools you should call, in what order, and what inputs each needs.
-- Sum up what you get from tool results in your next messages."""
+        if (
+            agent.services.get("agent_manager")
+            and not agent.services["agent_manager"].one_turn_process
+        ):
+            from AgentCrew.modules.agents.manager import AgentMode
 
-                if eval_text:
-                    adaptive_messages["content"].insert(
-                        0,
-                        {
-                            "type": "text",
-                            "text": eval_text,
-                        },
-                    )
+            if agent._colaboration_mode == AgentMode.TRANSFER:
+                eval_text = """Generate then execute the plan to fulfill user or agent task below, the plan must stay inside <agent_evaluation> tags:
+    - Plan out the tool call strategy for this task: which tools you should call, in what order, and what inputs each needs.
+    - The purpose of the planning is finding the optimal way to gather necessary information and organize steps to be taken to accomplished the task
+    - Sum up what you get from tool results in your next messages.
+    - Is another agent better suited? If yes, transfer immediately.
+    Then execute your plan.
+    Skip evaluation for: simple one-sentence answers, or when the request matches "when [condition], [action]" — call `learn_behavior` directly instead."""
+            elif agent._colaboration_mode == AgentMode.DELEGATE:
+                eval_text = """Generate then execute the plan to fulfill user task below, the plan must stay inside <agent_evaluation> tags:
+    - Plan out the tool call strategy for this task: which tools you should call, in what order, and what inputs each needs.
+    - The purpose of the planning is finding the optimal way to gather necessary information and organize steps to be taken to accomplished the task
+    - Sum up what you get from tool results in your next messages.
+    - Can this request break into multiple sub-tasks and be delegated to specialist agents? If yes, delegate them.
+    - Can multiple sub-tasks run in parallel? If yes, emit multiple delegate calls in one turn.
+    Then execute your plan.
+    Skip evaluation for: simple one-sentence answers, or when the request matches "when [condition], [action]" — call `learn_behavior` directly instead."""
+            else:
+                eval_text = """"Generate then execute the plan to fulfill user task below, the plan must stay inside <agent_evaluation> tags:
+    - Plan out the tool call strategy for this task: which tools you should call, in what order, and what inputs each needs.
+    - The purpose of the planning is finding the optimal way to gather necessary information and organize steps to be taken to accomplished the task
+    - Sum up what you get from tool results in your next messages."""
 
-        if len(adaptive_messages["content"]) > 0:
-            adaptive_messages["content"].append(
-                {"type": "text", "text": "--- Begin user request ---"}
+            if eval_text:
+                adaptive_messages.append(eval_text)
+
+        if len(adaptive_messages) > 0:
+            adaptive_messages.append(
+                f"---Start {'user' if is_user_request else 'agent'} task from here---"
             )
-            final_messages.insert(last_user_index, adaptive_messages)
+            final_messages.insert(
+                last_user_index,
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": "\n\n".join(adaptive_messages)}
+                    ],
+                },
+            )
 
     def shrink_tool_results(self, final_messages: list[dict[str, Any]]) -> None:
         """Prune large tool results when token usage exceeds 85% of model context."""

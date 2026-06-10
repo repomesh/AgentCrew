@@ -113,6 +113,9 @@ class AgentManager:
     @enforce_transfer.setter
     def enforce_transfer(self, enabled: bool):
         self.agent_mode = AgentMode.TRANSFER if enabled else AgentMode.NONE
+        for agent in self.agents:
+            if isinstance(agent, LocalAgent):
+                agent._colaboration_mode = self.agent_mode
 
     @classmethod
     def get_instance(cls):
