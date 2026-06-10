@@ -196,7 +196,7 @@ You must analyze and plan out the steps then execute it with your available tool
             dir_structure = self._get_directory_structure()
             if dir_structure:
                 adaptive_messages.append(
-                    f"## Current directory `{os.getcwd()}` structure:\n{dir_structure}"
+                    f"## Current directory structure:\n{dir_structure}"
                 )
 
         if (
