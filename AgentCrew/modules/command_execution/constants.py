@@ -40,7 +40,7 @@ BLOCKED_PATTERNS = [
     r"sudo",  # Privilege escalation
     r"su\s",
     r"chmod\s+777",  # Dangerous permissions
-    r">\s*/dev/",  # Device access
+    r">\s*/dev/(?!null\b)",  # Device access (allow >/dev/null but block raw device redirections)
     r"mkfs",  # Filesystem formatting
     r"dd\s+if",  # Disk operations
     r":\(\)\{\s*:\|:\&\s*\};:",  # Fork bomb
