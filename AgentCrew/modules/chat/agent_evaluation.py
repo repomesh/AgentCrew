@@ -4,7 +4,7 @@ import re
 from typing import Any
 
 _AGENT_EVALUATION_RE = re.compile(
-    r"(?:```(?:json)?\s*)?<agent_evaluation>(.*?)</agent_evaluation>\s*(?:```)?",
+    r"^\s*(?:```(?:json)?\s*)?<agent_evaluation>(.*?)</agent_evaluation>\s*(?:```)?\s*",
     flags=re.DOTALL | re.IGNORECASE,
 )
 _TRAILING_FENCE_RE = re.compile(r"(?:```(?:json)?\s*)$", flags=re.IGNORECASE)
@@ -23,10 +23,25 @@ def parse_agent_evaluation(text: str) -> dict[str, Any]:
     text = text or ""
     open_tag = "<agent_evaluation>"
     close_tag = "</agent_evaluation>"
-    has_open_tag = open_tag in text
-    has_close_tag = close_tag in text
 
-    if has_open_tag and not has_close_tag:
+    # 1. Check for a complete <agent_evaluation> block at the start of text
+    match = _AGENT_EVALUATION_RE.match(text)
+    if match:
+        planning_content = match.group(1).strip()
+        visible_content = text[match.end() :].strip()
+        return {
+            "visible_content": visible_content,
+            "planning_content": planning_content,
+            "has_incomplete_tag": False,
+        }
+
+    # 2. Check for incomplete block at the start (open tag present but no close tag yet)
+    normalized_start = text.lstrip()
+    for prefix in ("```json", "```"):
+        if normalized_start.startswith(prefix):
+            normalized_start = normalized_start[len(prefix) :].lstrip()
+
+    if normalized_start.startswith(open_tag) and close_tag not in text:
         open_idx = text.find(open_tag)
         return {
             "visible_content": _clean_visible_prefix(text[:open_idx]),
@@ -36,23 +51,23 @@ def parse_agent_evaluation(text: str) -> dict[str, Any]:
             "has_incomplete_tag": True,
         }
 
-    partial_open_idx = text.find("<agent")
-    if partial_open_idx != -1 and not has_open_tag and not has_close_tag:
+    # 3. Check for partial tag being typed at the start (e.g., "<agen...")
+    if (
+        normalized_start.startswith("<agent")
+        and open_tag not in text
+        and close_tag not in text
+    ):
+        partial_open_idx = text.find("<agent")
         return {
             "visible_content": _clean_visible_prefix(text[:partial_open_idx]),
             "planning_content": "",
             "has_incomplete_tag": True,
         }
 
-    matches = list(_AGENT_EVALUATION_RE.finditer(text))
-    planning_parts = [
-        match.group(1).strip() for match in matches if match.group(1).strip()
-    ]
-    visible_content = _AGENT_EVALUATION_RE.sub("", text).strip()
-    planning_content = "\n\n".join(planning_parts).strip()
+    # 4. No agent_evaluation block at the beginning — everything is visible content
     return {
-        "visible_content": visible_content,
-        "planning_content": planning_content,
+        "visible_content": text,
+        "planning_content": "",
         "has_incomplete_tag": False,
     }
 
