@@ -206,7 +206,7 @@ You must analyze and plan out the steps then execute it with your available tool
         ):
             from AgentCrew.modules.agents.manager import AgentMode
 
-            if agent._colaboration_mode == AgentMode.TRANSFER:
+            if is_user_request and agent._colaboration_mode == AgentMode.TRANSFER:
                 eval_text = """Generate then execute the plan to fulfill user or agent task below, the plan must stay inside <agent_evaluation> tags:
     - Plan out the tool call strategy for this task: which tools you should call, in what order, and what inputs each needs.
     - The purpose of the planning is finding the optimal way to gather necessary information and organize steps to be taken to accomplished the task
@@ -214,7 +214,7 @@ You must analyze and plan out the steps then execute it with your available tool
     - Is another agent better suited? If yes, transfer immediately.
     Then execute your plan.
     Skip evaluation for: simple one-sentence answers, or when the request matches "when [condition], [action]" — call `learn_behavior` directly instead."""
-            elif agent._colaboration_mode == AgentMode.DELEGATE:
+            elif is_user_request and agent._colaboration_mode == AgentMode.DELEGATE:
                 eval_text = """Generate then execute the plan to fulfill user task below, the plan must stay inside <agent_evaluation> tags:
     - Plan out the tool call strategy for this task: which tools you should call, in what order, and what inputs each needs.
     - The purpose of the planning is finding the optimal way to gather necessary information and organize steps to be taken to accomplished the task
