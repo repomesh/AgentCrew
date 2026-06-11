@@ -8,6 +8,14 @@ from typing import Any, Callable
 from .service import FileEditingService
 
 
+def is_full_content_mode(blocks: list[dict[str, str]]) -> bool:
+    if len(blocks) == 1:
+        block = blocks[0]
+        search_text = block.get("search", "")
+        return search_text == ""
+    return False
+
+
 def convert_blocks_to_string(blocks: list[dict[str, str]]) -> str:
     result_parts = []
     for block in blocks:
@@ -118,12 +126,20 @@ def get_file_write_or_edit_tool_handler(
             )
         # Array mode — search/replace blocks
         elif isinstance(blocks, list):
-            blocks_string = convert_blocks_to_string(blocks)
-            result = file_editing_service.write_or_edit_file(
-                file_path=file_path,
-                is_search_replace=True,
-                text_or_search_replace_blocks=blocks_string,
-            )
+            if is_full_content_mode(blocks):
+                content = blocks[0].get("replace", None)
+                result = file_editing_service.write_or_edit_file(
+                    file_path=file_path,
+                    is_search_replace=False,
+                    text_or_search_replace_blocks=content,
+                )
+            else:
+                blocks_string = convert_blocks_to_string(blocks)
+                result = file_editing_service.write_or_edit_file(
+                    file_path=file_path,
+                    is_search_replace=True,
+                    text_or_search_replace_blocks=blocks_string,
+                )
         else:
             raise ValueError(
                 "Error: write_blocks must be a string (full file write) "

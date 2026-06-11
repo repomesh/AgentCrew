@@ -28,7 +28,8 @@ def get_code_analysis_tool_definition() -> dict[str, Any]:
     tool_arguments = {
         "path": {
             "type": "string",
-            "description": "The root directory to analyze_repo. Use './' to analyze all source files in the current directory, or specify a subdirectory (e.g., 'src') to analyze files within that directory. Choose the path that will provide the most relevant information for the task at hand.",
+            "description": "The root directory to analyze_repo. Use '.' to analyze all source files in the current directory, or specify a subdirectory (e.g., 'src') to analyze files within that directory. Choose the path that will provide the most relevant information for the task at hand.",
+            "default": ".",
         },
         "exclude_patterns": {
             "type": "array",
@@ -41,10 +42,11 @@ def get_code_analysis_tool_definition() -> dict[str, Any]:
         },
         "deep_analysis": {
             "type": "boolean",
-            "description": "When true, include project notes (rules, conventions, patterns, flows) extracted in the tool result. When false, skip project notes for faster analysis. Default is true.",
+            "description": "When true, include project notes (rules, conventions, patterns, flows) extracted in the tool result. When false, skip project notes for faster analysis.",
+            "default": True,
         },
     }
-    tool_required = ["path"]
+    tool_required = []
 
     return {
         "type": "function",
