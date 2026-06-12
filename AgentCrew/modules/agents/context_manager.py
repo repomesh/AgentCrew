@@ -116,7 +116,7 @@ You must analyze and plan out the steps then execute it with your available tool
             resource_blocks = []
             for resource in resources:
                 fields = []
-                for key in ("uri", "name", "title", "description", "mimeType", "size"):
+                for key in ("uri", "description"):
                     value = resource.get(key)
                     if value is not None and value != "":
                         fields.append(f"  - **{key}**: {value}")
