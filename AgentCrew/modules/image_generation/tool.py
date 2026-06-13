@@ -185,13 +185,13 @@ def get_generate_image_tool_handler(
         size = params.get("size", "1024x1024")
 
         if not meta_prompt:
-            return "Error: No meta_prompt provided."
+            raise ValueError("No meta_prompt provided.")
 
         if isinstance(meta_prompt, str):
             try:
                 meta_prompt = json.loads(meta_prompt)
             except json.JSONDecodeError:
-                return "Error: meta_prompt is not valid JSON."
+                return ValueError("meta_prompt is not valid JSON.")
 
         result = await image_service.generate_image(
             meta_prompt=meta_prompt,

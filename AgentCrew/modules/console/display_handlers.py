@@ -6,8 +6,13 @@ Handles rendering of various UI elements like messages, dividers, models, agents
 from __future__ import annotations
 
 import json
+import re
 from datetime import datetime
+from io import BytesIO
+from pathlib import Path
 from typing import Any
+
+from textual_image.renderable import Image as TextualImage
 from rich.console import Group
 from AgentCrew.modules.chat.agent_evaluation import parse_agent_evaluation
 from rich.box import HORIZONTALS, SIMPLE, SQUARE
@@ -464,6 +469,29 @@ class DisplayHandlers:
             )
         )
 
+    def _display_message_images(self, msg: dict) -> int:
+        """Scan message content for image_url blocks and display them.
+
+        Handles both flat list content and nested tool_result content.
+
+        Args:
+            msg: The message dict to scan.
+
+        Returns:
+            Number of images displayed.
+        """
+        count = 0
+        content = msg.get("content", "")
+        if isinstance(content, list):
+            for item in content:
+                if isinstance(item, dict):
+                    if item.get("type") == "image_url":
+                        url = item.get("image_url", {}).get("url", "")
+                        if url.startswith("data:"):
+                            self.display_image_from_data_uri(url)
+                            count += 1
+        return count
+
     def display_loaded_conversation(self, messages: list, default_agent_name: str):
         """Display all messages from a loaded conversation."""
         last_consolidated_idx = 0
@@ -489,8 +517,16 @@ class DisplayHandlers:
                     if start != -1 and end != -1:
                         content = content[start + len(prefix) : end]
                 elif content.startswith("Content of "):
+                    # Still show images even if text content is suppressed
+                    self._display_message_images(msg)
                     continue
-                self.display_user_message(content)
+                # Show images from user message first, then text
+                has_image = self._display_message_images(msg)
+                if content.strip():
+                    self.display_user_message(content)
+                elif not has_image:
+                    # Only show empty message if there's nothing at all
+                    self.display_user_message(content)
             elif role == "assistant":
                 agent_name = msg.get("agent") or default_agent_name
                 content = self._extract_message_content(msg)
@@ -504,6 +540,20 @@ class DisplayHandlers:
                 if "tool_calls" in msg:
                     for tool_call in msg["tool_calls"]:
                         self._ui.tool_display.display_tool_use(tool_call)
+                self.display_divider()
+            elif role == "tool":
+                # Display tool result messages (e.g. generate_image results)
+                tool_name = msg.get("tool_name", "tool")
+                has_image = self._display_message_images(msg)
+                content = self._extract_message_content(msg)
+                if content.strip():
+                    result_text = Text(f"🔧 Tool result [{tool_name}]: ", style=RICH_STYLE_GRAY)
+                    result_text.append(content)
+                    self.console.print(result_text)
+                elif has_image:
+                    self.console.print(
+                        Text(f"🔧 Tool result [{tool_name}] ── image above", style=RICH_STYLE_GRAY)
+                    )
                 self.display_divider()
             elif role == "consolidated":
                 self.console.print(
@@ -530,6 +580,68 @@ class DisplayHandlers:
                 # Format the summary with markdown
                 self.console.print(Markdown(content, code_theme=CODE_THEME))
                 self.display_divider()
+
+    # ── Image display ────────────────────────────────────────────────────────
+
+    def display_image(self, image_source: str | Path) -> None:
+        """Display an image in the console using textual-image renderable.
+
+        Lazy-imports textual_image; falls back to a text message if unavailable.
+
+        Args:
+            image_source: File path string or Path to an image file.
+        """
+        try:
+            self.console.print(TextualImage(image_source))
+        except ImportError:
+            self.console.print(
+                Text(
+                    f"[textual-image not installed; cannot display: {image_source}]",
+                    style=RICH_STYLE_YELLOW,
+                )
+            )
+        except Exception as e:
+            self.console.print(
+                Text(f"[Image display error: {e}]", style=RICH_STYLE_RED)
+            )
+
+    def display_image_from_data_uri(self, data_uri: str) -> None:
+        """Decode a base64 data URI and display the image."""
+        pil_image = self._data_uri_to_image(data_uri)
+        if pil_image:
+            try:
+                self.console.print(TextualImage(pil_image))
+            except ImportError:
+                self.console.print(
+                    Text(
+                        "[textual-image not installed; cannot display image data]",
+                        style=RICH_STYLE_YELLOW,
+                    )
+                )
+            except Exception as e:
+                self.console.print(
+                    Text(f"[Image display error: {e}]", style=RICH_STYLE_RED)
+                )
+        else:
+            self.console.print(
+                Text("[Failed to decode image data]", style=RICH_STYLE_RED)
+            )
+
+    @staticmethod
+    def _data_uri_to_image(data_uri: str):
+        """Convert a base64 data URI to a Pillow Image."""
+        import base64
+
+        match = re.match(r"^data:([^;]+);base64,(.*)$", data_uri, re.DOTALL)
+        if not match:
+            return None
+        try:
+            image_bytes = base64.b64decode(match.group(2))
+            from PIL import Image as PILImage
+
+            return PILImage.open(BytesIO(image_bytes))
+        except Exception:
+            return None
 
     def display_token_usage(
         self,

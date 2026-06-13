@@ -51,6 +51,7 @@ dependencies = [
   "tomli-w==1.2.0",
   "pyyaml==6.0.3",
   "together==2.16.0",
+  "textual-image==0.13.2",
 ]
 
 [project.optional-dependencies]

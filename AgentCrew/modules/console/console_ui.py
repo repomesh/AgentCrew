@@ -176,6 +176,14 @@ class ConsoleUI(Observer):
                 self.ui_effects.stop_delegate_animation(tool_use.get("id", agent_name))
                 self.tool_display.display_delegate_completed(tool_use)
             else:
+                # Check if tool result contains image content
+                tool_result = data.get("tool_result")
+                if isinstance(tool_result, list):
+                    for item in tool_result:
+                        if isinstance(item, dict) and item.get("type") == "image_url":
+                            url = item.get("image_url", {}).get("url", "")
+                            if url.startswith("data:"):
+                                self.display_handlers.display_image_from_data_uri(url)
                 self.ui_effects.start_loading_animation()
         elif event == "tool_error":
             self.tool_display.display_tool_error(
@@ -344,6 +352,10 @@ class ConsoleUI(Observer):
         elif event == "file_processing":
             self.ui_effects.stop_loading_animation()  # Stop loading on first chunk
             self.display_handlers.add_file(data["file_path"])
+            # Display image inline if the attached file is an image
+            file_path = data.get("file_path", "")
+            if file_path.lower().endswith((".png", ".jpg", ".jpeg", ".gif", ".webp")):
+                self.display_handlers.display_image(file_path)
         elif event == "file_dropped":
             self.display_handlers._added_files.remove(data["file_path"])
         elif event == "consolidation_completed":

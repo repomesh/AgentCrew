@@ -51,7 +51,6 @@ class OpenAIImageProvider(BaseImageProvider):
             model=self.model_id,
             prompt=prompt,
             size=size,
-            response_format="b64_json",
         )
         if not response or not response.data:
             raise SystemError("Image generated failed.")
