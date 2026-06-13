@@ -95,6 +95,12 @@ class AgentToolRegistrar:
                         )
 
                         register_command_execution(service, agent)
+                    elif tool_name == "image_generation":
+                        from AgentCrew.modules.image_generation.tool import (
+                            register as register_image_generation,
+                        )
+
+                        register_image_generation(service, agent)
                     else:
                         logger.warning(f"⚠️ Tool {tool_name} not found in services")
             else:

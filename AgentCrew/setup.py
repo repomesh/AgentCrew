@@ -319,6 +319,22 @@ class ApplicationSetup:
             click.echo(f"\u26a0\ufe0f Skills service not available: {str(e)}")
             skills_service = None
 
+        try:
+            from AgentCrew.modules.image_generation import ImageGenerationService
+
+            image_generation_service = ImageGenerationService()
+            if not image_generation_service.has_any_provider():
+                click.echo(
+                    "⚠️  Image generation tool not available:"
+                    " No image generation API key found.\n"
+                    "   Set OPENAI_API_KEY, GEMINI_API_KEY,"
+                    " or DEEPINFRA_API_KEY to enable."
+                )
+                image_generation_service = None
+        except Exception as e:
+            click.echo(f"⚠️ Image generation service not available: {str(e)}")
+            image_generation_service = None
+
         voice_service = None
         if with_voice:
             try:
@@ -351,6 +367,7 @@ class ApplicationSetup:
             "command_execution": command_execution_service,
             "skills": skills_service,
             "voice": voice_service,
+            "image_generation": image_generation_service,
         }
 
         self.agent_manager = AgentManager.get_instance()

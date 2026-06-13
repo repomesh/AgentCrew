@@ -46,6 +46,7 @@ class AgentsConfigTab(QWidget):
             "code_analysis",
             "web_search",
             "browser",
+            "image_generation",
             "file_editing",
             "command_execution",
         ]
