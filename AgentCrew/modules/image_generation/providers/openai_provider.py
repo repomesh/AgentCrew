@@ -50,6 +50,7 @@ class OpenAIImageProvider(BaseImageProvider):
         response = await self._client.images.generate(
             model=self.model_id,
             prompt=prompt,
+            output_format="webp",
             size=size,
         )
         if not response or not response.data:
@@ -60,7 +61,7 @@ class OpenAIImageProvider(BaseImageProvider):
 
         return ImageGenerationResult(
             base64_data=image_b64,
-            mime_type="image/png",
+            mime_type="image/webp",
             provider=self.name,
             model=self.model_id,
             revised_prompt=revised_prompt,
@@ -85,6 +86,7 @@ class OpenAIImageProvider(BaseImageProvider):
         response = await self._client.images.edit(
             model=self.model_id,
             image=image_data,
+            output_format="webp",
             prompt=prompt,
             response_format="b64_json",
         )
@@ -97,7 +99,7 @@ class OpenAIImageProvider(BaseImageProvider):
 
         return ImageGenerationResult(
             base64_data=image_b64,
-            mime_type="image/png",
+            mime_type="image/webp",
             provider=self.name,
             model=self.model_id,
             revised_prompt=revised_prompt,

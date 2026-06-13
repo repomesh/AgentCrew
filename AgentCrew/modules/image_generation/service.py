@@ -122,7 +122,7 @@ class ImageGenerationService:
         save_dir.mkdir(parents=True, exist_ok=True)
 
         timestamp = int(time.time())
-        ext = "png" if "png" in result.mime_type else "jpg"
+        ext = result.mime_type.lstrip("image/") or "png"
         filename = f"generated_{result.provider}_{timestamp}.{ext}"
         file_path = save_dir / filename
 

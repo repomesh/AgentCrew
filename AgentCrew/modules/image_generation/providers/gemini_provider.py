@@ -66,6 +66,11 @@ class GeminiImageProvider(BaseImageProvider):
 
         config = self._types.GenerateContentConfig(
             response_modalities=["TEXT", "IMAGE"],
+            image_config=self._types.ImageConfig(
+                image_output_options=self._types.ImageConfigImageOutputOptions(
+                    mime_type="image/webp"
+                )
+            ),
         )
 
         response = await self._client.aio.models.generate_content(
@@ -87,7 +92,7 @@ class GeminiImageProvider(BaseImageProvider):
         for part in parts:
             if hasattr(part, "inline_data") and part.inline_data:
                 image_data = part.inline_data.data
-                mime_type = getattr(part.inline_data, "mime_type", None) or "image/png"
+                mime_type = getattr(part.inline_data, "mime_type", None) or "image/webp"
                 break
 
         if not image_data:
