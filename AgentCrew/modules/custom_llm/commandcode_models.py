@@ -1,4 +1,4 @@
-from AgentCrew.modules.llm.types import Model
+from AgentCrew.modules.llm.types import Model, SampleParam
 
 COMMANDCODE_MODELS = [
     Model(
@@ -136,6 +136,21 @@ COMMANDCODE_MODELS = [
         input_token_price_1m=0.600000,
         output_token_price_1m=3.000000,
         cached_token_price_1m=0.100000,
+    ),
+    Model(
+        id="moonshotai/Kimi-K2.7-Code",
+        provider="commandcode",
+        name="Kimi K2.7 Code",
+        description="MoonshotAI Kimi K2.7 Code via CommandCode — coding-focused agentic model with vision, improved long-horizon coding and 30% fewer thinking tokens",
+        capabilities=["thinking", "tool_use", "vision", "stream", "structured_output"],
+        default_reasoning="medium",
+        force_sample_params=SampleParam(
+            temperature=1.0,
+        ),
+        max_context_token=256_000,
+        input_token_price_1m=0.950000,
+        output_token_price_1m=4.000000,
+        cached_token_price_1m=0.190000,
     ),
     Model(
         id="zai-org/GLM-5.1",

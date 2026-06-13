@@ -1,4 +1,4 @@
-from AgentCrew.modules.llm.types import Model
+from AgentCrew.modules.llm.types import Model, SampleParam
 
 # CrofAI switched to pure pay-as-you-go pricing on May 31, 2026.
 # All prices below sourced from https://crof.ai/v1/models API endpoint.
@@ -151,6 +151,21 @@ CROFAI_MODELS = [
         max_context_token=262_144,
         input_token_price_1m=0.50,
         output_token_price_1m=1.99,
+        cached_token_price_1m=0.05,
+    ),
+    Model(
+        id="kimi-k2.7-code",
+        provider="crofai",
+        name="Kimi K2.7 Code",
+        description="MoonshotAI Kimi K2.7 Code on CrofAI with vision and reasoning support — improved long-horizon coding with 30% fewer thinking tokens.",
+        capabilities=["tool_use", "thinking", "vision", "stream", "structured_output"],
+        force_sample_params=SampleParam(
+            temperature=1.0,
+        ),
+        default_reasoning="medium",
+        max_context_token=262_144,
+        input_token_price_1m=0.55,
+        output_token_price_1m=2.25,
         cached_token_price_1m=0.05,
     ),
     Model(

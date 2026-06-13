@@ -1,4 +1,4 @@
-from AgentCrew.modules.llm.types import Model
+from AgentCrew.modules.llm.types import Model, SampleParam
 
 OPENCODE_GO_MODELS = [
     Model(
@@ -39,6 +39,20 @@ OPENCODE_GO_MODELS = [
         provider="opencode_go",
         name="Kimi K2.6",
         description="OpenCode Go curated Kimi K2.6 model over the OpenAI-compatible chat completions endpoint",
+        capabilities=["tool_use", "thinking", "vision", "structured_output", "stream"],
+        max_context_token=265_000,
+        default=False,
+        input_token_price_1m=0.0,
+        output_token_price_1m=0.0,
+    ),
+    Model(
+        id="kimi-k2.7-code",
+        provider="opencode_go",
+        name="Kimi K2.7 Code",
+        description="OpenCode Go curated Kimi K2.7 Code model over the OpenAI-compatible chat completions endpoint — coding-focused with improved long-horizon coding and 30% fewer thinking tokens",
+        force_sample_params=SampleParam(
+            temperature=1.0,
+        ),
         capabilities=["tool_use", "thinking", "vision", "structured_output", "stream"],
         max_context_token=265_000,
         default=False,

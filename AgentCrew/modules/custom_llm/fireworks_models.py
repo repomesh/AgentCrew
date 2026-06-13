@@ -60,4 +60,18 @@ FIREWORKS_MODELS = [
         cached_token_price_1m=0.26,
         output_token_price_1m=4.4,
     ),
+    Model(
+        id="accounts/fireworks/models/kimi-k2p7-code",
+        provider="fireworks",
+        name="Kimi K2.7 Code",
+        description="Kimi K2.7 Code on Fireworks - coding-focused agentic model with improved long-horizon coding and 30% fewer thinking tokens vs K2.6",
+        force_sample_params=SampleParam(
+            temperature=1.0,
+        ),
+        capabilities=["tool_use", "thinking", "vision", "stream", "structured_output"],
+        default_reasoning="medium",
+        input_token_price_1m=0.95,
+        cached_token_price_1m=0.19,
+        output_token_price_1m=4.0,
+    ),
 ]
