@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-import base64
 import json
-import mimetypes
 from typing import Any
+
+from AgentCrew.modules.utils.file_handler import read_optimized_image_file
 
 from .service import ImageGenerationService
 
@@ -201,14 +201,10 @@ def get_generate_image_tool_handler(
         if result["success"]:
             file_path = result["file_path"]
 
-            # Read image and encode as base64 for image_url block
-            try:
-                with open(file_path, "rb") as f:
-                    image_data = base64.b64encode(f.read()).decode("utf-8")
-                mime_type, _ = mimetypes.guess_type(file_path)
-                if not mime_type:
-                    mime_type = "image/png"
-            except Exception:
+            optimized_image = read_optimized_image_file(file_path)
+            if optimized_image:
+                mime_type, image_data, _ = optimized_image
+            else:
                 image_data = None
                 mime_type = None
 

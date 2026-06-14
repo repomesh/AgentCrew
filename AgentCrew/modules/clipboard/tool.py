@@ -1,4 +1,7 @@
 from typing import Any, Callable
+
+from AgentCrew.modules.utils.file_handler import optimize_image_data_uri
+
 from .service import ClipboardService
 
 
@@ -75,14 +78,13 @@ def get_clipboard_read_tool_handler(clipboard_service: ClipboardService) -> Call
     async def handle_clipboard_read() -> str | list[dict[str, Any]]:
         result = clipboard_service.read()
         if result["type"] == "image":
+            image_data = result["content"]
+            media_type = "image/png"
+            data_uri = optimize_image_data_uri(f"data:{media_type};base64,{image_data}")
             return [
                 {
-                    "type": "image",
-                    "source": {
-                        "type": "base64",
-                        "media_type": "image/png",
-                        "data": result["content"],
-                    },
+                    "type": "image_url",
+                    "image_url": {"url": data_uri},
                 }
             ]
         else:

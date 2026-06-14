@@ -1,11 +1,12 @@
 import os
-import mimetypes
 import re
 from typing import Any, Union
 from anthropic import AsyncAnthropic
 from anthropic.types import TextBlock, TextDelta
 from dotenv import load_dotenv
-from AgentCrew.modules.llm.base import BaseLLMService, read_binary_file, read_text_file
+from AgentCrew.modules.llm.base import (
+    BaseLLMService,
+)
 from AgentCrew.modules.llm.model_registry import ModelRegistry
 from AgentCrew.modules.llm.token_usage import TokenUsage
 from loguru import logger
@@ -116,44 +117,6 @@ class AnthropicService(BaseLLMService):
         Returns:
             Content object for the file or None if processing failed
         """
-        mime_type, _ = mimetypes.guess_type(file_path)
-
-        if mime_type == "application/pdf":
-            pdf_data = read_binary_file(file_path)
-            if pdf_data:
-                logger.info(f"📄 Including PDF document: {file_path}")
-                return {
-                    "type": "document",
-                    "source": {
-                        "type": "base64",
-                        "media_type": "application/pdf",
-                        "data": pdf_data,
-                    },
-                }
-        elif mime_type and mime_type.startswith("image/"):
-            if "vision" not in ModelRegistry.get_model_capabilities(
-                f"{self._provider_name}/{self.model}"
-            ):
-                return None
-            image_data = read_binary_file(file_path)
-            if image_data:
-                logger.info(f"🖼️ Including image: {file_path}")
-                return {
-                    "type": "image",
-                    "source": {
-                        "type": "base64",
-                        "media_type": mime_type,
-                        "data": image_data,
-                    },
-                }
-        else:
-            content = read_text_file(file_path)
-            if content:
-                logger.info(f"📄 Including text file: {file_path}")
-                return {
-                    "type": "text",
-                    "text": f"Content of {file_path}:\n\n{content}",
-                }
 
         return None
 
@@ -161,7 +124,7 @@ class AnthropicService(BaseLLMService):
         """Process a file and return the appropriate message content."""
         return self._process_file(file_path, for_command=False)
 
-    def handle_file_command(self, file_path):
+    def handle_file_command(self, file_path: str) -> list[dict[str, Any]] | None:
         """Handle the /file command and return message content."""
         content = self._process_file(file_path, for_command=True)
         if content:

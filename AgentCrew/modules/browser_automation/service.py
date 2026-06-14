@@ -23,6 +23,7 @@ from .element_extractor import (
     remove_duplicate_lines,
 )
 from .js_loader import js_loader, JavaScriptExecutor
+from AgentCrew.modules.utils.file_handler import optimize_image_data_uri
 
 import PyChromeDevTools
 from loguru import logger
@@ -801,12 +802,16 @@ class BrowserAutomationService:
                         f"Failed to remove element boxes: {remove_result.get('error')}"
                     )
 
+            data_uri = optimize_image_data_uri(
+                f"data:{mime_type};base64,{screenshot_data}"
+            )
+
             return {
                 "success": True,
                 "message": f"Successfully captured screenshot in {format} format",
                 "screenshot": {
                     "type": "image_url",
-                    "image_url": {"url": f"data:{mime_type};base64,{screenshot_data}"},
+                    "image_url": {"url": data_uri},
                 },
                 "format": format,
                 "url": current_url,

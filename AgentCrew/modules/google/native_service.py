@@ -1,19 +1,13 @@
 import os
 import re
 import json
-import mimetypes
 from typing import Any, Tuple
 from dotenv import load_dotenv
 from google import genai
 from AgentCrew.modules.llm.model_registry import ModelRegistry
 from AgentCrew.modules.llm.token_usage import TokenUsage
 from google.genai import types
-from AgentCrew.modules.llm.base import (
-    BaseLLMService,
-    read_binary_file,
-    read_text_file,
-    base64_to_bytes,
-)
+from AgentCrew.modules.llm.base import BaseLLMService, base64_to_bytes
 from loguru import logger
 import traceback
 
@@ -204,35 +198,7 @@ class GoogleAINativeService(BaseLLMService):
         Returns:
             dict[str, Any] | None: The message content or None if processing failed
         """
-        mime_type, _ = mimetypes.guess_type(file_path)
-
-        if mime_type and mime_type.startswith("image/"):
-            if "vision" not in ModelRegistry.get_model_capabilities(
-                f"{self._provider_name}/{self.model}"
-            ):
-                return None
-            image_data = read_binary_file(file_path)
-            if image_data:
-                message_content = {
-                    "type": "image_url",
-                    "image_url": {
-                        "url": f"data:{mime_type};base64,{image_data}",
-                        "detail": "high",
-                    },
-                }
-                return message_content
-        else:
-            content = read_text_file(file_path)
-            if content:
-                message_content = {
-                    "type": "text",
-                    "text": f"Content of {file_path}:\n\n{content}",
-                }
-
-                logger.info(f"📄 Including text file: {file_path}")
-                return message_content
-            else:
-                return None
+        return None
 
     def handle_file_command(self, file_path: str) -> list[dict[str, Any]] | None:
         """
@@ -244,23 +210,6 @@ class GoogleAINativeService(BaseLLMService):
         Returns:
             list[dict[str, Any]] | None: Message content or None if processing failed
         """
-        result = self.process_file_for_message(file_path)
-        if result:
-            if "type" in result and result["type"] == "text":
-                return [
-                    {
-                        "type": "text",
-                        "text": f"{result['text']}",
-                    }
-                ]
-            else:
-                # For now, we'll just use text for file content
-                return [
-                    {
-                        "type": "text",
-                        "text": f"I'm sharing this file with you: {os.path.basename(file_path)}",
-                    }
-                ]
         return None
 
     def _build_schema(self, param_def):

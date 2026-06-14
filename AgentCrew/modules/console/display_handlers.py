@@ -547,12 +547,17 @@ class DisplayHandlers:
                 has_image = self._display_message_images(msg)
                 content = self._extract_message_content(msg)
                 if content.strip():
-                    result_text = Text(f"🔧 Tool result [{tool_name}]: ", style=RICH_STYLE_GRAY)
+                    result_text = Text(
+                        f"🔧 Tool result [{tool_name}]: ", style=RICH_STYLE_GRAY
+                    )
                     result_text.append(content)
                     self.console.print(result_text)
                 elif has_image:
                     self.console.print(
-                        Text(f"🔧 Tool result [{tool_name}] ── image above", style=RICH_STYLE_GRAY)
+                        Text(
+                            f"🔧 Tool result [{tool_name}] ── image above",
+                            style=RICH_STYLE_GRAY,
+                        )
                     )
                 self.display_divider()
             elif role == "consolidated":

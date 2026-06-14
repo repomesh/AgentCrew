@@ -11,6 +11,8 @@ from urllib.parse import unquote, urlparse
 
 from loguru import logger
 from typing import TYPE_CHECKING
+
+from AgentCrew.modules.utils.file_handler import optimize_image_data_uri
 from mcp import ClientSession, StdioServerParameters
 from mcp.types import (
     BlobResourceContents,
@@ -970,10 +972,11 @@ class MCPService:
                     }
                 )
             elif isinstance(c, ImageContent):
+                data_uri = optimize_image_data_uri(f"data:{c.mimeType};base64,{c.data}")
                 result.append(
                     {
                         "type": "image_url",
-                        "image_url": {"url": f"data:{c.mimeType};base64,{c.data}"},
+                        "image_url": {"url": data_uri},
                     }
                 )
             elif isinstance(c, ResourceLink):
@@ -996,10 +999,11 @@ class MCPService:
                     }
                 )
             elif isinstance(c, ImageContent):
+                data_uri = optimize_image_data_uri(f"data:{c.mimeType};base64,{c.data}")
                 result.append(
                     {
                         "type": "image_url",
-                        "image_url": {"url": f"data:{c.mimeType};base64,{c.data}"},
+                        "image_url": {"url": data_uri},
                     }
                 )
             elif isinstance(c, ResourceLink):
@@ -1137,9 +1141,12 @@ class MCPService:
         ):
             return None
 
+        data_uri = optimize_image_data_uri(
+            f"data:{mime_type};base64,{resource_content.blob}"
+        )
         return {
             "type": "image_url",
-            "image_url": {"url": f"data:{mime_type};base64,{resource_content.blob}"},
+            "image_url": {"url": data_uri},
         }
 
     def _resource_link_fallback(

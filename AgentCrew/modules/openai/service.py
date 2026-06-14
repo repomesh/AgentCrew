@@ -1,10 +1,11 @@
 import os
 import json
-import mimetypes
 from typing import Any, Tuple
 from openai import AsyncOpenAI
 from dotenv import load_dotenv
-from AgentCrew.modules.llm.base import BaseLLMService, read_binary_file, read_text_file
+from AgentCrew.modules.llm.base import (
+    BaseLLMService,
+)
 from AgentCrew.modules.llm.model_registry import ModelRegistry
 from AgentCrew.modules.llm.token_usage import TokenUsage
 from loguru import logger
@@ -151,35 +152,7 @@ class OpenAIService(BaseLLMService):
         return result_text
 
     def _process_file(self, file_path):
-        mime_type, _ = mimetypes.guess_type(file_path)
-
-        if mime_type and mime_type.startswith("image/"):
-            if "vision" not in ModelRegistry.get_model_capabilities(
-                f"{self._provider_name}/{self.model}"
-            ):
-                return None
-            image_data = read_binary_file(file_path)
-            if image_data:
-                message_content = {
-                    "type": "image_url",
-                    "image_url": {
-                        "url": f"data:{mime_type};base64,{image_data}",
-                        "detail": "high",
-                    },
-                }
-                return message_content
-        else:
-            content = read_text_file(file_path)
-            if content:
-                message_content = {
-                    "type": "text",
-                    "text": f"Content of {file_path}:\n\n{content}",
-                }
-
-                logger.info(f"📄 Including text file: {file_path}")
-                return message_content
-            else:
-                return None
+        return None
 
     def process_file_for_message(self, file_path):
         """Process a file and return the appropriate message content."""
@@ -188,9 +161,6 @@ class OpenAIService(BaseLLMService):
 
     def handle_file_command(self, file_path):
         """Handle the /file command and return message content."""
-        content = self._process_file(file_path)
-        if content:
-            return [content]
         return None
 
     def register_tool(self, tool_definition, handler_function):

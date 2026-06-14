@@ -1,5 +1,4 @@
 import json
-import mimetypes
 import os
 from typing import Any, Tuple
 
@@ -7,7 +6,9 @@ from dotenv import load_dotenv
 from loguru import logger
 from together import AsyncTogether
 
-from AgentCrew.modules.llm.base import BaseLLMService, read_binary_file, read_text_file
+from AgentCrew.modules.llm.base import (
+    BaseLLMService,
+)
 from AgentCrew.modules.llm.model_registry import ModelRegistry
 from AgentCrew.modules.llm.token_usage import TokenUsage
 
@@ -225,29 +226,6 @@ class TogetherAIService(BaseLLMService):
         return result_text
 
     def _process_file(self, file_path: str):
-        mime_type, _ = mimetypes.guess_type(file_path)
-        if mime_type and mime_type.startswith("image/"):
-            if "vision" not in ModelRegistry.get_model_capabilities(
-                f"{self._provider_name}/{self.model}"
-            ):
-                return None
-            image_data = read_binary_file(file_path)
-            if image_data:
-                return {
-                    "type": "image_url",
-                    "image_url": {
-                        "url": f"data:{mime_type};base64,{image_data}",
-                        "detail": "high",
-                    },
-                }
-        else:
-            content = read_text_file(file_path)
-            if content:
-                logger.info(f"📄 Including text file: {file_path}")
-                return {
-                    "type": "text",
-                    "text": f"Content of {file_path}:\n\n{content}",
-                }
         return None
 
     def process_file_for_message(self, file_path: str) -> dict[str, Any] | None:
