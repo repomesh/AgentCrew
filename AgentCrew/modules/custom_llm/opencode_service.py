@@ -6,16 +6,6 @@ from AgentCrew.modules.llm.token_usage import TokenUsage
 
 
 class OpenCodeService(CustomLLMService):
-    def _normalize_tool_calls(
-        self, tool_calls: list[dict[str, Any]]
-    ) -> list[dict[str, Any]]:
-        normalized_tool_calls = []
-        for raw_tool_call in tool_calls:
-            normalized_tool_call = self._normalize_tool_call_for_request(raw_tool_call)
-            if normalized_tool_call:
-                normalized_tool_calls.append(normalized_tool_call)
-        return normalized_tool_calls
-
     def _stringify_content(self, content: Any) -> str:
         if isinstance(content, list):
             content_parts = []
@@ -37,107 +27,6 @@ class OpenCodeService(CustomLLMService):
         if isinstance(content, str):
             return content
         return str(content)
-
-    def _extract_assistant_content_and_reasoning(
-        self, content: Any
-    ) -> Tuple[str, str | None, bool]:
-        if not isinstance(content, list):
-            return self._stringify_content(content), None, False
-
-        text_parts = []
-        reasoning_parts = []
-        has_non_reasoning_content = False
-
-        for item in content:
-            if isinstance(item, dict):
-                item_type = item.get("type")
-                if item_type == "thinking":
-                    reasoning_text = item.get("thinking") or item.get("text")
-                    if reasoning_text:
-                        reasoning_parts.append(reasoning_text)
-                elif item_type == "text":
-                    text = item.get("text", "")
-                    if text:
-                        text_parts.append(text)
-                        has_non_reasoning_content = True
-                elif "text" in item:
-                    text = item.get("text", "")
-                    if text:
-                        text_parts.append(text)
-                        has_non_reasoning_content = True
-                elif item.get("content") is not None:
-                    text_parts.append(str(item["content"]))
-                    has_non_reasoning_content = True
-                else:
-                    text_parts.append(str(item))
-                    has_non_reasoning_content = True
-            elif item is not None:
-                text_parts.append(str(item))
-                has_non_reasoning_content = True
-
-        return (
-            "\n".join(part for part in text_parts if part),
-            "\n".join(part for part in reasoning_parts if part) or None,
-            bool(reasoning_parts) and not has_non_reasoning_content,
-        )
-
-    def _convert_internal_format(self, messages: list[dict[str, Any]]):
-        converted_messages = []
-        pending_reasoning_content = None
-
-        for raw_msg in messages:
-            msg = dict(raw_msg)
-            msg.pop("agent", None)
-            role = msg.get("role", "")
-
-            if role == "consolidated":
-                msg["role"] = "user"
-                msg.pop("metadata", None)
-            elif role == "assistant":
-                content_text, extracted_reasoning, thinking_only = (
-                    self._extract_assistant_content_and_reasoning(
-                        msg.get("content", "")
-                    )
-                )
-                reasoning_content = (
-                    msg.get("reasoning_content")
-                    or msg.get("reasoning")
-                    or extracted_reasoning
-                )
-
-                if thinking_only and not msg.get("tool_calls"):
-                    if reasoning_content:
-                        if pending_reasoning_content:
-                            pending_reasoning_content = (
-                                f"{pending_reasoning_content}\n{reasoning_content}"
-                            )
-                        else:
-                            pending_reasoning_content = reasoning_content
-                    continue
-
-                if "tool_calls" in msg and msg.get("tool_calls", []):
-                    msg["tool_calls"] = self._normalize_tool_calls(msg["tool_calls"])
-
-                if pending_reasoning_content and not reasoning_content:
-                    reasoning_content = pending_reasoning_content
-
-                pending_reasoning_content = None
-                msg["content"] = content_text
-                if reasoning_content:
-                    msg["reasoning_content"] = reasoning_content
-                converted_messages.append(msg)
-                continue
-
-            elif role == "tool":
-                msg.pop("tool_name", None)
-                msg.pop("is_rejected", None)
-            elif role == "user":
-                msg.pop("tool_call_id", None)
-
-            msg["content"] = self._stringify_content(msg.get("content", ""))
-            converted_messages.append(msg)
-
-        return converted_messages
 
     def process_stream_chunk(
         self, chunk, assistant_response: str, tool_uses: list[dict]

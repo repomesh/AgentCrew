@@ -439,7 +439,18 @@ class GoogleAINativeService(BaseLLMService):
 
             elif role == "assistant":
                 # Create an assistant message
-                parts = [Part.from_text(text=content)]
+                parts = []
+                if isinstance(content, list):
+                    for c in content:
+                        if c.get("type", "text") == "thinking":
+                            parts.append(
+                                Part(
+                                    thought=c.get("thinking", None),
+                                    thought_signature=c.get("signature", None),
+                                )
+                            )
+                        else:
+                            parts.append(Part.from_text(text=c.get("text", "")))
 
                 # Add tool calls if present
                 if "tool_calls" in msg:

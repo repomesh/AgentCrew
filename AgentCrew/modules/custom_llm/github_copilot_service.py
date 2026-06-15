@@ -273,19 +273,13 @@ class GithubCopilotService(CustomLLMService):
         }
 
     def _convert_internal_format(self, messages: list[dict[str, Any]]):
-        thinking_block = None
-        for i, msg in enumerate(messages):
+        for msg in messages:
             msg.pop("agent", None)
 
             if msg.get("role") == "consolidated":
                 msg["role"] = "user"
                 msg.pop("metadata", None)
             elif msg.get("role") == "assistant":
-                if thinking_block:
-                    msg["reasoning_text"] = thinking_block.get("thinking", "")
-                    msg["reasoning_opaque"] = thinking_block.get("signature", "")
-                    thinking_block = None
-                    del messages[i - 1]
                 if isinstance(msg.get("content", ""), list):
                     thinking_block = next(
                         (
@@ -295,7 +289,14 @@ class GithubCopilotService(CustomLLMService):
                         ),
                         None,
                     )
-                    msg["content"] = []
+                    msg["content"] = [
+                        block
+                        for block in msg["content"]
+                        if block.get("type", "text") != "thinking"
+                    ]
+                    if thinking_block:
+                        msg["reasoning_text"] = thinking_block.get("thinking", "")
+                        msg["reasoning_opaque"] = thinking_block.get("signature", "")
 
             elif msg.get("role") == "tool":
                 # Special treatment for GitHub Copilot GPT-4.1 model

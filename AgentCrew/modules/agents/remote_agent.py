@@ -90,8 +90,6 @@ class RemoteAgent(BaseAgent):
                 "role": "assistant",
                 "content": [{"type": "text", "text": message_data.get("message", "")}],
             }
-        elif message_type == MessageType.Thinking:
-            return None
         elif message_type == MessageType.ToolResult:
             return {
                 "role": "tool",

@@ -121,6 +121,20 @@ class DisplayHandlers:
         )
         self.console.print(assistant_panel)
 
+    def display_thinking_message(self, agent_name: str, message: str):
+        header = Text(
+            f"🤖 {agent_name.upper()} Thought:",
+            style=RICH_STYLE_GRAY,
+        )
+        thinking_panel = Panel(
+            Markdown(message, code_theme=CODE_THEME),
+            title=header,
+            box=HORIZONTALS,
+            title_align="left",
+            border_style=RICH_STYLE_GRAY,
+        )
+        self.console.print(thinking_panel)
+
     def display_divider(self):
         """Display a divider line."""
         pass
@@ -529,6 +543,9 @@ class DisplayHandlers:
                     self.display_user_message(content)
             elif role == "assistant":
                 agent_name = msg.get("agent") or default_agent_name
+                thinking = self._extract_thinking_content(msg)
+                if thinking:
+                    self.display_thinking_message(agent_name, thinking)
                 content = self._extract_message_content(msg)
                 parsed = parse_agent_evaluation(content)
                 if parsed["planning_content"]:
@@ -546,13 +563,7 @@ class DisplayHandlers:
                 tool_name = msg.get("tool_name", "tool")
                 has_image = self._display_message_images(msg)
                 content = self._extract_message_content(msg)
-                if content.strip():
-                    result_text = Text(
-                        f"🔧 Tool result [{tool_name}]: ", style=RICH_STYLE_GRAY
-                    )
-                    result_text.append(content)
-                    self.console.print(result_text)
-                elif has_image:
+                if has_image:
                     self.console.print(
                         Text(
                             f"🔧 Tool result [{tool_name}] ── image above",
@@ -851,6 +862,20 @@ class DisplayHandlers:
     def clear_files(self):
         """Clear the added files list."""
         self._added_files = []
+
+    def _extract_thinking_content(self, message):
+        thinking_block = next(
+            (
+                c
+                for c in message.get("content", [])
+                if c.get("type", "text") == "thinking"
+            ),
+            None,
+        )
+        if thinking_block:
+            return thinking_block.get("thinking", "")
+        else:
+            return None
 
     def _extract_message_content(self, message):
         """Extract the content from a message, handling different formats."""

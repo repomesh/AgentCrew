@@ -7,6 +7,7 @@ Usage:
     Or with an image in .agentcrew/images/:
     uv run python test_image.py .agentcrew/images/generated_*.png
 """
+
 from __future__ import annotations
 
 import sys

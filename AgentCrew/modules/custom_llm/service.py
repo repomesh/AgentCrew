@@ -287,47 +287,67 @@ class CustomLLMService(OpenAIService):
         return result_text
 
     def _convert_internal_format(self, messages: list[dict[str, Any]]):
-        for msg in messages:
+        converted_messages = []
+        for raw_msg in messages:
+            msg = dict(raw_msg)
             msg.pop("agent", None)
-            if msg.get("role") == "consolidated":
+            role = msg.get("role", "")
+
+            if role == "consolidated":
                 msg["role"] = "user"
                 msg.pop("metadata", None)
-            elif msg.get("role") == "tool":
+            elif role == "assistant":
+                thinking_block = next(
+                    (
+                        block
+                        for block in msg.get("content", [])
+                        if block.get("type", "text") == "thinking"
+                    ),
+                    None,
+                )
+                msg["content"] = "\n".join(
+                    [
+                        block.get("text", "")
+                        for block in msg["content"]
+                        if block.get("type", "text") != "thinking"
+                    ]
+                )
+                if thinking_block:
+                    msg["reasoning_content"] = thinking_block.get("thinking", "")
+
+                if "tool_calls" in msg and msg.get("tool_calls", []):
+                    normalized_tool_calls = []
+                    for raw_tool_call in msg["tool_calls"]:
+                        normalized_tool_call = self._normalize_tool_call_for_request(
+                            raw_tool_call
+                        )
+                        if normalized_tool_call:
+                            normalized_tool_calls.append(normalized_tool_call)
+                    msg["tool_calls"] = normalized_tool_calls
+
+                converted_messages.append(msg)
+                continue
+
+            elif role == "tool":
                 msg.pop("tool_name", None)
                 msg.pop("is_rejected", None)
-                if isinstance(msg.get("content", ""), list):
-                    cleaned_tool_content = []
-                    for tool_content in msg["content"]:
-                        if isinstance(tool_content, dict):
-                            if tool_content.get("type", "text") == "text":
-                                cleaned_tool_content.append(
-                                    tool_content.get("text", "")
-                                )
-                    msg["content"] = "\n".join(cleaned_tool_content)
-            elif msg.get("role") == "assistant":
-                if isinstance(msg.get("content", ""), list):
-                    for assistant_content in msg["content"]:
-                        if isinstance(assistant_content, dict):
-                            if assistant_content.get("type", "text") == "thinking":
-                                assistant_content["type"] = "text"
-                                assistant_content["text"] = (
-                                    f"<think>{assistant_content.get('thinking', '')}</think>"
-                                )
-                                assistant_content.pop("thinking", None)
-            elif msg.get("role") == "user":
+            elif role == "user":
                 msg.pop("tool_call_id", None)
 
-            if "tool_calls" in msg and msg.get("tool_calls", []):
-                normalized_tool_calls = []
-                for raw_tool_call in msg["tool_calls"]:
-                    normalized_tool_call = self._normalize_tool_call_for_request(
-                        raw_tool_call
-                    )
-                    if normalized_tool_call:
-                        normalized_tool_calls.append(normalized_tool_call)
-                msg["tool_calls"] = normalized_tool_calls
+            if isinstance(msg.get("content", ""), list):
+                filter_msg_content = []
+                for content in msg["content"]:
+                    if content.get("type", "text") == "image_url":
+                        if "vision" in ModelRegistry.get_model_capabilities(
+                            f"{self._provider_name}/{self.model}"
+                        ):
+                            filter_msg_content.append(content)
+                    else:
+                        filter_msg_content.append(content)
+                msg["content"] = filter_msg_content
+            converted_messages.append(msg)
 
-        return messages
+        return converted_messages
 
     def _build_stream_params(
         self,

@@ -82,6 +82,25 @@ class OpenAIService(BaseLLMService):
             if msg.get("role") == "consolidated":
                 msg["role"] = "user"
                 msg.pop("metadata", None)
+            if msg.get("role") == "assistant":
+                if isinstance(msg.get("content", ""), list):
+                    thinking_block = next(
+                        (
+                            block
+                            for block in msg.get("content", [])
+                            if block.get("type", "text") == "thinking"
+                        ),
+                        None,
+                    )
+                    msg["content"] = "\n".join(
+                        [
+                            block.get("text", "")
+                            for block in msg["content"]
+                            if block.get("type", "text") != "thinking"
+                        ]
+                    )
+                    if thinking_block:
+                        msg["reasoning_text"] = thinking_block.get("thinking", "")
             elif msg.get("role") == "user":
                 msg.pop("tool_call_id", None)
 

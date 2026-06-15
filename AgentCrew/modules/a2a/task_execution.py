@@ -203,13 +203,6 @@ class TaskExecutionEngine:
                 thinking_data: Tuple[str, str] | None = (
                     (thinking_content, thinking_signature) if thinking_content else None
                 )
-                thinking_message = agent.format_message(
-                    MessageType.Thinking, {"thinking": thinking_data}
-                )
-                if thinking_message:
-                    await self._append_history_message(
-                        task.context_id, thinking_message, task_history
-                    )
 
                 assistant_message = agent.format_message(
                     MessageType.Assistant,
@@ -218,6 +211,7 @@ class TaskExecutionEngine:
                         "tool_uses": [
                             t for t in tool_uses if t.get("name", "") != "transfer"
                         ],
+                        "thinking": thinking_data,
                     },
                 )
                 if assistant_message:

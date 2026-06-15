@@ -86,16 +86,14 @@ class TurnExecutor:
             thinking_data = (
                 (thinking_content, thinking_signature) if thinking_content else None
             )
-            thinking_message = agent.format_message(
-                MessageType.Thinking,
-                {"thinking": thinking_data},
-            )
-            if thinking_message:
-                state.history.append(thinking_message)
 
             assistant_message = agent.format_message(
                 MessageType.Assistant,
-                {"message": current_response, "tool_uses": tool_uses},
+                {
+                    "message": current_response,
+                    "thinking": thinking_data,
+                    "tool_uses": tool_uses,
+                },
             )
             if assistant_message:
                 state.history.append(assistant_message)

@@ -254,21 +254,9 @@ class MessageHandler(Observable):
 
     def _finalize_current_turn(
         self,
-        assistant_response: str,
         token_usage: TokenUsage,
-        *,
         store_memory: bool,
-        emit_response_completed: bool,
     ) -> list[dict]:
-        if assistant_response.strip():
-            self._messages_append(
-                self.agent.format_message(
-                    MessageType.Assistant, {"message": assistant_response}
-                )
-            )
-
-        if emit_response_completed:
-            self._notify("response_completed", assistant_response)
 
         messages_for_this_turn = self._get_messages_for_current_turn()
 
@@ -404,11 +392,20 @@ class MessageHandler(Observable):
                     self._notify("streaming_stopped", assistant_response)
                     session.finalize("canceled")
                     await self.stream_generator.aclose()
+                    if assistant_response.strip():
+                        self._messages_append(
+                            self.agent.format_message(
+                                MessageType.Assistant,
+                                {
+                                    "message": assistant_response,
+                                    "thinking": (thinking_chunk, None),
+                                },
+                            )
+                        )
+                        self._notify("response_completed", assistant_response)
                     self._finalize_current_turn(
-                        assistant_response,
                         token_usage,
                         store_memory=False,
-                        emit_response_completed=bool(assistant_response.strip()),
                     )
                     self._notify(
                         "stream_canceled",
@@ -459,12 +456,6 @@ class MessageHandler(Observable):
             thinking_data = (
                 (thinking_content, thinking_signature) if thinking_content else None
             )
-            thinking_message = self.agent.format_message(
-                MessageType.Thinking, {"thinking": thinking_data}
-            )
-            if thinking_message:
-                self._messages_append(thinking_message)
-                self._notify("thinking_message_added", thinking_message)
 
             # Handle tool use if needed
             if not has_stop_interupted and tool_uses and len(tool_uses) > 0:
@@ -478,6 +469,7 @@ class MessageHandler(Observable):
                         MessageType.Assistant,
                         {
                             "message": assistant_response,
+                            "thinking": thinking_data,
                             "tool_uses": tool_uses_without_transfer,
                         },
                     )
@@ -486,9 +478,7 @@ class MessageHandler(Observable):
                 elif assistant_response.strip():
                     assistant_message = self.agent.format_message(
                         MessageType.Assistant,
-                        {
-                            "message": assistant_response,
-                        },
+                        {"message": assistant_response, "thinking": thinking_data},
                     )
                     self._messages_append(assistant_message)
                 self._notify("assistant_message_added", assistant_response)
@@ -519,11 +509,20 @@ class MessageHandler(Observable):
             if assistant_response.strip() == "":
                 return await self.get_assistant_response(token_usage)
 
+            self._messages_append(
+                self.agent.format_message(
+                    MessageType.Assistant,
+                    {
+                        "message": assistant_response,
+                        "thinking": thinking_data,
+                    },
+                )
+            )
+            self._notify("response_completed", assistant_response)
+
             self._finalize_current_turn(
-                assistant_response,
                 token_usage,
                 store_memory=True,
-                emit_response_completed=True,
             )
 
             if self.agent_manager.defered_transfer:
@@ -552,11 +551,20 @@ class MessageHandler(Observable):
                     pass
             if not session.finished.is_set():
                 session.finalize("canceled")
+
+            if assistant_response.strip():
+                self._messages_append(
+                    self.agent.format_message(
+                        MessageType.Assistant,
+                        {
+                            "message": assistant_response,
+                        },
+                    )
+                )
+                self._notify("response_completed", assistant_response)
             self._finalize_current_turn(
-                assistant_response,
                 token_usage,
                 store_memory=False,
-                emit_response_completed=bool(assistant_response.strip()),
             )
             self._notify(
                 "stream_canceled",

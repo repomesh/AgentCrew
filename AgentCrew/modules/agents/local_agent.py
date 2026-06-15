@@ -292,7 +292,10 @@ class LocalAgent(BaseAgent):
         return message
 
     def _format_assistant_message(
-        self, assistant_response: str, tool_uses: list[dict] | None = None
+        self,
+        assistant_response: str,
+        thinking_data: tuple[str, str] | None = None,
+        tool_uses: list[dict] | None = None,
     ) -> dict[str, Any]:
         """
         Format the assistant's response into the appropriate message format for the LLM provider.
@@ -304,70 +307,44 @@ class LocalAgent(BaseAgent):
         Returns:
             dict[str, Any]: A properly formatted message to append to the messages list
         """
+        assistant_message = {
+            "agent": self.name,
+            "role": "assistant",
+            "content": [{"type": "text", "text": assistant_response}],
+        }
+        if thinking_data:
+            thinking_content, thinking_signature = thinking_data
+            thinking_block = {"type": "thinking", "thinking": thinking_content}
+            # Add signature if available
+            if thinking_signature:
+                thinking_block["signature"] = thinking_signature
+            assistant_message["content"].insert(0, thinking_block)
         valid_tool_uses = [
             tool_use
             for tool_use in (tool_uses or [])
             if tool_use.get("id") and tool_use.get("name")
         ]
         if valid_tool_uses:
-            return {
-                "role": "assistant",
-                "agent": self.name,
-                "content": assistant_response,
-                "tool_calls": [
-                    {
-                        "id": tool_use["id"],
-                        "name": tool_use["name"],
-                        "arguments": tool_use["input"],
-                        "type": tool_use.get("type", "tool_call"),
-                    }
-                    for tool_use in valid_tool_uses
-                ],
-            }
-        else:
-            return {
-                "agent": self.name,
-                "role": "assistant",
-                "content": assistant_response,
-            }
-
-    def _format_thinking_message(self, thinking_data) -> dict[str, Any] | None:
-        """
-        Format thinking content into the appropriate message format for Claude.
-
-        Args:
-            thinking_data: Tuple containing (thinking_content, thinking_signature)
-                or None if no thinking data is available
-
-        Returns:
-            dict[str, Any]: A properly formatted message containing thinking blocks
-        """
-        if not thinking_data:
-            return None
-
-        thinking_content, thinking_signature = thinking_data
-
-        if not thinking_content:
-            return None
-
-        # For Claude, thinking blocks need to be preserved in the assistant's message
-        thinking_block = {"type": "thinking", "thinking": thinking_content}
-
-        # Add signature if available
-        if thinking_signature:
-            thinking_block["signature"] = thinking_signature
-
-        return {"role": "assistant", "agent": self.name, "content": [thinking_block]}
+            assistant_message["tool_calls"] = [
+                {
+                    "id": tool_use["id"],
+                    "name": tool_use["name"],
+                    "arguments": tool_use["input"],
+                    "type": tool_use.get("type", "tool_call"),
+                }
+                for tool_use in valid_tool_uses
+            ]
+        return assistant_message
 
     def format_message(
         self, message_type: MessageType, message_data: dict[str, Any]
     ) -> dict[str, Any] | None:
         if message_type == MessageType.Assistant:
             return self._format_assistant_message(
-                message_data.get("message", ""), message_data.get("tool_uses", None)
+                message_data.get("message", ""),
+                message_data.get("thinking", None),
+                message_data.get("tool_uses", None),
             )
-        elif message_type == MessageType.Thinking:
-            return self._format_thinking_message(message_data.get("thinking", None))
         elif message_type == MessageType.ToolResult:
             return self._format_tool_result(
                 message_data.get("tool_use", {}),
@@ -577,8 +554,7 @@ class LocalAgent(BaseAgent):
 
                     if tool_uses:
                         _tool_uses = tool_uses
-                    if chunk_token_usage:
-                        _token_usage = _token_usage.merge(chunk_token_usage)
+                    _token_usage = _token_usage.merge(chunk_token_usage)
 
             self.token_usage = _token_usage
             if callback:

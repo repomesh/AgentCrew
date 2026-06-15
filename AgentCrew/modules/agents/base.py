@@ -12,7 +12,6 @@ if TYPE_CHECKING:
 
 class MessageType(Enum):
     Assistant = 0
-    Thinking = 1
     ToolResult = 2
     FileContent = 3
 

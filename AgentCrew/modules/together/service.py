@@ -106,9 +106,7 @@ class TogetherAIService(BaseLLMService):
                                     "text", ""
                                 )
                                 if thinking_text:
-                                    cleaned_content.append(
-                                        f"<thinking>{thinking_text}</thinking>"
-                                    )
+                                    msg["reasoning_content"] = thinking_text
                             elif item.get("type") == "text":
                                 cleaned_content.append(item.get("text", ""))
                             elif "text" in item:
@@ -120,14 +118,6 @@ class TogetherAIService(BaseLLMService):
                     msg["content"] = "\n".join(c for c in cleaned_content if c)
                 elif not isinstance(content, str):
                     msg["content"] = str(content) if content is not None else ""
-
-                # Preserve reasoning_content for Together's preserved thinking feature
-                # When using GLM-5 or other reasoning models with preserved thinking,
-                # pass through reasoning_content from previous assistant turns
-                if "reasoning_content" in raw_msg:
-                    msg["reasoning_content"] = raw_msg["reasoning_content"]
-                if "reasoning" in raw_msg:
-                    msg["reasoning"] = raw_msg["reasoning"]
 
             elif role == "user":
                 # Handle user message content arrays
