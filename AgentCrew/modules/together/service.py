@@ -107,6 +107,11 @@ class TogetherAIService(BaseLLMService):
                                 )
                                 if thinking_text:
                                     msg["reasoning_content"] = thinking_text
+
+                                elif "thinking" in ModelRegistry.get_model_capabilities(
+                                    f"{self._provider_name}/{self.model}"
+                                ):
+                                    msg["reasoning_content"] = " "
                             elif item.get("type") == "text":
                                 cleaned_content.append(item.get("text", ""))
                             elif "text" in item:
