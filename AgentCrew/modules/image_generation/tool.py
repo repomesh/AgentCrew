@@ -159,6 +159,13 @@ def get_generate_image_tool_definition() -> dict[str, Any]:
             ),
             "default": "1024x1024",
         },
+        "output_dir": {
+            "type": "string",
+            "description": (
+                "Optional target directory for saving the generated image."
+                " If omitted, the image is saved to the default output directory."
+            ),
+        },
     }
 
     return {
@@ -196,6 +203,7 @@ def get_generate_image_tool_handler(
         result = await image_service.generate_image(
             meta_prompt=meta_prompt,
             size=size,
+            output_dir=params.get("output_dir"),
         )
 
         if result["success"]:
