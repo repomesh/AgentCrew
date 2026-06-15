@@ -607,7 +607,7 @@ class DisplayHandlers:
             image_source: File path string or Path to an image file.
         """
         try:
-            self.console.print(TextualImage(image_source))
+            self.console.print(TextualImage(image_source, width=30, height="auto"))
         except ImportError:
             self.console.print(
                 Text(
@@ -625,7 +625,7 @@ class DisplayHandlers:
         pil_image = self._data_uri_to_image(data_uri)
         if pil_image:
             try:
-                self.console.print(TextualImage(pil_image))
+                self.console.print(TextualImage(pil_image, width=30, height="auto"))
             except ImportError:
                 self.console.print(
                     Text(

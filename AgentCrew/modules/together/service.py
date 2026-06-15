@@ -65,6 +65,7 @@ class TogetherAIService(BaseLLMService):
 
     def _convert_internal_format(self, messages: list[dict[str, Any]]):
         converted_messages = []
+        defered_vision_messages = []
         for raw_msg in messages:
             msg = dict(raw_msg)
             msg.pop("agent", None)
@@ -83,10 +84,26 @@ class TogetherAIService(BaseLLMService):
                         if isinstance(item, dict):
                             if item.get("type") == "text":
                                 cleaned_content.append(item.get("text", ""))
-                            elif "content" in item:
-                                cleaned_content.append(str(item["content"]))
-                            else:
-                                cleaned_content.append(str(item))
+                            elif (
+                                item.get("type") == "image_url"
+                                and "vision"
+                                in ModelRegistry.get_model_capabilities(
+                                    f"{self._provider_name}/{self.model}"
+                                )
+                            ):
+                                defered_vision_messages.append(
+                                    {
+                                        "role": "user",
+                                        "content": [
+                                            {
+                                                "type": "text",
+                                                "text": f"Image from tool id: {msg.get('tool_call_id', '')}",
+                                            },
+                                            item,
+                                        ],
+                                    }
+                                )
+
                         elif item is not None:
                             cleaned_content.append(str(item))
                     msg["content"] = "\n".join(c for c in cleaned_content if c)
@@ -125,23 +142,10 @@ class TogetherAIService(BaseLLMService):
                     msg["content"] = str(content) if content is not None else " "
 
             elif role == "user":
-                # Handle user message content arrays
                 msg.pop("tool_call_id", None)
-                if isinstance(content, list):
-                    cleaned_content = []
-                    for item in content:
-                        if isinstance(item, dict):
-                            if item.get("type") == "text":
-                                cleaned_content.append(item.get("text", ""))
-                            elif "text" in item:
-                                cleaned_content.append(item["text"])
-                            else:
-                                cleaned_content.append(str(item))
-                        elif item is not None:
-                            cleaned_content.append(str(item))
-                    msg["content"] = "\n".join(c for c in cleaned_content if c)
-                elif not isinstance(content, str):
-                    msg["content"] = str(content) if content is not None else ""
+                if len(defered_vision_messages) > 0:
+                    converted_messages.extend(defered_vision_messages)
+                    defered_vision_messages = []
 
             if "tool_calls" in msg and msg.get("tool_calls", []):
                 converted_tool_calls = []
@@ -160,6 +164,10 @@ class TogetherAIService(BaseLLMService):
                 msg["tool_calls"] = converted_tool_calls
 
             converted_messages.append(msg)
+
+        if len(defered_vision_messages) > 0:
+            converted_messages.extend(defered_vision_messages)
+            defered_vision_messages = []
         return converted_messages
 
     async def process_message(self, prompt: str, temperature: float = 0) -> str:

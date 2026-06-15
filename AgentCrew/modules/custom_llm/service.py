@@ -288,6 +288,7 @@ class CustomLLMService(OpenAIService):
 
     def _convert_internal_format(self, messages: list[dict[str, Any]]):
         converted_messages = []
+        defered_vision_messages = []
         for raw_msg in messages:
             msg = dict(raw_msg)
             msg.pop("agent", None)
@@ -341,20 +342,40 @@ class CustomLLMService(OpenAIService):
                 msg.pop("is_rejected", None)
             elif role == "user":
                 msg.pop("tool_call_id", None)
+                if len(defered_vision_messages) > 0:
+                    converted_messages.extend(defered_vision_messages)
+                    defered_vision_messages = []
 
             if isinstance(msg.get("content", ""), list):
                 filter_msg_content = []
-                for content in msg["content"]:
-                    if content.get("type", "text") == "image_url":
+                for part in msg["content"]:
+                    if part.get("type", "text") == "image_url":
                         if "vision" in ModelRegistry.get_model_capabilities(
                             f"{self._provider_name}/{self.model}"
                         ):
-                            filter_msg_content.append(content)
+                            if role == "user":
+                                filter_msg_content.append(part)
+                            elif role == "tool":
+                                defered_vision_messages.append(
+                                    {
+                                        "role": "user",
+                                        "content": [
+                                            {
+                                                "type": "text",
+                                                "text": f"Image from tool id: {msg.get('tool_call_id', '')}",
+                                            },
+                                            part,
+                                        ],
+                                    }
+                                )
                     else:
-                        filter_msg_content.append(content)
+                        filter_msg_content.append(part)
                 msg["content"] = filter_msg_content
             converted_messages.append(msg)
 
+        if len(defered_vision_messages) > 0:
+            converted_messages.extend(defered_vision_messages)
+            defered_vision_messages = []
         return converted_messages
 
     def _build_stream_params(
