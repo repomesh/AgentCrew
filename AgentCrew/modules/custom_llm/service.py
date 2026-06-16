@@ -333,7 +333,11 @@ class CustomLLMService(OpenAIService):
                     if "thinking" in ModelRegistry.get_model_capabilities(
                         f"{self._provider_name}/{self.model}"
                     ):
-                        msg["reasoning_content"] = msg["reasoning_content"] or " "
+                        msg["reasoning_content"] = (
+                            msg["reasoning_content"]
+                            if "reasoning_content" in msg and msg["reasoning_content"]
+                            else " "
+                        )
 
                 converted_messages.append(msg)
                 continue

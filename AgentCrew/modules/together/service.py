@@ -162,7 +162,11 @@ class TogetherAIService(BaseLLMService):
                 if "thinking" in ModelRegistry.get_model_capabilities(
                     f"{self._provider_name}/{self.model}"
                 ):
-                    msg["reasoning_content"] = msg["reasoning_content"] or " "
+                    msg["reasoning_content"] = (
+                        msg["reasoning_content"]
+                        if "reasoning_content" in msg and msg["reasoning_content"]
+                        else " "
+                    )
                 msg["tool_calls"] = converted_tool_calls
 
             converted_messages.append(msg)
