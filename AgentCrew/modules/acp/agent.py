@@ -12,6 +12,7 @@ if TYPE_CHECKING:
     from AgentCrew.modules.agents import AgentManager
     from acp import Client
 
+from AgentCrew.modules.llm.token_usage import TokenUsage
 from AgentCrew.modules.acp.client_communication import ClientCommunication
 from AgentCrew.modules.acp.mcp_orchestrator import McpOrchestrator
 from AgentCrew.modules.acp.model_controller import ModelController
@@ -198,6 +199,9 @@ class AgentCrewAcpAgent(Agent):
             updated_at=stored.updated_at,
             model_id=stored.model_id,
             thought_level=stored.thought_level,
+            token_usage=TokenUsage(**stored.token_usage)
+            if stored.token_usage
+            else TokenUsage(),
         )
         self._sessions[session_id] = state
         await self._model_controller.apply_session_model_to_agent(state)
@@ -308,6 +312,9 @@ class AgentCrewAcpAgent(Agent):
                 updated_at=stored.updated_at,
                 model_id=stored.model_id,
                 thought_level=stored.thought_level,
+                token_usage=TokenUsage(**stored.token_usage)
+                if stored.token_usage
+                else TokenUsage(),
             )
             self._sessions[session_id] = state
         else:

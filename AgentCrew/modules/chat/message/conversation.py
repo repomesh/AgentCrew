@@ -171,9 +171,7 @@ class ConversationManager:
                 from AgentCrew.modules.agents import LocalAgent
 
                 logger.info(f"Loaded conversation {conversation_id}")
-                self.message_handler._notify(
-                    "conversation_loaded", {"id": conversation_id, "history": history}
-                )
+                token_usage = None
                 if isinstance(self.message_handler.agent, LocalAgent) and metadata:
                     from AgentCrew.modules.llm.token_usage import TokenUsage
 
@@ -181,21 +179,19 @@ class ConversationManager:
                         input_tokens=metadata.get("input_tokens", 0),
                         output_tokens=metadata.get("output_tokens", 0),
                         cached_tokens=metadata.get("cached_tokens", 0),
-                        total_input_tokens=metadata.get("total_tokens", 0),
+                        total_input_tokens=metadata.get("total_input_tokens", 0),
                         cache_creation_tokens=metadata.get("cache_creation_tokens", 0),
                     )
                     self.message_handler.agent.token_usage = token_usage
 
-                    self.message_handler._notify(
-                        "update_token_usage",
-                        {
-                            "input_tokens": token_usage.input_tokens,
-                            "output_tokens": token_usage.output_tokens,
-                            "cached_tokens": token_usage.cached_tokens,
-                            "total_tokens": token_usage.total_input_tokens,
-                            "cache_creation_tokens": token_usage.cache_creation_tokens,
-                        },
-                    )
+                self.message_handler._notify(
+                    "conversation_loaded",
+                    {
+                        "id": conversation_id,
+                        "history": history,
+                        "token_usage": token_usage,
+                    },
+                )
                 return history
             else:
                 self.message_handler._notify(

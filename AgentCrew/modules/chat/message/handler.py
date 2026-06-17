@@ -269,7 +269,7 @@ class MessageHandler(Observable):
                             "output_tokens": token_usage.output_tokens,
                             "cached_tokens": token_usage.cached_tokens,
                             "cache_creation_tokens": token_usage.cache_creation_tokens,
-                            "total_tokens": token_usage.total_input_tokens,
+                            "total_input_tokens": token_usage.total_input_tokens,
                         }
                         self.persistent_service.store_conversation_metadata(
                             self.current_conversation_id, metadata
@@ -491,6 +491,12 @@ class MessageHandler(Observable):
                 # Process each tool use
                 await self.tool_manager.execute_tools_batch(tool_uses)
 
+                # check the stop earlier to prevent double token merge
+                if has_stop_interupted:
+                    # return as soon as possible
+                    self._notify("response_completed", assistant_response)
+                    return assistant_response, token_usage
+
                 if token_usage:
                     self._notify(
                         "update_token_usage",
@@ -500,12 +506,6 @@ class MessageHandler(Observable):
                             "cached_tokens": token_usage.cached_tokens,
                         },
                     )
-
-                if has_stop_interupted:
-                    # return as soon as possible
-                    self._notify("response_completed", assistant_response)
-                    return assistant_response, token_usage
-
                 return await self.get_assistant_response(token_usage)
 
             # prevent stream drop with bounded retry limit
@@ -632,7 +632,7 @@ class MessageHandler(Observable):
                         "output_tokens": token_usage.output_tokens,
                         "cached_tokens": token_usage.cached_tokens,
                         "cache_creation_tokens": token_usage.cache_creation_tokens,
-                        "total_tokens": token_usage.total_input_tokens,
+                        "total_input_tokens": token_usage.total_input_tokens,
                     }
                     self.persistent_service.store_conversation_metadata(
                         self.current_conversation_id, metadata

@@ -100,9 +100,10 @@ class ConsoleUI(Observer):
             if should_exit or was_cleared or not self.message_handler.agent.history:
                 return
 
-            assistant_response, self._token_usage = asyncio.run(
+            assistant_response, token_usage = asyncio.run(
                 self.message_handler.get_assistant_response()
             )
+            self._token_usage = self._token_usage.merge(token_usage)
         except Exception as e:
             self.message_handler._notify("error", f"Voice activation failed: {str(e)}")
         finally:
@@ -381,15 +382,20 @@ class ConsoleUI(Observer):
             loaded_text = Text("Loaded conversation: ", style=RICH_STYLE_YELLOW)
             loaded_text.append(data.get("id", "N/A"))
             self.display_handlers.display_message(loaded_text)
+            token_usage = data.get("token_usage", None)
+            if token_usage is not None:
+                self._token_usage = token_usage
+            self.session_cost = 0.0
+            self._total_cost = 0.0
         elif event == "conversation_saved":
             logger.info(f"Conversation saved: {data.get('id', 'N/A')}")
         elif event == "update_token_usage":
-            self._token_usage = TokenUsage(
-                input_tokens=data.get("input_tokens", 0),
-                output_tokens=data.get("output_tokens", 0),
-                cached_tokens=data.get("cached_tokens", 0),
-                total_input_tokens=data.get("total_tokens", 0),
-                cache_creation_tokens=data.get("cache_creation_tokens", 0),
+            self._token_usage = self._token_usage.merge(
+                TokenUsage(
+                    input_tokens=data.get("input_tokens", 0),
+                    output_tokens=data.get("output_tokens", 0),
+                    cached_tokens=data.get("cached_tokens", 0),
+                )
             )
             self._calculate_token_usage(self._token_usage)
         elif event == "voice_recording_started":
@@ -840,7 +846,7 @@ class ConsoleUI(Observer):
                     )
 
                     self._is_resizing = False
-                    self._token_usage = token_usage
+                    self._token_usage = self._token_usage.merge(token_usage)
 
                     # Ensure loading animation is stopped
                     self.stop_loading_animation()

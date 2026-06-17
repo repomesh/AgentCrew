@@ -116,6 +116,34 @@ class ClientCommunication:
                 ),
             )
 
+    async def send_usage_update(
+        self,
+        session_id: str,
+        token_usage: Any,
+        session_cost: float,
+        context_size: int,
+        context_used: int,
+    ):
+        from acp.schema import Cost, UsageUpdate
+
+        if self._conn is not None:
+            await self._conn.session_update(
+                session_id,
+                UsageUpdate(
+                    session_update="usage_update",
+                    cost=Cost(amount=session_cost, currency="USD"),
+                    size=context_size,
+                    used=context_used,
+                    _meta={
+                        "input_tokens": token_usage.input_tokens,
+                        "output_tokens": token_usage.output_tokens,
+                        "cached_tokens": token_usage.cached_tokens,
+                        "cache_creation_tokens": token_usage.cache_creation_tokens,
+                        "total_input_tokens": token_usage.total_input_tokens,
+                    },
+                ),
+            )
+
     @staticmethod
     def tool_title(tool_use: dict[str, Any]) -> str:
         return f"{tool_use.get('name', 'tool')}"

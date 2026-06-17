@@ -40,9 +40,13 @@ class OpenAIImageProvider(BaseImageProvider):
 
             auth = OpenAICodexOAuth.get_auth()
             if auth and auth.get("access_token"):
-                default_headers = {
-                    "ChatGPT-Account-ID": auth.get("account_id", ""),
-                } if auth.get("account_id") else None
+                default_headers = (
+                    {
+                        "ChatGPT-Account-ID": auth.get("account_id", ""),
+                    }
+                    if auth.get("account_id")
+                    else None
+                )
                 self._client = AsyncOpenAI(
                     api_key=auth["access_token"],
                     base_url=CODEX_BASE_URL,

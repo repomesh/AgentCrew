@@ -89,8 +89,7 @@ class TaskExecutionEngine:
                 current_response,
                 artifacts,
                 task_history,
-                input_tokens=token_usage.total_input_tokens,
-                output_tokens=token_usage.output_tokens,
+                token_usage=token_usage,
             )
 
         except TaskCanceledException:
@@ -456,9 +455,15 @@ class TaskExecutionEngine:
         current_response: str,
         artifacts: list[Any],
         task_history: list[dict[str, Any]],
-        input_tokens: int = 0,
-        output_tokens: int = 0,
+        token_usage: TokenUsage | None = None,
     ) -> None:
+        if token_usage is None:
+            token_usage = TokenUsage()
+        session_cost = agent.calculate_usage_cost(
+            token_usage.input_tokens,
+            token_usage.output_tokens,
+            token_usage.cached_tokens,
+        )
         if current_response.strip():
             assistant_message = agent.format_message(
                 MessageType.Assistant, {"message": current_response}
@@ -495,8 +500,13 @@ class TaskExecutionEngine:
                     status=task.status,
                     final=True,
                     metadata={
-                        "input_tokens": input_tokens,
-                        "output_tokens": output_tokens,
+                        "input_tokens": token_usage.input_tokens,
+                        "output_tokens": token_usage.output_tokens,
+                        "cached_tokens": token_usage.cached_tokens,
+                        "cache_creation_tokens": token_usage.cache_creation_tokens,
+                        "total_input_tokens": token_usage.total_input_tokens,
+                        "total_tokens": token_usage.total_tokens,
+                        "cost": session_cost,
                     },
                 ),
             )

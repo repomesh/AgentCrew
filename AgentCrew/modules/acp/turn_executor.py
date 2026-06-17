@@ -38,6 +38,7 @@ class TurnExecutor:
 
         retried_count = 0
         await self._run_turn_with_retry(session_id, state, conn, agent, retried_count)
+        await self._send_usage_update(session_id, state, agent)
 
     async def _run_turn_with_retry(
         self,
@@ -56,7 +57,11 @@ class TurnExecutor:
         def process_result(_tool_uses, _token_usage):
             nonlocal tool_uses, token_usage
             tool_uses = _tool_uses
-            token_usage = _token_usage
+            if _token_usage:
+                if token_usage:
+                    token_usage = token_usage.merge(_token_usage)
+                else:
+                    token_usage = _token_usage
 
         try:
             async for (
@@ -97,6 +102,9 @@ class TurnExecutor:
             )
             if assistant_message:
                 state.history.append(assistant_message)
+
+            if token_usage:
+                state.token_usage = state.token_usage.merge(token_usage)
 
             if tool_uses:
                 await self.execute_tools(session_id, state, agent, tool_uses)
@@ -145,6 +153,32 @@ class TurnExecutor:
                     )
 
             raise
+
+    async def _send_usage_update(
+        self,
+        session_id: str,
+        state: AcpSessionState,
+        agent: LocalAgent,
+    ):
+        from AgentCrew.modules.llm.model_registry import ModelRegistry
+
+        try:
+            context_size = ModelRegistry.get_model_limit(agent.get_model())
+        except Exception:
+            context_size = 0
+        context_used = state.token_usage.total_input_tokens
+        session_cost = agent.calculate_usage_cost(
+            state.token_usage.input_tokens,
+            state.token_usage.output_tokens,
+            state.token_usage.cached_tokens,
+        )
+        await self._client_comm.send_usage_update(
+            session_id,
+            state.token_usage,
+            session_cost,
+            context_size,
+            context_used,
+        )
 
     async def execute_tools(
         self,
