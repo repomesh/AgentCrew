@@ -25,6 +25,8 @@ class SessionLifecycle:
         self._client_comm = client_comm
 
     async def _persist_session(self, session_id: str, state: AcpSessionState):
+        from dataclasses import asdict
+
         stored = await self._session_store.save_session(
             session_id=session_id,
             cwd=state.cwd,
@@ -33,6 +35,7 @@ class SessionLifecycle:
             title=state.title,
             model_id=state.model_id,
             thought_level=state.thought_level,
+            token_usage=asdict(state.token_usage),
         )
         state.updated_at = stored.updated_at
 

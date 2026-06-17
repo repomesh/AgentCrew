@@ -669,6 +669,7 @@ class DisplayHandlers:
         input_tokens = token_usage.input_tokens
         output_tokens = token_usage.output_tokens
         cached_tokens = token_usage.cached_tokens
+        total_token = token_usage.total_tokens
         token_info = Text("📊 Token Usage: ", style=RICH_STYLE_YELLOW)
         token_info.append(
             f"Input: {input_tokens:,} | Output: {output_tokens:,} | ",
@@ -680,7 +681,7 @@ class DisplayHandlers:
                 style=RICH_STYLE_YELLOW,
             )
         token_info.append(
-            f"Total: {input_tokens + output_tokens + cached_tokens:,} | Cost: ${total_cost:.4f} | Session: ${session_cost:.4f}",
+            f"Total: {total_token:,} | Cost: ${total_cost:.4f} | Session: ${session_cost:.4f}",
             style=RICH_STYLE_YELLOW,
         )
         self.console.print(Panel(token_info, box=HORIZONTALS))

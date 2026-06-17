@@ -732,6 +732,12 @@ Rules:
             now = datetime.datetime.now().isoformat()
 
             child_metadata = self.get_conversation_metadata(new_conversation_id)
+            # Reset token usage fields for a fresh start on the fork
+            child_metadata["input_tokens"] = 0
+            child_metadata["output_tokens"] = 0
+            child_metadata["cached_tokens"] = 0
+            child_metadata["cache_creation_tokens"] = 0
+            child_metadata["total_input_tokens"] = 0
             child_metadata["parent_id"] = parent_conversation_id
             child_metadata["fork_point"] = message_index
             child_metadata["fork_title"] = None

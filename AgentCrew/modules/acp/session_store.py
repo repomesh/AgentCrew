@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any
 
 
+
 _SAFE_SESSION_RE = re.compile(r"[^a-zA-Z0-9_.-]+")
 
 
@@ -22,12 +23,14 @@ class AcpStoredSession:
     title: str | None = None
     model_id: str | None = None
     thought_level: str | None = None
+    token_usage: dict[str, Any] = field(default_factory=dict)
     created_at: str = field(default_factory=lambda: _utc_now())
     updated_at: str = field(default_factory=lambda: _utc_now())
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "AcpStoredSession":
         now = _utc_now()
+        raw_token_usage = data.get("token_usage") or {}
         return cls(
             session_id=str(data.get("session_id", "")),
             cwd=str(data.get("cwd", "")),
@@ -36,6 +39,7 @@ class AcpStoredSession:
             title=data.get("title"),
             model_id=data.get("model_id"),
             thought_level=data.get("thought_level"),
+            token_usage=raw_token_usage,
             created_at=str(data.get("created_at") or now),
             updated_at=str(data.get("updated_at") or now),
         )
@@ -69,6 +73,7 @@ class AcpSessionStore:
         title: str | None = None,
         model_id: str | None = None,
         thought_level: str | None = None,
+        token_usage: dict[str, Any] | None = None,
     ) -> AcpStoredSession:
         async with self.lock:
             existing = await self._read_session_unlocked(session_id)
@@ -81,6 +86,7 @@ class AcpSessionStore:
                 title=title,
                 model_id=model_id,
                 thought_level=thought_level,
+                token_usage=token_usage or {},
                 created_at=existing.created_at if existing else now,
                 updated_at=now,
             )
@@ -139,6 +145,7 @@ class AcpSessionStore:
                 title=title or source.title,
                 model_id=model_id or source.model_id,
                 thought_level=thought_level or source.thought_level,
+                token_usage={},
                 created_at=now,
                 updated_at=now,
             )
