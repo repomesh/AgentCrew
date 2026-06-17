@@ -88,6 +88,17 @@ DEEPINFRA_MODELS = [
         output_token_price_1m=2.56,
     ),
     Model(
+        id="zai-org/GLM-5.2",
+        provider="deepinfra",
+        name="Zai GLM-5.2",
+        description="GLM-5.2 is Z-AI's next-generation flagship model for agentic engineering, with significantly stronger coding capabilities than its predecessor",
+        force_sample_params=SampleParam(temperature=0.7, top_p=0.95, top_k=40),
+        capabilities=["tool_use", "stream", "structured_output"],
+        input_token_price_1m=1.4,
+        cached_token_price_1m=0.25,
+        output_token_price_1m=4.4,
+    ),
+    Model(
         id="zai-org/GLM-5.1",
         provider="deepinfra",
         name="Zai GLM-5.1",

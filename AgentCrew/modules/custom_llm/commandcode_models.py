@@ -165,6 +165,18 @@ COMMANDCODE_MODELS = [
         cached_token_price_1m=0.260000,
     ),
     Model(
+        id="zai-org/GLM-5.2",
+        provider="commandcode",
+        name="GLM-5.2",
+        description="Z.ai GLM-5.2 via CommandCode — long-context reasoning model optimized for agentic workloads",
+        capabilities=["thinking", "tool_use", "stream", "structured_output"],
+        default_reasoning="medium",
+        max_context_token=200_000,
+        input_token_price_1m=1.400000,
+        output_token_price_1m=4.400000,
+        cached_token_price_1m=0.260000,
+    ),
+    Model(
         id="zai-org/GLM-5",
         provider="commandcode",
         name="GLM-5",
