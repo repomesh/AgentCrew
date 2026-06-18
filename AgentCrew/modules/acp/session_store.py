@@ -10,7 +10,6 @@ from pathlib import Path
 from typing import Any
 
 
-
 _SAFE_SESSION_RE = re.compile(r"[^a-zA-Z0-9_.-]+")
 
 

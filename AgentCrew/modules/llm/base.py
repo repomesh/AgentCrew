@@ -211,12 +211,17 @@ class BaseLLMService(ABC):
         pass
 
     @abstractmethod
-    async def process_message(self, prompt: str, temperature: float = 0) -> str:
+    async def process_message(
+        self,
+        prompt: str | list,
+        temperature: float = 0,
+        model_id: str | None = None,
+    ) -> str:
         """
         Process a user message and return the LLM's response.
 
         Args:
-            prompt (str): The user's input message to be processed
+            prompt: The user's input message or a list of message dictionaries to be processed
 
         Returns:
             str: The processed response from the LLM

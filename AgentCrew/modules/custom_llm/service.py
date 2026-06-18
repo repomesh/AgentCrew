@@ -211,26 +211,35 @@ class CustomLLMService(OpenAIService):
 
         return tool_call_index
 
-    async def process_message(self, prompt: str, temperature: float = 0) -> str:
+    async def process_message(
+        self,
+        prompt: str | list,
+        temperature: float = 0,
+        model_id: str | None = None,
+    ) -> str:
         result_text = ""
         input_tokens = 0
         output_tokens = 0
         cached_tokens = 0
 
         stream = await self.client.chat.completions.create(
-            model=self.model,
+            model=model_id or self.model,
             timeout=60,
             max_tokens=3000,
             temperature=temperature,
             stream=True,
             stream_options={"include_usage": True},
-            messages=[
-                {"role": "system", "content": self.system_prompt},
-                {
-                    "role": "user",
-                    "content": prompt,
-                },
-            ],
+            messages=(
+                [
+                    {"role": "system", "content": self.system_prompt},
+                    *prompt,
+                ]
+                if isinstance(prompt, list)
+                else [
+                    {"role": "system", "content": self.system_prompt},
+                    {"role": "user", "content": prompt},
+                ]
+            ),
             extra_headers=self.extra_headers,
         )
 

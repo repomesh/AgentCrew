@@ -53,7 +53,12 @@ class AnthropicService(BaseLLMService):
             return input_cost + output_cost + cached_cost
         return 0.0
 
-    async def process_message(self, prompt: str, temperature: float = 0) -> str:
+    async def process_message(
+        self,
+        prompt: str | list,
+        temperature: float = 0,
+        model_id: str | None = None,
+    ) -> str:
         """Summarize the provided content using Claude with streaming."""
         result_text = ""
         input_tokens = 0
@@ -61,16 +66,15 @@ class AnthropicService(BaseLLMService):
         cached_tokens = 0
 
         async with self.client.messages.stream(
-            model=self.model,
+            model=model_id or self.model,
             temperature=temperature,
             max_tokens=3000,
             system=self.system_prompt,
-            messages=[
-                {
-                    "role": "user",
-                    "content": prompt,
-                },
-            ],
+            messages=(
+                self._convert_internal_format(prompt)
+                if isinstance(prompt, list)
+                else [{"role": "user", "content": prompt}]
+            ),
         ) as stream:
             async for event in stream:
                 if event.type == "content_block_delta" and isinstance(

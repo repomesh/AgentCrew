@@ -532,13 +532,19 @@ class LocalAgent(BaseAgent):
         _token_usage = TokenUsage()
         # Ensure the first message is a system message with the agent's prompt
         self._clean_shrinkable_tool_result(messages or self.history)
-        final_messages = messages[:] if messages else self.history[:]
-        self._enhance_agent_context_messages(final_messages)
+        enhancing_messages = messages[:] if messages else self.history[:]
+        self._enhance_agent_context_messages(enhancing_messages)
+        from AgentCrew.modules.utils import VisionPreprocessingUtils
+
+        final_messages = copy.deepcopy(enhancing_messages)
+
+        await VisionPreprocessingUtils.preprocess_messages(
+            final_messages,
+            self.llm,
+        )
         try:
             async with await self.llm.stream_assistant_response(
-                copy.deepcopy(
-                    final_messages
-                )  # This will prevent llm converting message break the original format
+                final_messages
             ) as stream:
                 async for chunk in stream:
                     (

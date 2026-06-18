@@ -184,11 +184,18 @@ class OpenAICodexService(OpenAIResponseService):
             "raw": payload,
         }
 
-    async def process_message(self, prompt: str, temperature: float = 0) -> str:
+    async def process_message(
+        self,
+        prompt: str | list,
+        temperature: float = 0,
+        model_id: str | None = None,
+    ) -> str:
         self._ensure_valid_token()
         request_params = {
-            "model": self.model,
-            "input": [{"role": "user", "content": prompt}],
+            "model": model_id or self.model,
+            "input": self._convert_internal_format(prompt)
+            if isinstance(prompt, list)
+            else [{"role": "user", "content": prompt}],
             "stream": True,
             "store": False,
             "instructions": self.system_prompt or DEFAULT_CODEX_INSTRUCTIONS,

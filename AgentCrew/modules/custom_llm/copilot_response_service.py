@@ -121,14 +121,19 @@ class GithubCopilotResponseService(OpenAIResponseService):
             "raw": payload,
         }
 
-    async def process_message(self, prompt: str, temperature: float = 0) -> str:
+    async def process_message(
+        self,
+        prompt: str | list,
+        temperature: float = 0,
+        model_id: str | None = None,
+    ) -> str:
         if self._is_github_provider():
             self.base_url = self.base_url.rstrip("/")
             self._github_copilot_token_to_open_ai_key(self.api_key)
             if self._extra_headers:
                 self._extra_headers["X-Initiator"] = "user"
                 self._extra_headers["X-Request-Id"] = str(uuid4())
-        return await super().process_message(prompt, temperature)
+        return await super().process_message(prompt, temperature, model_id)
 
     async def stream_assistant_response(self, messages):
         """Stream the assistant's response with tool support."""
