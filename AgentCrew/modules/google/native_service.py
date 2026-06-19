@@ -149,15 +149,22 @@ class GoogleAINativeService(BaseLLMService):
             return input_cost + output_cost + cached_cost
         return 0.0
 
-    async def process_message(self, prompt: str, temperature: float = 0) -> str:
+    async def process_message(
+        self,
+        prompt: str | list,
+        temperature: float = 0,
+        model_id: str | None = None,
+    ) -> str:
         result_text = ""
         input_tokens = 0
         output_tokens = 0
         cached_tokens = 0
 
         stream_generator = await self.client.aio.models.generate_content_stream(
-            model=self.model,
-            contents=prompt,
+            model=model_id or self.model,
+            contents=self._convert_internal_format(prompt)
+            if isinstance(prompt, list)
+            else prompt,
             config=types.GenerateContentConfig(
                 max_output_tokens=3000,
                 temperature=temperature,

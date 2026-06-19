@@ -30,6 +30,7 @@ class CommandCodeService(CustomLLMService):
             api_key=api_key,
             base_url=base_url,
             provider_name="commandcode",
+            extra_headers={"x-cmd-zdr": "1"},
         )
         self.model = "deepseek/deepseek-v4-pro"
         logger.info("Initialized Command Code Service")

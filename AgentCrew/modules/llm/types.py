@@ -36,6 +36,7 @@ class Model(BaseModel):
     output_token_price_1m: float = 0.0
     cached_token_price_1m: float = 0.0
     service_name: str | None = None
+    vision_model: str | None = None
 
     def resolved_service_name(self) -> str:
         """Return the service name to use for this model, falling back to provider."""

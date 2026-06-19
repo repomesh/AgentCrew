@@ -853,9 +853,9 @@ class ConsoleUI(Observer):
 
                     if assistant_response:
                         # Calculate and display token usage
-                        self._calculate_token_usage(token_usage)
+                        self._calculate_token_usage(self._token_usage)
                         self.display_token_usage(
-                            token_usage,
+                            self._token_usage,
                             self._total_cost,
                             self.session_cost,
                         )
