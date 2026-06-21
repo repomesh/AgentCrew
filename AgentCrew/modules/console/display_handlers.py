@@ -514,7 +514,7 @@ class DisplayHandlers:
                 break
 
         # Display each message in the conversation
-        for msg in messages[min(last_consolidated_idx, len(messages) - 50) :]:
+        for msg in messages[max(last_consolidated_idx, len(messages) - 50) :]:
             role = msg.get("role")
             if role == "user":
                 content = self._extract_message_content(msg)

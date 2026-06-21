@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any
 import sys
 from loguru import logger
+from pydantic import AnyUrl
 
 
 # Docling Configuration
@@ -39,6 +40,62 @@ DOCLING_FORMATS = [
     "application/vnd.openxmlformats-officedocument.presentationml.presentation",
     "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
 ]
+
+# Fixed provider configuration for Docling picture description.
+# Each entry has: fixed chat completions URL, API key env var, and vision model.
+# The first provider whose API key env var is set will be used.
+# Ordered by cost (cheapest first).
+PICTURE_DESCRIPTION_PROVIDERS = {
+    "crofai": {
+        "url": "https://crof.ai/v1/chat/completions",
+        "api_key_env": "CROFAI_API_KEY",
+        "model": "qwen3.5-9b",
+    },
+    "deepinfra": {
+        "url": "https://api.deepinfra.com/v1/openai/chat/completions",
+        "api_key_env": "DEEPINFRA_API_KEY",
+        "model": "google/gemma-4-31B-it",
+    },
+    "commandcode": {
+        "url": "https://api.commandcode.ai/provider/chat/completions",
+        "api_key_env": "COMMAND_CODE_API_KEY",
+        "model": "xiaomi/mimo-v2.5",
+    },
+    "together": {
+        "url": "https://api.together.xyz/v1/chat/completions",
+        "api_key_env": "TOGETHER_API_KEY",
+        "model": "Qwen/Qwen3.5-9B",
+    },
+    "fireworks": {
+        "url": "https://api.fireworks.ai/inference/v1/chat/completions",
+        "api_key_env": "FIREWORKS_API_KEY",
+        "model": "accounts/fireworks/models/minimax-m3",
+    },
+    "opencode_go": {
+        "url": "https://opencode.ai/zen/go/v1/chat/completions",
+        "api_key_env": "OPENCODE_API_KEY",
+        "model": "mimo-v2.5",
+    },
+    "google": {
+        "url": "https://generativelanguage.googleapis.com/v1/chat/completions",
+        "api_key_env": "GEMINI_API_KEY",
+        "model": "gemini-flash-lite-latest",
+    },
+    "openai": {
+        "url": "https://api.openai.com/v1/chat/completions",
+        "api_key_env": "OPENAI_API_KEY",
+        "model": "gpt-4.1-mini",
+    },
+    "claude": {
+        "url": "https://api.anthropic.com/v1/chat/completions",
+        "api_key_env": "ANTHROPIC_API_KEY",
+        "model": "claude-haiku-4-5",
+    },
+}
+
+PICTURE_DESCRIPTION_PROMPT = (
+    "Describe the image in three sentences. Be concise and accurate."
+)
 
 EXTENSION_MIME_MAPPING = {
     "docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
@@ -219,6 +276,56 @@ class FileHandler:
 
         return True
 
+    def _resolve_picture_description_options(self):
+        """
+        Resolve a vision-capable LLM provider for Docling picture description.
+
+        Uses fixed provider URLs and API key env var checks (PICTURE_DESCRIPTION_PROVIDERS).
+        The first provider whose API key env var is set will be used.
+        No ModelRegistry or ServiceManager imports needed.
+
+        Returns:
+            PictureDescriptionApiOptions | None: Options if a vision provider is
+            available, None otherwise (graceful degradation).
+        """
+        try:
+            from docling.datamodel.pipeline_options import (
+                PictureDescriptionApiOptions,
+            )
+
+            for provider, config in PICTURE_DESCRIPTION_PROVIDERS.items():
+                api_key = os.getenv(config["api_key_env"])
+                if not api_key:
+                    continue
+
+                headers = {
+                    "Content-Type": "application/json",
+                    "Authorization": f"Bearer {api_key}",
+                }
+                params = {
+                    "model": config["model"],
+                    "temperature": 0.6,
+                }
+
+                logger.info(
+                    f"Picture description enabled with provider: {provider}, model: {config['model']}"
+                )
+                return PictureDescriptionApiOptions(
+                    url=AnyUrl(config["url"]),
+                    headers=headers,
+                    params=params,
+                    prompt=PICTURE_DESCRIPTION_PROMPT,
+                    timeout=30,
+                )
+
+            logger.info(
+                "No vision model available for picture description (no API keys set)"
+            )
+            return None
+        except Exception as e:
+            logger.warning(f"Failed to resolve picture description options: {str(e)}")
+            return None
+
     def initialize_docling_parser(self):
         if self.converter is not None:
             return self.converter
@@ -242,24 +349,45 @@ class FileHandler:
                     PowerpointFormatOption,
                 )
 
-                pdf_pipeline_options = PdfPipelineOptions()
-
-                pdf_pipeline_options.accelerator_options = AcceleratorOptions(
-                    num_threads=2, device=AcceleratorDevice.MPS
-                )
-
-                # Explicitly disable enrichment features and use a safe picture_description_options
-                # https://github.com/docling-project/docling/issues/2515
+                pdf_pipeline_options = PdfPipelineOptions(document_timeout=60)
                 word_pipeline_options = ConvertPipelineOptions(
+                    document_timeout=60,
                     do_picture_classification=False,
-                    do_picture_description=False,
-                    enable_remote_services=False,
                     picture_description_options=PictureDescriptionApiOptions(),
                 )
 
-                if sys.platform != "darwin":
+                # Enable picture description if a vision-capable LLM is available
+                picture_desc_options = self._resolve_picture_description_options()
+
+                if picture_desc_options:
+                    pdf_pipeline_options.enable_remote_services = True
+                    pdf_pipeline_options.do_picture_description = True
+                    pdf_pipeline_options.picture_description_options = (
+                        picture_desc_options
+                    )
+                    word_pipeline_options.enable_remote_services = True
+                    word_pipeline_options.do_picture_description = True
+                    word_pipeline_options.picture_description_options = (
+                        picture_desc_options
+                    )
+                    logger.info("Picture description enabled with vision model")
+                else:
+                    pdf_pipeline_options.do_picture_description = False
+                    pdf_pipeline_options.enable_remote_services = False
+
+                    word_pipeline_options.do_picture_description = False
+                    word_pipeline_options.enable_remote_services = False
+                    logger.info(
+                        "Picture description disabled (no vision model available)"
+                    )
+
+                pdf_pipeline_options.accelerator_options = AcceleratorOptions(
+                    num_threads=4, device=AcceleratorDevice.AUTO
+                )
+
+                if sys.platform == "darwin":
                     pdf_pipeline_options.accelerator_options = AcceleratorOptions(
-                        num_threads=4, device=AcceleratorDevice.AUTO
+                        num_threads=2, device=AcceleratorDevice.MPS
                     )
                 self.converter = DocumentConverter(
                     format_options={

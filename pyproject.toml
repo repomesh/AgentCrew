@@ -59,18 +59,19 @@ cpu = [
   "torch==2.11.0",
   "torchvision==0.26.0",
   "torchaudio==2.11.0",
-  "docling==2.91.0",
+  "docling==2.103.0",
 ]
 nvidia = [
   "torch==2.11.0",
   "torchvision==0.26.0",
   "torchaudio==2.11.0",
-  "docling==2.91.0",
+  "docling==2.103.0",
 ]
 redis = ["redis==7.4.0"]
 gui = ["qtawesome==1.4.2", "pyside6==6.11.0"]
 
 [tool.uv]
+exclude-newer = "3 days"
 conflicts = [[{ extra = "cpu" }, { extra = "nvidia" }]]
 
 [tool.uv.sources]

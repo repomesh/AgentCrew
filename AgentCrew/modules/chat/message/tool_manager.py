@@ -138,7 +138,7 @@ class ToolManager:
             if action == "deny":
                 reason = confirmation.get("reason", "")
                 reason_message = (
-                    f"with rejected reason: {reason}. Adjust your next steps bases on the reason why user rejected. Learn new behavior if the reason has `when <condition>, <action>` format."
+                    f"with rejected reason: {reason}. Adjust your next steps bases on the reason why user rejected. Learn behavior only when the reason has `when <condition>, <action>` format."
                     if reason
                     else "Immediately Pause the response and WAIT for user reason and adjustment."
                 )
@@ -397,7 +397,7 @@ class ToolManager:
         if action == "deny":
             reason = confirmation.get("reason", "")
             reason_message = (
-                f"with rejected reason: {reason}. Adjust your next steps bases on the reason why user rejected. Learn new behavior if the reason has `when <condition>, <action>` format."
+                f"with rejected reason: {reason}. Adjust your next steps bases on the reason why user rejected. Learn behavior only when the reason has `when <condition>, <action>` format."
                 if reason
                 else "Immediately Pause the response and WAIT for user reason and adjustment."
             )
