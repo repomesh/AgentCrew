@@ -292,6 +292,33 @@ class FileHandler:
             from docling.datamodel.pipeline_options import (
                 PictureDescriptionApiOptions,
             )
+            from AgentCrew.modules.config import GlobalConfig
+
+            last_used_provider = GlobalConfig().get_last_used_provider()
+
+            if last_used_provider:
+                config = PICTURE_DESCRIPTION_PROVIDERS[last_used_provider]
+                api_key = os.getenv(config["api_key_env"])
+                if api_key:
+                    headers = {
+                        "Content-Type": "application/json",
+                        "Authorization": f"Bearer {api_key}",
+                    }
+                    params = {
+                        "model": config["model"],
+                        "temperature": 0.6,
+                    }
+
+                    logger.info(
+                        f"Picture description enabled with provider: {last_used_provider}, model: {config['model']}"
+                    )
+                    return PictureDescriptionApiOptions(
+                        url=AnyUrl(config["url"]),
+                        headers=headers,
+                        params=params,
+                        prompt=PICTURE_DESCRIPTION_PROMPT,
+                        timeout=30,
+                    )
 
             for provider, config in PICTURE_DESCRIPTION_PROVIDERS.items():
                 api_key = os.getenv(config["api_key_env"])

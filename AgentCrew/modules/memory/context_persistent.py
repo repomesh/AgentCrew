@@ -707,6 +707,11 @@ Rules:
         Copies messages up to (but not including) message_index into a new conversation,
         updates both parent and child metadata with fork relationship info.
 
+        If the fork point falls within content inherited from an ancestor conversation
+        (i.e. message_index <= fork_point of the current conversation), the effective
+        parent is traced up the ancestry chain so that the new fork becomes a sibling
+        of the current conversation under the common ancestor, rather than a nested child.
+
         Args:
             parent_conversation_id: The ID of the conversation to fork from.
             message_index: The message index to fork at (messages before this index are copied).
@@ -731,6 +736,29 @@ Rules:
 
             now = datetime.datetime.now().isoformat()
 
+            # ---- Trace effective parent for inherited content ----
+            # If the current conversation is itself a fork and the fork point
+            # falls within inherited content, walk up the ancestry chain to
+            # find the actual ancestor that owns the content being forked.
+            effective_parent_id = parent_conversation_id
+            current_id = parent_conversation_id
+
+            while True:
+                current_meta = self.get_conversation_metadata(current_id)
+                ancestor_parent_id = current_meta.get("parent_id")
+                ancestor_fork_point = current_meta.get("fork_point")
+
+                if not ancestor_parent_id or ancestor_fork_point is None:
+                    break
+
+                if message_index > ancestor_fork_point:
+                    break
+
+                effective_parent_id = ancestor_parent_id
+                current_id = ancestor_parent_id
+
+            # ------------------------------------------------------
+
             child_metadata = self.get_conversation_metadata(new_conversation_id)
             # Reset token usage fields for a fresh start on the fork
             child_metadata["input_tokens"] = 0
@@ -738,7 +766,7 @@ Rules:
             child_metadata["cached_tokens"] = 0
             child_metadata["cache_creation_tokens"] = 0
             child_metadata["total_input_tokens"] = 0
-            child_metadata["parent_id"] = parent_conversation_id
+            child_metadata["parent_id"] = effective_parent_id
             child_metadata["fork_point"] = message_index
             child_metadata["fork_title"] = None
             child_metadata["created_from"] = {
@@ -748,7 +776,8 @@ Rules:
             }
             self.store_conversation_metadata(new_conversation_id, child_metadata)
 
-            parent_metadata = self.get_conversation_metadata(parent_conversation_id)
+            # Register fork_children on the effective parent
+            parent_metadata = self.get_conversation_metadata(effective_parent_id)
             fork_children = parent_metadata.get("fork_children", [])
             fork_children.append(
                 {
@@ -758,10 +787,11 @@ Rules:
                 }
             )
             parent_metadata["fork_children"] = fork_children
-            self.store_conversation_metadata(parent_conversation_id, parent_metadata)
+            self.store_conversation_metadata(effective_parent_id, parent_metadata)
 
             logger.info(
-                f"Forked conversation {parent_conversation_id} at index {message_index} -> {new_conversation_id}"
+                f"Forked conversation {parent_conversation_id} at index {message_index} "
+                f"-> {new_conversation_id} (effective parent: {effective_parent_id})"
             )
             return new_conversation_id
 

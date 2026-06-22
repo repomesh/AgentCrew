@@ -1,6 +1,6 @@
 [project]
 name = "agentcrew-ai"
-version = "0.17.0"
+version = "0.17.1"
 requires-python = ">=3.12"
 classifiers = [
   "Programming Language :: Python :: 3",
@@ -26,7 +26,7 @@ dependencies = [
   "tavily-python==0.7.23",
   "pillow==12.2.0",
   "chromadb==1.5.8",
-  "openai==2.32.0",
+  "openai==2.36.0",
   "mcp==1.27.1",
   "google-genai==1.73.1",
   "markdown==3.10.2",
@@ -47,7 +47,7 @@ dependencies = [
   "jsonschema==4.26.0",
   "tomli-w==1.2.0",
   "pyyaml==6.0.3",
-  "together==2.10.0",
+  "together==2.16.0",
 ]
 
 [project.optional-dependencies]
@@ -55,13 +55,13 @@ cpu = [
   "torch==2.11.0",
   "torchvision==0.26.0",
   "torchaudio==2.11.0",
-  "docling==2.91.0",
+  "docling==2.103.0",
 ]
 nvidia = [
   "torch==2.11.0",
   "torchvision==0.26.0",
   "torchaudio==2.11.0",
-  "docling==2.91.0",
+  "docling==2.103.0",
 ]
 
 redis = ["redis==7.4.0"]
