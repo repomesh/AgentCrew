@@ -287,6 +287,7 @@ class LocalAgent(BaseAgent):
         if is_error:
             message["content"] = f"ERROR: {str(message['content'])}"
         if is_rejected:
+            message["content"] = f"DENIED: {str(message['content'])}"
             message["is_rejected"] = True
 
         return message
@@ -460,18 +461,71 @@ class LocalAgent(BaseAgent):
     ) -> list[str]:
         assistant_messages: list[str] = []
         last_user_idx = -1
+        # Map tool_call_id -> ask question for pairing across parallel calls
+        ask_questions_by_id: dict[str, str] = {}
+
         for index, message in enumerate(messages):
             if isinstance(message, dict) and message.get("role") == "user":
                 last_user_idx = index
 
         for message in messages[last_user_idx + 1 :]:
-            if not isinstance(message, dict) or message.get("role") != "assistant":
+            if not isinstance(message, dict):
                 continue
-            content = message.get("content", "")
-            if isinstance(content, str):
-                normalized = content.strip()
-                if normalized:
-                    assistant_messages.append(normalized)
+            role = message.get("role")
+            if role == "assistant":
+                content = message.get("content", "")
+                if isinstance(content, str):
+                    normalized = content.strip()
+                    if normalized:
+                        assistant_messages.append(normalized)
+
+                # Index ask tool questions by their tool call id
+                for tc in message.get("tool_calls") or []:
+                    if isinstance(tc, dict) and tc.get("name") == "ask":
+                        tc_id = tc.get("id")
+                        if not tc_id:
+                            continue
+                        arguments = tc.get("arguments", {})
+                        if isinstance(arguments, dict):
+                            q = arguments.get("question", "")
+                        elif isinstance(arguments, str):
+                            import json
+
+                            try:
+                                q = json.loads(arguments).get("question", "")
+                            except json.JSONDecodeError:
+                                q = ""
+                        else:
+                            q = ""
+                        if q:
+                            ask_questions_by_id[tc_id] = q
+
+            elif role == "tool":
+                # Capture tool rejection reasons (user feedback)
+                if message.get("is_rejected"):
+                    content = message.get("content", "")
+                    if isinstance(content, str) and content.strip():
+                        assistant_messages.append(
+                            f"[Tool rejected: {message.get('tool_name', 'unknown')}] "
+                            f"{content.strip()}"
+                        )
+                # Capture ask tool answers paired with the question by tool_call_id
+                elif message.get("tool_name") == "ask":
+                    content = message.get("content", "")
+                    if isinstance(content, str) and content.strip():
+                        tc_id = message.get("tool_call_id")
+                        question = (
+                            ask_questions_by_id.pop(tc_id, None) if tc_id else None
+                        )
+                        if question:
+                            assistant_messages.append(
+                                f"[User answered: {content.strip()} | Question was: {question}]"
+                            )
+                        else:
+                            assistant_messages.append(
+                                f"[User answered: {content.strip()}]"
+                            )
+
         normalized_current_response = current_response.strip()
         if normalized_current_response and (
             not assistant_messages

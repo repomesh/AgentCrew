@@ -313,12 +313,20 @@ You must analyze and plan out the steps then execute it with your available tool
                     continue
 
                 if msg.get("tool_call_id", None) in tool_result_id_needed_shrink:
-                    msg["content"] = [
-                        {
-                            "text": f"[tool:{tool_name} truncated]",
-                            "type": "text",
-                        }
-                    ]
+                    # keep the reason of tool rejected remains
+                    if not msg.get("is_rejected", False):
+                        msg["content"] = [
+                            {
+                                "text": f"[tool:{tool_name} was truncated]",
+                                "type": "text",
+                            }
+                        ]
+                    else:
+                        msg["content"] = [
+                            {
+                                "text": f"[tool: {tool_name} was rejected with reason: {msg.get('content')}]"
+                            }
+                        ]
                     msg.pop("tool_name", None)
                     msg.pop("is_rejected", None)
                     msg["role"] = "user"
