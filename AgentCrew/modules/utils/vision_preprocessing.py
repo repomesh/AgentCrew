@@ -256,11 +256,6 @@ class VisionPreprocessingUtils:
     @staticmethod
     def _resolve_vision_model(provider: str, vision_model_id: str) -> Any | None:
         registry = ModelRegistry.get_instance()
-        if "/" in vision_model_id:
-            logger.warning(
-                "Vision preprocessing expects Model.vision_model to be a same-provider model id, not a fully qualified id"
-            )
-            return None
         model = registry.get_model(f"{provider}/{vision_model_id}")
         if not model:
             logger.warning(
