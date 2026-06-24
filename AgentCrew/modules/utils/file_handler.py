@@ -314,7 +314,7 @@ class FileHandler:
                     params = {
                         "model": config["model"],
                         "temperature": 0.6,
-                        "max_tokens": 2000,
+                        "max_tokens": 1000,
                     }
 
                     logger.info(
@@ -340,7 +340,7 @@ class FileHandler:
                 params = {
                     "model": config["model"],
                     "temperature": 0.6,
-                    "max_tokens": 2000,
+                    "max_tokens": 1000,
                 }
 
                 logger.info(
@@ -350,6 +350,7 @@ class FileHandler:
                     url=AnyUrl(config["url"]),
                     headers=headers,
                     params=params,
+                    concurrency=3,
                     prompt=VISION_DESCRIPTION_PROMPT,
                     timeout=60,
                 )
