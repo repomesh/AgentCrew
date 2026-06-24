@@ -54,15 +54,15 @@ PICTURE_DESCRIPTION_PROVIDERS = {
     "deepinfra": {
         "url": "https://api.deepinfra.com/v1/openai/chat/completions",
         "api_key_env": "DEEPINFRA_API_KEY",
-        "model": "google/gemma-4-31B-it",
+        "model": "google/gemma-4-26B-A4B-it",
     },
     "commandcode": {
-        "url": "https://api.commandcode.ai/provider/chat/completions",
+        "url": "https://api.commandcode.ai/provider/v1/chat/completions",
         "api_key_env": "COMMAND_CODE_API_KEY",
         "model": "xiaomi/mimo-v2.5",
     },
     "together": {
-        "url": "https://api.together.xyz/v1/chat/completions",
+        "url": "https://api.together.ai/v1/chat/completions",
         "api_key_env": "TOGETHER_API_KEY",
         "model": "Qwen/Qwen3.5-9B",
     },
@@ -77,7 +77,7 @@ PICTURE_DESCRIPTION_PROVIDERS = {
         "model": "mimo-v2.5",
     },
     "google": {
-        "url": "https://generativelanguage.googleapis.com/v1/chat/completions",
+        "url": "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
         "api_key_env": "GEMINI_API_KEY",
         "model": "gemini-flash-lite-latest",
     },
@@ -314,6 +314,7 @@ class FileHandler:
                     params = {
                         "model": config["model"],
                         "temperature": 0.6,
+                        "max_tokens": 2000,
                     }
 
                     logger.info(
@@ -324,7 +325,7 @@ class FileHandler:
                         headers=headers,
                         params=params,
                         prompt=VISION_DESCRIPTION_PROMPT,
-                        timeout=30,
+                        timeout=60,
                     )
 
             for provider, config in PICTURE_DESCRIPTION_PROVIDERS.items():
@@ -339,6 +340,7 @@ class FileHandler:
                 params = {
                     "model": config["model"],
                     "temperature": 0.6,
+                    "max_tokens": 2000,
                 }
 
                 logger.info(
@@ -349,7 +351,7 @@ class FileHandler:
                     headers=headers,
                     params=params,
                     prompt=VISION_DESCRIPTION_PROMPT,
-                    timeout=30,
+                    timeout=60,
                 )
 
             logger.info(
