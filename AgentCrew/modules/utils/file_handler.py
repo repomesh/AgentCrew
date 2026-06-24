@@ -51,15 +51,15 @@ PICTURE_DESCRIPTION_PROVIDERS = {
         "api_key_env": "CROFAI_API_KEY",
         "model": "qwen3.5-9b",
     },
-    "deepinfra": {
-        "url": "https://api.deepinfra.com/v1/openai/chat/completions",
-        "api_key_env": "DEEPINFRA_API_KEY",
-        "model": "google/gemma-4-26B-A4B-it",
-    },
     "commandcode": {
         "url": "https://api.commandcode.ai/provider/v1/chat/completions",
         "api_key_env": "COMMAND_CODE_API_KEY",
         "model": "xiaomi/mimo-v2.5",
+    },
+    "deepinfra": {
+        "url": "https://api.deepinfra.com/v1/openai/chat/completions",
+        "api_key_env": "DEEPINFRA_API_KEY",
+        "model": "google/gemma-4-26B-A4B-it",
     },
     "together": {
         "url": "https://api.together.ai/v1/chat/completions",
