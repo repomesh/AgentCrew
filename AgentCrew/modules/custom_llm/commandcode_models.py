@@ -402,4 +402,17 @@ COMMANDCODE_MODELS = [
         output_token_price_1m=0.0,
         cached_token_price_1m=0.0,
     ),
+    Model(
+        id="sakana/fugu-ultra",
+        provider="commandcode",
+        name="Fugu Ultra",
+        description="Sakana Fugu Ultra via CommandCode — multi-agent orchestration system matching frontier performance on coding, reasoning, and agentic tasks",
+        capabilities=["thinking", "tool_use", "stream", "structured_output"],
+        default_reasoning="medium",
+        vision_model="xiaomi/mimo-v2.5",
+        max_context_token=400_000,
+        input_token_price_1m=0.0,
+        output_token_price_1m=0.0,
+        cached_token_price_1m=0.0,
+    ),
 ]
