@@ -304,7 +304,7 @@ class CodeAnalysisService:
         """Generate a hierarchical text representation of the code structure analysis."""
         return self._text_map_formatter.generate_text_map(analysis_results)
 
-    def get_file_content(
+    async def get_file_content(
         self,
         file_path,
         start_line=None,
@@ -340,7 +340,7 @@ class CodeAnalysisService:
         if mime_type and mime_type in ALLOWED_MIME_TYPES:
             if self.file_handler is None:
                 self.file_handler = FileHandler()
-            result = self.file_handler.process_file(file_path)
+            result = await self.file_handler.async_process_file(file_path)
             if result and "text" in result:
                 return file_path, result["text"]
             if result and "image_url" in result:

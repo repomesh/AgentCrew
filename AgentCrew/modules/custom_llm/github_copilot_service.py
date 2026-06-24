@@ -299,36 +299,20 @@ class GithubCopilotService(CustomLLMService):
                         msg["reasoning_opaque"] = thinking_block.get("signature", "")
 
             elif msg.get("role") == "tool":
-                # Special treatment for GitHub Copilot GPT-4.1 model
-                # At the the time of writing, GitHub Copilot GPT-4.1 model cannot read tool results with array content
                 msg.pop("tool_name", None)
                 msg.pop("is_rejected", None)
                 if isinstance(msg.get("content", ""), list):
-                    if self._is_github_provider() and self.model != "gpt-4.1":
-                        # OpenAI format for tool responses
-                        parsed_tool_result = []
-                        for tool_content in msg["content"]:
-                            if tool_content.get("type", "text") == "image_url":
-                                if "vision" in ModelRegistry.get_model_capabilities(
-                                    f"{self._provider_name}/{self.model}"
-                                ):
-                                    parsed_tool_result.append(tool_content)
-                            else:
+                    # OpenAI format for tool responses
+                    parsed_tool_result = []
+                    for tool_content in msg["content"]:
+                        if tool_content.get("type", "text") == "image_url":
+                            if "vision" in ModelRegistry.get_model_capabilities(
+                                f"{self._provider_name}/{self.model}"
+                            ):
                                 parsed_tool_result.append(tool_content)
-                        msg["content"] = parsed_tool_result
-                    else:
-                        parsed_tool_result = []
-                        for tool_content in msg["content"]:
-                            # Skipping non-text tool results when vision is unavailable
-                            # if res.get("type", "text") == "image_url":
-                            #     if "vision" in ModelRegistry.get_model_capabilities(self.model):
-                            #         parsed_tool_result.append(res)
-                            # else:
-                            if tool_content.get("type", "text") == "text":
-                                parsed_tool_result.append(tool_content.get("text", ""))
-                        msg["content"] = (
-                            "\n".join(parsed_tool_result) if parsed_tool_result else ""
-                        )
+                        else:
+                            parsed_tool_result.append(tool_content)
+                    msg["content"] = parsed_tool_result
                 elif isinstance(msg.get("content", ""), str):
                     msg["content"] = [{"type": "text", "text": msg["content"]}]
             elif msg.get("role") == "user":
@@ -473,16 +457,4 @@ class GithubCopilotService(CustomLLMService):
                     ):
                         self.extra_headers["Copilot-Vision-Request"] = "true"
 
-                # if self._interaction_id:
-                #     self.extra_headers["X-Interaction-Id"] = self._interaction_id
-            # Special handling for GitHub Copilot GPT-4.1 model
-            # TODO: Find a better way to handle this
-            if self.model == "gpt-4.1":
-                for m in messages:
-                    if m.get("role") == "tool" and isinstance(m.get("content"), list):
-                        parsed_content = []
-                        for content in m.get("content", []):
-                            if content.get("type", "text") == "text":
-                                parsed_content.append(content.get("text", ""))
-                        m["content"] = "\n".join(parsed_content)
         return await super().stream_assistant_response(messages)

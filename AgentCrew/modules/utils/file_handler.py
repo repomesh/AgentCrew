@@ -51,18 +51,18 @@ PICTURE_DESCRIPTION_PROVIDERS = {
         "api_key_env": "CROFAI_API_KEY",
         "model": "qwen3.5-9b",
     },
-    "deepinfra": {
-        "url": "https://api.deepinfra.com/v1/openai/chat/completions",
-        "api_key_env": "DEEPINFRA_API_KEY",
-        "model": "google/gemma-4-31B-it",
-    },
     "commandcode": {
-        "url": "https://api.commandcode.ai/provider/chat/completions",
+        "url": "https://api.commandcode.ai/provider/v1/chat/completions",
         "api_key_env": "COMMAND_CODE_API_KEY",
         "model": "xiaomi/mimo-v2.5",
     },
+    "deepinfra": {
+        "url": "https://api.deepinfra.com/v1/openai/chat/completions",
+        "api_key_env": "DEEPINFRA_API_KEY",
+        "model": "google/gemma-4-26B-A4B-it",
+    },
     "together": {
-        "url": "https://api.together.xyz/v1/chat/completions",
+        "url": "https://api.together.ai/v1/chat/completions",
         "api_key_env": "TOGETHER_API_KEY",
         "model": "Qwen/Qwen3.5-9B",
     },
@@ -77,7 +77,7 @@ PICTURE_DESCRIPTION_PROVIDERS = {
         "model": "mimo-v2.5",
     },
     "google": {
-        "url": "https://generativelanguage.googleapis.com/v1/chat/completions",
+        "url": "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
         "api_key_env": "GEMINI_API_KEY",
         "model": "gemini-flash-lite-latest",
     },
@@ -92,10 +92,6 @@ PICTURE_DESCRIPTION_PROVIDERS = {
         "model": "claude-haiku-4-5",
     },
 }
-
-PICTURE_DESCRIPTION_PROMPT = (
-    "Describe the image in three sentences. Be concise and accurate."
-)
 
 EXTENSION_MIME_MAPPING = {
     "docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
@@ -233,6 +229,16 @@ class FileHandler:
         """Initialize the file handling service."""
         self.converter = None
 
+    async def async_process_file(self, file_path: str) -> dict[str, Any] | None:
+        """Async version of process_file — offloads blocking work to a thread pool.
+
+        This prevents event loop blocking when called from async contexts
+        (A2A server, MCP service, etc.).
+        """
+        import asyncio
+
+        return await asyncio.to_thread(self.process_file, file_path)
+
     @staticmethod
     def guess_mime_by_extension(file_path: str) -> str | None:
         extension = os.path.splitext(file_path)[1].lower().lstrip(".")
@@ -293,6 +299,7 @@ class FileHandler:
                 PictureDescriptionApiOptions,
             )
             from AgentCrew.modules.config import GlobalConfig
+            from .vision_preprocessing import VISION_DESCRIPTION_PROMPT
 
             last_used_provider = GlobalConfig().get_last_used_provider()
 
@@ -307,6 +314,7 @@ class FileHandler:
                     params = {
                         "model": config["model"],
                         "temperature": 0.6,
+                        "max_tokens": 2000,
                     }
 
                     logger.info(
@@ -316,8 +324,8 @@ class FileHandler:
                         url=AnyUrl(config["url"]),
                         headers=headers,
                         params=params,
-                        prompt=PICTURE_DESCRIPTION_PROMPT,
-                        timeout=30,
+                        prompt=VISION_DESCRIPTION_PROMPT,
+                        timeout=60,
                     )
 
             for provider, config in PICTURE_DESCRIPTION_PROVIDERS.items():
@@ -332,6 +340,7 @@ class FileHandler:
                 params = {
                     "model": config["model"],
                     "temperature": 0.6,
+                    "max_tokens": 2000,
                 }
 
                 logger.info(
@@ -341,8 +350,8 @@ class FileHandler:
                     url=AnyUrl(config["url"]),
                     headers=headers,
                     params=params,
-                    prompt=PICTURE_DESCRIPTION_PROMPT,
-                    timeout=30,
+                    prompt=VISION_DESCRIPTION_PROMPT,
+                    timeout=60,
                 )
 
             logger.info(
@@ -376,9 +385,9 @@ class FileHandler:
                     PowerpointFormatOption,
                 )
 
-                pdf_pipeline_options = PdfPipelineOptions(document_timeout=60)
+                pdf_pipeline_options = PdfPipelineOptions(document_timeout=600)
                 word_pipeline_options = ConvertPipelineOptions(
-                    document_timeout=60,
+                    document_timeout=600,
                     do_picture_classification=False,
                     picture_description_options=PictureDescriptionApiOptions(),
                 )

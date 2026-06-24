@@ -21,7 +21,6 @@ from a2a.types import (
 )
 
 
-# TODO: cover all of cases for images
 def convert_a2a_message_to_agent(message: Message) -> dict[str, Any]:
     """
     Convert an A2A message to SwissKnife format.

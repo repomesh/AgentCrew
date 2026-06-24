@@ -544,8 +544,8 @@ tools = ["memory", "browser", "web_search", "code_analysis"]
             from AgentCrew.modules.mcpclient import MCPSessionManager
 
             mcp_manager = MCPSessionManager.get_instance()
-            mcp_manager.initialize_for_agent()
             for agent in self.agent_manager.agents.values():
+                mcp_manager.discover_mcps_for_agent_background(agent.name)
                 agent.activate()
 
         return self.agent_manager

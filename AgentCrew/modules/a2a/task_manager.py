@@ -210,12 +210,7 @@ class AgentTaskManager(TaskManager):
                     temp_file = os.path.join(tempfile.gettempdir(), part["file_name"])
                     with open(temp_file, "wb") as f:
                         f.write(part["file_data"])
-                    file_part = self.file_handler.process_file(temp_file)
-                    # TODO: this path is deprecated and never hit to this point
-                    if not file_part:
-                        file_part = self.agent.format_message(
-                            MessageType.FileContent, {"file_uri": temp_file}
-                        )
+                    file_part = await self.file_handler.async_process_file(temp_file)
                     if file_part:
                         new_parts.append(file_part)
                     else:

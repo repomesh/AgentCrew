@@ -83,15 +83,9 @@ class ChromaMemoryService(BaseMemoryService):
 
             voyage_ef = VoyageEmbeddingFunction(
                 api_key=os.getenv("VOYAGE_API_KEY"),
-                model_name="voyage-3.5",
+                model_name="voyage-4",
             )
             self.embedding_function = voyage_ef
-        elif os.getenv("OPENAI_API_KEY"):
-            openai_ef = embedding_functions.OpenAIEmbeddingFunction(
-                api_key=os.getenv("OPENAI_API_KEY"),
-                model_name="text-embedding-3-small",
-            )
-            self.embedding_function = openai_ef
         else:
             self.embedding_function = embedding_functions.DefaultEmbeddingFunction()
 
