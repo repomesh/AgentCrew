@@ -233,6 +233,16 @@ class FileHandler:
         """Initialize the file handling service."""
         self.converter = None
 
+    async def async_process_file(self, file_path: str) -> dict[str, Any] | None:
+        """Async version of process_file — offloads blocking work to a thread pool.
+
+        This prevents event loop blocking when called from async contexts
+        (A2A server, MCP service, etc.).
+        """
+        import asyncio
+
+        return await asyncio.to_thread(self.process_file, file_path)
+
     @staticmethod
     def guess_mime_by_extension(file_path: str) -> str | None:
         extension = os.path.splitext(file_path)[1].lower().lstrip(".")

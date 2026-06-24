@@ -180,7 +180,7 @@ async def _local_read_file(
     if not os.path.isabs(file_path):
         file_path = os.path.abspath(os.path.expanduser(file_path))
     service = CodeAnalysisService()
-    path, content = service.get_file_content(
+    path, content = await service.get_file_content(
         file_path, start_line=start_line, end_line=end_line
     )
     if isinstance(content, dict):

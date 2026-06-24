@@ -724,16 +724,16 @@ class MCPService:
         except Exception as e:
             return [self._resource_link_fallback(resource_link, str(e))]
 
-        return self._format_resource_result(resource_link, resource_result)
+        return await self._format_resource_result(resource_link, resource_result)
 
-    def _format_resource_result(
+    async def _format_resource_result(
         self, resource_link: ResourceLink, resource_result
     ) -> list[dict[str, Any]]:
         formatted = []
         for resource_content in resource_result.contents:
             error_str = None
             try:
-                processed = self._process_resource_content(
+                processed = await self._process_resource_content(
                     resource_link, resource_content
                 )
             except Exception as e:
@@ -756,7 +756,7 @@ class MCPService:
                 )
         return formatted
 
-    def _process_resource_content(
+    async def _process_resource_content(
         self,
         resource_link: ResourceLink,
         resource_content: TextResourceContents | BlobResourceContents,
@@ -778,7 +778,7 @@ class MCPService:
                     temp_file.write(base64.b64decode(resource_content.blob))
                     temp_path = temp_file.name
 
-            return self._get_file_handler().process_file(temp_path)
+            return await self._get_file_handler().async_process_file(temp_path)
         finally:
             if temp_path and os.path.exists(temp_path):
                 os.unlink(temp_path)

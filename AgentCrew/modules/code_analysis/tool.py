@@ -176,7 +176,7 @@ def get_file_content_tool_handler(
         else:
             abs_file_path = file_path
 
-        _, file_content = code_analysis_service.get_file_content(
+        _, file_content = await code_analysis_service.get_file_content(
             abs_file_path, start_line=start_line, end_line=end_line
         )
 
@@ -186,7 +186,7 @@ def get_file_content_tool_handler(
                 file_content,
             ]
 
-        return f"{file_path}\n{file_content}"
+        return f"{file_content}"
 
     return handler
 
