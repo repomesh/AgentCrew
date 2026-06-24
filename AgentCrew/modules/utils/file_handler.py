@@ -93,10 +93,6 @@ PICTURE_DESCRIPTION_PROVIDERS = {
     },
 }
 
-PICTURE_DESCRIPTION_PROMPT = (
-    "Describe the image in three sentences. Be concise and accurate."
-)
-
 EXTENSION_MIME_MAPPING = {
     "docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
     "pdf": "application/pdf",
@@ -303,6 +299,7 @@ class FileHandler:
                 PictureDescriptionApiOptions,
             )
             from AgentCrew.modules.config import GlobalConfig
+            from .vision_preprocessing import VISION_DESCRIPTION_PROMPT
 
             last_used_provider = GlobalConfig().get_last_used_provider()
 
@@ -326,7 +323,7 @@ class FileHandler:
                         url=AnyUrl(config["url"]),
                         headers=headers,
                         params=params,
-                        prompt=PICTURE_DESCRIPTION_PROMPT,
+                        prompt=VISION_DESCRIPTION_PROMPT,
                         timeout=30,
                     )
 
@@ -351,7 +348,7 @@ class FileHandler:
                     url=AnyUrl(config["url"]),
                     headers=headers,
                     params=params,
-                    prompt=PICTURE_DESCRIPTION_PROMPT,
+                    prompt=VISION_DESCRIPTION_PROMPT,
                     timeout=30,
                 )
 

@@ -22,7 +22,7 @@ VISION_DESCRIPTION_PROMPT = """Describe the image in as much useful detail as po
 Include:
 - main subject
 - scene and environment
-- visible objects and their relationships
+- visible objects, their positions and relationships
 - colors, layout, style, and notable visual details
 - any people, actions, emotions, or gestures
 - all visible text, labels, signs, code, UI text, tables, charts, or handwriting
