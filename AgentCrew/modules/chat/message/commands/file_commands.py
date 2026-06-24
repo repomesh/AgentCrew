@@ -39,14 +39,6 @@ class FileCommands:
                 self.message_handler.file_handler = FileHandler()
             file_content = self.message_handler.file_handler.process_file(file_path)
 
-            # TODO: this path is deprecated and never hit to this point
-            if not file_content:
-                from AgentCrew.modules.agents.base import MessageType
-
-                file_content = self.message_handler.agent.format_message(
-                    MessageType.FileContent, {"file_uri": file_path}
-                )
-
             if file_content:
                 all_file_contents.append(file_content)
                 processed_files.append(file_path)

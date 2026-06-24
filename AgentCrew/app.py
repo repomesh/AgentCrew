@@ -402,7 +402,6 @@ class AgentCrewApplication:
         token_usage_file: str | None = None,
     ) -> str:
         from AgentCrew.modules.agents import run_agent_loop, LocalAgent
-        from AgentCrew.modules.agents.base import MessageType
         from AgentCrew.modules.mcpclient import MCPSessionManager
         from AgentCrew.modules.llm.model_registry import ModelRegistry
 
@@ -491,11 +490,6 @@ class AgentCrewApplication:
                     for file_path in files:
                         file_path = os.path.expanduser(file_path.strip())
                         file_content = file_handler.process_file(file_path)
-                        # TODO: this path is deprecated and never hit to this point
-                        if not file_content:
-                            file_content = current_agent.format_message(
-                                MessageType.FileContent, {"file_uri": file_path}
-                            )
                         if file_content:
                             all_file_contents.append(file_content)
                     if all_file_contents:
