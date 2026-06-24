@@ -385,9 +385,9 @@ class FileHandler:
                     PowerpointFormatOption,
                 )
 
-                pdf_pipeline_options = PdfPipelineOptions(document_timeout=60)
+                pdf_pipeline_options = PdfPipelineOptions(document_timeout=600)
                 word_pipeline_options = ConvertPipelineOptions(
-                    document_timeout=60,
+                    document_timeout=600,
                     do_picture_classification=False,
                     picture_description_options=PictureDescriptionApiOptions(),
                 )
