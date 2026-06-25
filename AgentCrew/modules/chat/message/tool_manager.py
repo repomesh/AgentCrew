@@ -40,46 +40,7 @@ class ToolManager:
         tool_name = tool_use["name"]
         tool_id = tool_use["id"]
 
-        # Special handling for the transfer tool - always auto-approve
-        if tool_name == "transfer":
-            self.message_handler._notify("tool_use", tool_use)
-            try:
-                tool_result = await self.message_handler.agent.execute_tool_call(
-                    tool_name, tool_use["input"]
-                )
-                self._post_tool_transfer(tool_use, tool_result)
-            except Exception as e:
-                # if transfer failed we should add the tool_call message back for record
-
-                self.message_handler._messages_append(
-                    self.message_handler.agent.format_message(
-                        MessageType.Assistant,
-                        {
-                            "message": "",  # No message content for failed transfer
-                            "tool_uses": [tool_use],
-                        },
-                    )
-                )
-                error_message = self.message_handler.agent.format_message(
-                    MessageType.ToolResult,
-                    {
-                        "tool_use": tool_use,
-                        "tool_result": str(e),
-                        "is_error": True,
-                    },
-                )
-                self.message_handler._messages_append(error_message)
-                self.message_handler._notify(
-                    "tool_error",
-                    {
-                        "tool_use": tool_use,
-                        "error": str(e),
-                        "message": error_message,
-                    },
-                )
-            return
-
-        elif tool_name == "ask":
+        if tool_name == "ask":
             self.message_handler._notify("tool_use", tool_use)
             try:
                 # Wait for user response through confirmation flow
@@ -138,13 +99,11 @@ class ToolManager:
             if action == "deny":
                 reason = confirmation.get("reason", "")
                 reason_message = (
-                    f"with rejected reason: {reason}. Adjust your next steps bases on the reason why user rejected. Learn behavior only when the reason has `when <condition>, <action>` format."
+                    f"Rejected reason: {reason}. Adjust your next steps bases on the reason why user rejected. Learn behavior only when the reason has `when <condition>, <action>` format."
                     if reason
                     else "Immediately Pause the response and WAIT for user reason and adjustment."
                 )
-                tool_result = (
-                    f"Tool: {tool_id} call has been rejected by user, {reason_message}"
-                )
+                tool_result = f"Tool: {tool_name} with {tool_id} has been rejected and nothing has been changed. {reason_message}"
                 error_message = self.message_handler.agent.format_message(
                     MessageType.ToolResult,
                     {
@@ -175,6 +134,11 @@ class ToolManager:
             tool_result = await self.message_handler.agent.execute_tool_call(
                 tool_name, tool_use["input"]
             )
+
+            if tool_name == "transfer":
+                # Transfer tool needs post-transfer hook for agent switching
+                self._post_tool_transfer(tool_use, tool_result)
+                return
 
             tool_result_message = self.message_handler.agent.format_message(
                 MessageType.ToolResult,
@@ -397,13 +361,11 @@ class ToolManager:
         if action == "deny":
             reason = confirmation.get("reason", "")
             reason_message = (
-                f"with rejected reason: {reason}. Adjust your next steps bases on the reason why user rejected. Learn behavior only when the reason has `when <condition>, <action>` format."
+                f"Rejected reason: {reason}. Adjust your next steps bases on the reason why user rejected. Learn behavior only when the reason has `when <condition>, <action>` format."
                 if reason
                 else "Immediately Pause the response and WAIT for user reason and adjustment."
             )
-            tool_result = (
-                f"Tool: {tool_id} call has been rejected by user, {reason_message}"
-            )
+            tool_result = f"Tool: {tool_name} with {tool_id} has been rejected and nothing has been changed. {reason_message}"
             error_message = self.message_handler.agent.format_message(
                 MessageType.ToolResult,
                 {

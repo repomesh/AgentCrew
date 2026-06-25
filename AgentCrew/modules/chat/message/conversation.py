@@ -164,7 +164,7 @@ class ConversationManager:
                                 "Memories related to the user request:"
                             )
                             and not message_content.startswith("Content of ")
-                            and not message_content.startswith("<Transfer_Tool>")
+                            and not message_content.startswith("<Transfer_Request>")
                         ):
                             self.store_conversation_turn(message_content, i)
 

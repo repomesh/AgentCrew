@@ -309,7 +309,7 @@ class AgentManager:
                                     target_agent_name
                                 ].append(i)
                                 continue
-                            if content.startswith("<Transfer_Tool>"):
+                            if content.startswith("<Transfer_Request>"):
                                 continue
                             role = (
                                 "User"
