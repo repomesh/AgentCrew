@@ -174,11 +174,11 @@ You must analyze and plan out the steps then execute it with your available tool
         ) > 0 and (
             final_messages[last_user_index]["content"][0]
             .get("text", "")
-            .find("<Transfer_Tool>")
+            .find("<Transfer_Request>")
             != 0
             and final_messages[last_user_index]["content"][0]
             .get("text", "")
-            .find("<Transfer_Post_Action_Reminder>")
+            .find("<Post_Transfer_Action_Reminder>")
             != 0
         )
 

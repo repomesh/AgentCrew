@@ -549,7 +549,7 @@ class MessageHandler(Observable):
                         "content": [
                             {
                                 "type": "text",
-                                "text": f"""<Transfer_Post_Action_Reminder>{self.agent_manager.defered_transfer}. If action related to other agent, use `transfer` tool to chaining the work</Transfer_Post_Action_Reminder>""",
+                                "text": f"""<Post_Transfer_Action_Reminder>{self.agent_manager.defered_transfer}. If action related to other agent, use `transfer` tool to chaining the work</Post_Transfer_Action_Reminder>""",
                             }
                         ],
                     }

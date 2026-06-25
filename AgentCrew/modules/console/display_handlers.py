@@ -518,7 +518,7 @@ class DisplayHandlers:
             role = msg.get("role")
             if role == "user":
                 content = self._extract_message_content(msg)
-                if content.startswith("<Transfer_Tool>"):
+                if content.startswith("<Transfer_Request>"):
                     transfer_text = Text("Transfered to ", style=RICH_STYLE_YELLOW)
                     transfer_text.append(f"{msg.get('agent', 'unknown')} agent")
                     self.display_message(transfer_text)

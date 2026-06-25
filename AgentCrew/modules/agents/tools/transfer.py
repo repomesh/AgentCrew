@@ -99,8 +99,12 @@ def get_transfer_tool_handler(agent_manager: AgentManager) -> Callable:
         response = ""
 
         if result["success"] and result["transfer"]["from"] != "None":
-            response = f"<Transfer_Tool>\n  <Task from_agent='{result['transfer']['from']}'>\n{task}\n  </Task>\n"
-            response += f"  <Current_Agent>{result['transfer']['to']}</Current_Agent>\n"
+            response = f"""<Transfer_Request>
+  <From>{result["transfer"]["from"]}</From>
+  <To>{result["transfer"]["to"]} (You)</To>
+  <Task>
+    {task}
+  </Task>"""
 
             if result["transfer"].get("included_conversations", []):
                 response += f"  <Shared_Context>    \n{'    \n'.join(result['transfer'].get('included_conversations', []))}\n  </Shared_Context>\n"
@@ -111,7 +115,7 @@ def get_transfer_tool_handler(agent_manager: AgentManager) -> Callable:
                 else:
                     response += f"  <Post_Action>{post_action}</Post_Action>\n"
 
-            response += "</Transfer_Tool>"
+            response += "</Transfer_Request>"
 
             return response
 

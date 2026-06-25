@@ -17,7 +17,7 @@ def agent_evaluation_remove(data: str) -> str:
 
 def need_print_check(message: str) -> bool:
     return (
-        not message.startswith("<Transfer_Tool>")
+        not message.startswith("<Transfer_Request>")
         and not message.startswith("Memories related to the user request:")
         and not message.startswith("Need to tailor response bases on this")
     )
