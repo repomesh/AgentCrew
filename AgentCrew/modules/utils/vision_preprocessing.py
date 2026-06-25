@@ -17,7 +17,7 @@ from AgentCrew.modules.llm.model_registry import ModelRegistry
 
 VISION_CACHE_PATH_ENV = "AGENTCREW_VISION_CACHE_PATH"
 DEFAULT_VISION_CACHE_PATH = "~/.AgentCrew/cache/visions"
-VISION_DESCRIPTION_PROMPT = """Describe the image in as much useful detail as possible in around 500 words single paragraph:
+VISION_DESCRIPTION_PROMPT = """Describe the image in as much useful detail as possible in around 400 words single paragraph:
 
 Include:
 - main subject

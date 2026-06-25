@@ -324,8 +324,9 @@ class FileHandler:
                         url=AnyUrl(config["url"]),
                         headers=headers,
                         params=params,
+                        concurrency=4,
                         prompt=VISION_DESCRIPTION_PROMPT,
-                        timeout=60,
+                        timeout=120,
                     )
 
             for provider, config in PICTURE_DESCRIPTION_PROVIDERS.items():
@@ -350,9 +351,9 @@ class FileHandler:
                     url=AnyUrl(config["url"]),
                     headers=headers,
                     params=params,
-                    concurrency=3,
+                    concurrency=4,
                     prompt=VISION_DESCRIPTION_PROMPT,
-                    timeout=60,
+                    timeout=120,
                 )
 
             logger.info(
