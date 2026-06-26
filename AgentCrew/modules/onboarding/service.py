@@ -227,22 +227,26 @@ class OnboardingService:
         if self.llm_service:
             if self.llm_service.provider_name == "google":
                 self.llm_service.model = "gemini-3.1-pro-preview"
+            elif self.llm_service.provider_name == "commandcode":
+                self.llm_service.model = "zai-org/GLM-5.2"
+            elif self.llm_service.provider_name == "crofai":
+                self.llm_service.model = "glm-5.2"
             elif self.llm_service.provider_name == "claude":
                 self.llm_service.model = "claude-sonnet-4-6"
             elif self.llm_service.provider_name == "openai":
-                self.llm_service.model = "gpt-5.4"
+                self.llm_service.model = "gpt-5.5"
             elif self.llm_service.provider_name == "deepinfra":
-                self.llm_service.model = "zai-org/GLM-5.1"
+                self.llm_service.model = "zai-org/GLM-5.2"
             elif self.llm_service.provider_name == "github_copilot":
                 self.llm_service.model = "claude-sonnet-4.6"
             elif self.llm_service.provider_name == "copilot_response":
-                self.llm_service.model = "gpt-5.4"
+                self.llm_service.model = "gpt-5.5"
             elif self.llm_service.provider_name == "openai_codex":
-                self.llm_service.model = "gpt-5.4"
+                self.llm_service.model = "gpt-5.5"
             elif self.llm_service.provider_name == "together":
-                self.llm_service.model = "zai-org/GLM-5.1"
+                self.llm_service.model = "zai-org/GLM-5.2"
             elif self.llm_service.provider_name == "opencode_go":
-                self.llm_service.model = "kimi-k2.6"
+                self.llm_service.model = "kimi-k2.7-code"
 
     def should_run(self, config_uri: str | None = None) -> bool:
         """Check whether onboarding should run (no agents in config)."""
@@ -297,6 +301,10 @@ class OnboardingService:
             )
             return False
 
+        self._print_status(
+            f"Create your agent with {self.llm_service.provider_name}/{self.llm_service.model}"
+        )
+
         agent_name = name
         if not agent_name:
             agent_name = self._ask_text(
@@ -310,7 +318,7 @@ class OnboardingService:
 
         agent_description = description
         if not agent_description:
-            agent_description = self._ask_text(
+            agent_description = self._ask_text_multiline(
                 "What should this agent do?",
                 hint="e.g., Help me write Python code, Analyze financial data",
             )
@@ -415,6 +423,30 @@ class OnboardingService:
         )
         return result.strip() if result else ""
 
+    def _ask_text_multiline(self, message: str, hint: str = "") -> str:
+        kb = self._kb_skip()
+
+        @kb.add(Keys.ControlS)
+        def _(event):
+            """Submit on Ctrl+S."""
+            event.current_buffer.validate_and_handle()
+
+        if hint:
+            prompt_msg = HTML(
+                f"<ansigreen>{message}</ansigreen> <ansigrey>(type 'skip' to cancel, Alt+Enter or Ctrl+S to submit)</ansigrey>\n<ansigrey>{hint}</ansigrey>\n"
+            )
+        else:
+            prompt_msg = HTML(
+                f"<ansigreen>{message}</ansigreen> <ansigrey>(type 'skip' to cancel, Alt+Enter or Ctrl+S to submit)</ansigrey>"
+            )
+        result = prompt(
+            prompt_msg,
+            key_bindings=kb,
+            multiline=True,
+            style=_ONBOARDING_STYLE,
+        )
+        return result.strip() if result else ""
+
     async def _run_onboarding_chat(
         self, agent_name: str, agent_description: str
     ) -> str | None:
@@ -443,6 +475,7 @@ class OnboardingService:
                     return None
 
                 extracted = OnboardingService._extract_toml(result_text)
+                print(result_text)
                 if extracted:
                     try:
                         parsed = tomllib.loads(extracted)
@@ -553,10 +586,10 @@ class OnboardingService:
     def _extract_toml(text: str) -> str | None:
         """Extract TOML content from a ```toml markdown block or raw [[agents]] text."""
         text = text.strip()
-        pattern = r"```toml\s*\n?(.*?)\n?```"
+        pattern = r"```(toml)?\s*\n?((?:.|\n)*?)\n?```"
         match = re.search(pattern, text, re.DOTALL)
         if match:
-            return match.group(1).strip()
+            return match.group(2).strip()
         if text.startswith("[[agents]]"):
             return text
         return None
