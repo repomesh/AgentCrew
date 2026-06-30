@@ -35,6 +35,7 @@ from .constants import (
     RICH_STYLE_FILE_ACCENT_BOLD,
     RICH_STYLE_WHITE,
     CODE_THEME,
+    COMMAND_HELP_MESSAGES,
 )
 from .diff_display import DiffDisplay
 
@@ -698,132 +699,26 @@ class DisplayHandlers:
 
     def print_welcome_message(self, version: str):
         """Print the welcome message for the chat."""
-        welcome_messages = Group(
+        welcome_parts = [
             Text("Press Ctrl+C twice to exit.", style=RICH_STYLE_GRAY),
             Text("Type '/exit' or '/quit' to end the session.", style=RICH_STYLE_GRAY),
-            Text(
-                "Use '/voice' to input message with your voice.",
-                style=RICH_STYLE_YELLOW,
-            ),
-            Text(
-                "Use '/file <file_path>' to include a file in your message.",
-                style=RICH_STYLE_YELLOW,
-            ),
-            Text(
-                "Use '/clear' to clear the conversation history.",
-                style=RICH_STYLE_YELLOW,
-            ),
-            Text(
-                "Use '/think <budget>' to enable Claude's thinking mode (min 1024 tokens).",
-                style=RICH_STYLE_YELLOW,
-            ),
-            Text("Use '/think 0' to disable thinking mode.", style=RICH_STYLE_YELLOW),
-            Text(
-                "Use '/model [model_id]' to switch models or list available models.",
-                style=RICH_STYLE_YELLOW,
-            ),
-            Text(
-                "Use '/usage' to show current provider usage limits.",
-                style=RICH_STYLE_YELLOW,
-            ),
-            Text(
-                "Use '/debug [agent|chat|system]' to show debug information.",
-                style=RICH_STYLE_YELLOW,
-            ),
-            Text(
-                "Use '/jump <turn_number>' to rewind the conversation to a previous turn.",
-                style=RICH_STYLE_YELLOW,
-            ),
-            Text(
-                "Use '/copy <number>' to copy the nth-latest assistant response to clipboard.",
-                style=RICH_STYLE_YELLOW,
-            ),
-            Text(
-                "Use '/agent [agent_name]' to switch agents or list available agents.",
-                style=RICH_STYLE_YELLOW,
-            ),
-            Text(
-                "Use '/export_agent <agent_names> <output_file>' to export selected agents to a TOML file (comma-separated names).",
-                style=RICH_STYLE_YELLOW,
-            ),
-            Text(
-                "Use '/import_agent <file_or_url>' to import/replace agent configuration from a file or URL.",
-                style=RICH_STYLE_YELLOW,
-            ),
-            Text(
-                "Use '/edit_agent' to open agent configuration file in your default editor.",
-                style=RICH_STYLE_YELLOW,
-            ),
-            Text(
-                "Use '/edit_mcp' to open MCP configuration file in your default editor.",
-                style=RICH_STYLE_YELLOW,
-            ),
-            Text(
-                "Use '/edit_config' to open AgentCrew global configuration file in your default editor.",
-                style=RICH_STYLE_YELLOW,
-            ),
-            Text(
-                "Use '/toggle_transfer' to toggle agent transfer enforcement.",
-                style=RICH_STYLE_YELLOW,
-            ),
-            Text(
-                "Use '/agent_mode [transfer|delegate|none]' to switch agent interaction mode.",
-                style=RICH_STYLE_YELLOW,
-            ),
-            Text(
-                "Use '/toggle_session_yolo' to toggle YOLO mode (auto-approval of tool calls) in this session only.",
-                style=RICH_STYLE_YELLOW,
-            ),
-            Text(
-                "Use '/list_behaviors' to list all adaptive behaviors (global and project-specific).",
-                style=RICH_STYLE_YELLOW,
-            ),
-            Text(
-                "Use '/update_behavior <scope> <id> <behavior>' to create or update an adaptive behavior (format: 'when..., do...').",
-                style=RICH_STYLE_YELLOW,
-            ),
-            Text(
-                "Use '/delete_behavior <scope> <id>' to delete an adaptive behavior.",
-                style=RICH_STYLE_YELLOW,
-            ),
-            Text(
-                "Use '/clean_behaviors <scope>' to normalize and deduplicate adaptive behaviors in 'global' or 'project' scope.",
-                style=RICH_STYLE_YELLOW,
-            ),
-            Text("Use '/list' to list saved conversations.", style=RICH_STYLE_YELLOW),
-            Text(
-                "Use '/load <id>' or '/load <number>' to load a conversation.",
-                style=RICH_STYLE_YELLOW,
-            ),
-            Text(
-                "Use '/consolidate [count]' to summarize older messages (default: 10 recent messages preserved).",
-                style=RICH_STYLE_YELLOW,
-            ),
-            Text(
-                "Use '/evolve' to analyze current local-agent memory and propose a persisted system prompt evolution.",
-                style=RICH_STYLE_YELLOW,
-            ),
-            Text(
-                "Review and approve, edit, or decline the proposal in the interactive review UI after '/evolve'.",
-                style=RICH_STYLE_YELLOW,
-            ),
-            Text(
-                "Use '/unconsolidate' undo last consolidated.",
-                style=RICH_STYLE_YELLOW,
-            ),
-            Text(
-                "Use '/visual' to view raw message content with vim-like navigation and copy.",
-                style=RICH_STYLE_YELLOW,
-            ),
-            Text(
-                "Tool calls require confirmation before execution.",
-                style=RICH_STYLE_BLUE,
-            ),
-            Text(
-                "Use 'y' to approve once, 'n' to deny, 'all' to approve future calls to the same tool.",
-                style=RICH_STYLE_BLUE,
-            ),
+        ]
+        welcome_parts.extend(
+            Text(msg, style=RICH_STYLE_YELLOW) for msg in COMMAND_HELP_MESSAGES
         )
+        welcome_parts.extend(
+            [
+                Text(
+                    "Tool calls require confirmation before execution.",
+                    style=RICH_STYLE_BLUE,
+                ),
+                Text(
+                    "Use 'y' to approve once, 'n' to deny, 'all' to approve future calls to the same tool.",
+                    style=RICH_STYLE_BLUE,
+                ),
+            ]
+        )
+        welcome_messages = Group(*welcome_parts)
 
         self.console.print(
             Panel(
