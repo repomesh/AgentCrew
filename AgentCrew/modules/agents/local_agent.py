@@ -196,7 +196,9 @@ class LocalAgent(BaseAgent):
                 mcp_manager.discover_mcps_for_agent_background(self.name)
 
         system_prompt = (
-            f"<Agent_Instructions>\n{self.get_system_prompt()}\n</Agent_Instructions>"
+            f"<Name>{self.name}</Name>\n"
+            f"<Description>{self.description}</Description>\n"
+            f"<Instructions>\n{self.get_system_prompt()}\n</Instructions>"
         )
         if self.custom_system_prompt:
             system_prompt = f"{system_prompt}\n\n{self.custom_system_prompt}"

@@ -107,7 +107,7 @@ class ModelCompleter(Completer):
 
         # Only provide completions for the /model command
         if text.startswith("/model "):
-            model_text = text[len("/model "):]
+            model_text = text[len("/model ") :]
             filter_text = model_text.split("/")[-1] if "/" in model_text else model_text
 
             if not filter_text:
@@ -393,6 +393,10 @@ class ChatCompleter(Completer):
             (
                 "/clean_behaviors",
                 "Normalize and deduplicate adaptive behaviors (usage: /clean_behaviors global|project)",
+            ),
+            (
+                "/learn",
+                "Extract and store reusable behaviors from the current conversation",
             ),
             (
                 "/visual",

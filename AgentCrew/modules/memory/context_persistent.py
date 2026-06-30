@@ -2,6 +2,7 @@ import json
 import os
 import uuid
 import datetime
+import threading
 from typing import Any
 from loguru import logger
 
@@ -60,6 +61,9 @@ class ContextPersistenceService:
         self.prompt_evolutions_file_path = os.path.join(
             self.base_dir, self.PROMPT_EVOLUTIONS_FILE
         )
+
+        # Thread lock for adaptive behaviors file access
+        self._behavior_lock = threading.Lock()
 
         # _ensure_dir already raises OSError on failure
         self._ensure_dir(self.base_dir)
@@ -517,20 +521,21 @@ class ContextPersistenceService:
         Returns:
             Dictionary of behavior ID to behavior description mappings.
         """
-        adaptive_data = self._read_json_file(
-            self.adaptive_behaviors_local_path
-            if is_local
-            else self.adaptive_behaviors_file_path,
-            default_value={},
-        )
-
-        if not isinstance(adaptive_data, dict):
-            logger.warning(
-                "WARNING: Adaptive behaviors file was not a dictionary. Resetting."
+        with self._behavior_lock:
+            adaptive_data = self._read_json_file(
+                self.adaptive_behaviors_local_path
+                if is_local
+                else self.adaptive_behaviors_file_path,
+                default_value={},
             )
-            return {}
 
-        return adaptive_data.get(agent_name, {})
+            if not isinstance(adaptive_data, dict):
+                logger.warning(
+                    "WARNING: Adaptive behaviors file was not a dictionary. Resetting."
+                )
+                return {}
+
+            return adaptive_data.get(agent_name, {})
 
     def store_adaptive_behavior(
         self, agent_name: str, behavior_id: str, behavior: str, is_local=False
@@ -558,40 +563,41 @@ class ContextPersistenceService:
         if not behavior_lower.startswith("when"):
             raise ValueError("Behavior must follow 'when..., [action]...' format")
 
-        adaptive_data = self._read_json_file(
-            self.adaptive_behaviors_local_path
-            if is_local
-            else self.adaptive_behaviors_file_path,
-            default_value={},
-        )
-
-        if not isinstance(adaptive_data, dict):
-            logger.warning(
-                "WARNING: Adaptive behaviors file was not a dictionary. Resetting."
-            )
-            adaptive_data = {}
-
-        # Initialize agent's behaviors if not exists
-        if agent_name not in adaptive_data:
-            adaptive_data[agent_name] = {}
-
-        # Store the behavior
-        adaptive_data[agent_name][behavior_id] = behavior.strip()
-
-        try:
-            self._write_json_file(
+        with self._behavior_lock:
+            adaptive_data = self._read_json_file(
                 self.adaptive_behaviors_local_path
                 if is_local
                 else self.adaptive_behaviors_file_path,
-                adaptive_data,
+                default_value={},
             )
-            logger.info(
-                f"INFO: Stored adaptive behavior '{behavior_id}' for agent '{agent_name}'"
-            )
-            return True
-        except Exception as e:
-            logger.error(f"ERROR: Failed to store adaptive behavior: {e}")
-            return False
+
+            if not isinstance(adaptive_data, dict):
+                logger.warning(
+                    "WARNING: Adaptive behaviors file was not a dictionary. Resetting."
+                )
+                adaptive_data = {}
+
+            # Initialize agent's behaviors if not exists
+            if agent_name not in adaptive_data:
+                adaptive_data[agent_name] = {}
+
+            # Store the behavior
+            adaptive_data[agent_name][behavior_id] = behavior.strip()
+
+            try:
+                self._write_json_file(
+                    self.adaptive_behaviors_local_path
+                    if is_local
+                    else self.adaptive_behaviors_file_path,
+                    adaptive_data,
+                )
+                logger.info(
+                    f"INFO: Stored adaptive behavior '{behavior_id}' for agent '{agent_name}'"
+                )
+                return True
+            except Exception as e:
+                logger.error(f"ERROR: Failed to store adaptive behavior: {e}")
+                return False
 
     async def clean_adaptive_behaviors(
         self, agent_name: str, llm_service, is_local: bool = False
@@ -637,15 +643,20 @@ Rules:
                 if is_local
                 else self.adaptive_behaviors_file_path
             )
-            adaptive_data = self._read_json_file(adaptive_file_path, default_value={})
-            if not isinstance(adaptive_data, dict):
-                logger.warning(
-                    "WARNING: Adaptive behaviors file was not a dictionary. Resetting."
-                )
-                adaptive_data = {}
 
-            adaptive_data[agent_name] = normalized
-            self._write_json_file(adaptive_file_path, adaptive_data)
+            with self._behavior_lock:
+                adaptive_data = self._read_json_file(
+                    adaptive_file_path, default_value={}
+                )
+                if not isinstance(adaptive_data, dict):
+                    logger.warning(
+                        "WARNING: Adaptive behaviors file was not a dictionary. Resetting."
+                    )
+                    adaptive_data = {}
+
+                adaptive_data[agent_name] = normalized
+                self._write_json_file(adaptive_file_path, adaptive_data)
+
             logger.info(
                 f"INFO: Cleaned {len(behaviors)} adaptive behaviors into {len(normalized)} for agent '{agent_name}'"
             )
@@ -673,30 +684,32 @@ Rules:
             if is_local
             else self.adaptive_behaviors_file_path
         )
-        adaptive_data = self._read_json_file(adaptive_file_path, default_value={})
 
-        if not isinstance(adaptive_data, dict):
-            logger.warning("WARNING: Adaptive behaviors file was not a dictionary.")
-            return True
+        with self._behavior_lock:
+            adaptive_data = self._read_json_file(adaptive_file_path, default_value={})
 
-        if agent_name in adaptive_data and behavior_id in adaptive_data[agent_name]:
-            del adaptive_data[agent_name][behavior_id]
-
-            # Clean up empty agent entries
-            if not adaptive_data[agent_name]:
-                del adaptive_data[agent_name]
-
-            try:
-                self._write_json_file(adaptive_file_path, adaptive_data)
-                logger.info(
-                    f"INFO: Removed adaptive behavior '{behavior_id}' for agent '{agent_name}'"
-                )
+            if not isinstance(adaptive_data, dict):
+                logger.warning("WARNING: Adaptive behaviors file was not a dictionary.")
                 return True
-            except Exception as e:
-                logger.error(f"ERROR: Failed to remove adaptive behavior: {e}")
-                return False
 
-        return True  # Behavior didn't exist, consider it successful
+            if agent_name in adaptive_data and behavior_id in adaptive_data[agent_name]:
+                del adaptive_data[agent_name][behavior_id]
+
+                # Clean up empty agent entries
+                if not adaptive_data[agent_name]:
+                    del adaptive_data[agent_name]
+
+                try:
+                    self._write_json_file(adaptive_file_path, adaptive_data)
+                    logger.info(
+                        f"INFO: Removed adaptive behavior '{behavior_id}' for agent '{agent_name}'"
+                    )
+                    return True
+                except Exception as e:
+                    logger.error(f"ERROR: Failed to remove adaptive behavior: {e}")
+                    return False
+
+            return True  # Behavior didn't exist, consider it successful
 
     def fork_conversation(
         self, parent_conversation_id: str, message_index: int

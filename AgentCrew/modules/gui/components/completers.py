@@ -161,6 +161,7 @@ class GuiCommandCompleter:
             "/toggle_transfer",
             "/agent_mode",
             "/evolve",
+            "/learn",
             "/exit",
             "/quit",
         ]

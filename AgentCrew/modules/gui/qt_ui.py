@@ -557,6 +557,7 @@ class ChatWindow(QMainWindow, Observer):
             "evolution_summary_ready",
             "evolution_applied",
             "evolution_declined",
+            "learn_behavior_confirmation",
         ]
 
         if event in message_events:

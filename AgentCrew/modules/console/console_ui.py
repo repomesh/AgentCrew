@@ -20,7 +20,9 @@ from loguru import logger
 from .constants import (
     RICH_STYLE_GREEN,
     RICH_STYLE_BLUE,
+    RICH_STYLE_BLUE_BOLD,
     RICH_STYLE_YELLOW,
+    RICH_STYLE_WHITE,
     RICH_STYLE_YELLOW_BOLD,
     PROMPT_CHAR,
 )
@@ -398,6 +400,8 @@ class ConsoleUI(Observer):
                 )
             )
             self._calculate_token_usage(self._token_usage)
+        elif event == "learn_behavior_confirmation":
+            self._handle_learn_behavior_confirmation(data)
         elif event == "voice_recording_started":
             self.display_handlers.display_message(
                 Text("Start recording. Press Enter to stop...", style="bold yellow")
@@ -417,6 +421,40 @@ class ConsoleUI(Observer):
             )
         elif event == "voice_recording_completed":
             pass
+
+    def _handle_learn_behavior_confirmation(self, data: Any):
+        """Handle learn behavior confirmation request from the /learn command."""
+        confirmation_id = data.get("confirmation_id")
+        behavior_id = data.get("id", "")
+        behavior_text = data.get("behavior", "")
+
+        self.ui_effects.stop_loading_animation()
+        self.input_handler._stop_input_thread()
+        try:
+            self.console.print(
+                Text(
+                    f"\n🧠 Proposed behavior ({behavior_id}):",
+                    style=RICH_STYLE_BLUE_BOLD,
+                )
+            )
+            self.console.print(Text(f"  {behavior_text}", style=RICH_STYLE_WHITE))
+
+            choices = ["confirm (global)", "confirm (project)", "skip"]
+            response = self.input_handler.get_choice_input(
+                "Store this behavior?", choices, default="confirm (global)"
+            )
+
+            if response and response.startswith("confirm"):
+                scope = "project" if "project" in response else "global"
+                self.message_handler.resolve_learn_confirmation(
+                    confirmation_id, {"action": "confirm", "scope": scope}
+                )
+            else:
+                self.message_handler.resolve_learn_confirmation(
+                    confirmation_id, {"action": "skip"}
+                )
+        finally:
+            self.input_handler._start_input_thread()
 
     def copy_to_clipboard(self, text: str):
         """Copy text to clipboard and show confirmation."""
@@ -820,6 +858,7 @@ class ConsoleUI(Observer):
                         or user_input.startswith("/consolidate ")
                         or user_input.startswith("/agent ")
                         or user_input.startswith("/model ")
+                        or user_input.startswith("/learn")
                         or user_input.startswith("/retry")
                     ):
                         self.start_loading_animation()

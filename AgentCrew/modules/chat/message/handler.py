@@ -21,6 +21,7 @@ from .tool_manager import ToolManager
 from .conversation import ConversationManager
 from .base import Observable
 from .prompt_evolution_coordinator import PromptEvolutionCoordinator
+from .learn_review_coordinator import LearnReviewCoordinator
 from AgentCrew.modules.chat.stream_session import StreamSession
 from AgentCrew.modules.llm.token_usage import TokenUsage
 
@@ -88,6 +89,11 @@ class MessageHandler(Observable):
             agent_getter=lambda: self.agent,
             notify=self._notify,
             memory_service=self.memory_service,
+            persistence_service=self.persistent_service,
+        )
+        self.learn_review_coordinator = LearnReviewCoordinator(
+            agent_getter=lambda: self.agent,
+            notify=self._notify,
             persistence_service=self.persistent_service,
         )
 
@@ -205,6 +211,15 @@ class MessageHandler(Observable):
         return await self.prompt_evolution_coordinator.submit_review(
             action, approved_summary
         )
+
+    async def start_learn_review(self) -> bool:
+        return await self.learn_review_coordinator.start_review(
+            self.streamline_messages
+        )
+
+    def resolve_learn_confirmation(self, confirmation_id: int, result: dict):
+        """Resolve a pending learn behavior confirmation with the user's decision."""
+        self.learn_review_coordinator.resolve_confirmation(confirmation_id, result)
 
     def _create_stream_session(self) -> StreamSession:
         self._stream_session_counter += 1

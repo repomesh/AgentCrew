@@ -87,17 +87,18 @@ You must analyze and plan out the steps then execute it with your available tool
         if project_behaviors:
             adaptive_sections.append(
                 "### Project Behaviors\n"
-                + "\n".join(
-                    f"- `{key}`: {value}" for key, value in project_behaviors.items()
-                )
+                + "\n".join(f"- {value}" for _, value in project_behaviors.items())
             )
 
         if adaptive_sections:
             adaptive_messages.append(
                 (
                     "## Adaptive Behaviors\n"
-                    "Apply matching behaviors immediately, overriding default instructions.\n"
-                    "Project behaviors have higher priority than global behaviors.\n\n"
+                    "### How to Apply\n"
+                    "Each behavior follows the format: `when [condition], do [action steps]`.\n"
+                    "- **Condition matching**: At the start of every task, scan all behaviors. If the current task matches a condition, apply its action steps.\n"
+                    "- **Multiple matches**: Apply all matching behaviors. Project behaviors override global ones when they conflict.\n"
+                    "- **What counts as a match**: The condition describes a triggering situation — project context, user preferences, task type, etc. Use your best judgment.\n\n"
                     f"{'\n\n'.join(adaptive_sections)}"
                 )
             )
@@ -324,7 +325,8 @@ You must analyze and plan out the steps then execute it with your available tool
                     else:
                         msg["content"] = [
                             {
-                                "text": f"[tool: {tool_name} was rejected with reason: {msg.get('content')}]"
+                                "type": "text",
+                                "text": f"[tool: {tool_name} was rejected with reason: {msg.get('content')}]",
                             }
                         ]
                     msg.pop("tool_name", None)

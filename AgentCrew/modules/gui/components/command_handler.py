@@ -1,7 +1,14 @@
 import json
 from typing import Any
 import pyperclip
-from PySide6.QtWidgets import QApplication
+from PySide6.QtWidgets import (
+    QApplication,
+    QDialog,
+    QGridLayout,
+    QLabel,
+    QPushButton,
+    QVBoxLayout,
+)
 from PySide6.QtCore import Slot
 
 from AgentCrew.modules.gui.widgets.evolution_loading_dialog import (
@@ -64,6 +71,7 @@ class CommandHandler:
             user_input.startswith("/consolidate")
             or user_input.startswith("/agent")
             or user_input.startswith("/evolve")
+            or user_input.startswith("/learn")
             or user_input.startswith("/jump")
             or user_input.startswith("/fork")
             or user_input.startswith("/drop")
@@ -506,6 +514,9 @@ class CommandHandler:
             self.chat_window.display_status_message("Prompt evolution declined")
             self.chat_window.ui_state_manager.set_input_controls_enabled(True)
             return True
+        elif event == "learn_behavior_confirmation":
+            self._handle_learn_behavior_confirmation(data)
+            return True
         elif event == "evolution_finished":
             self._hide_evolution_loading_dialog()
             self.chat_window.display_status_message(
@@ -515,3 +526,56 @@ class CommandHandler:
 
         # Event not handled by command handler
         return False
+
+    def _handle_learn_behavior_confirmation(self, data: Any):
+        """Handle learn behavior confirmation request from the /learn command."""
+        confirmation_id = data.get("confirmation_id")
+        behavior_id = data.get("id", "")
+        behavior_text = data.get("behavior", "")
+
+        self.chat_window.ui_state_manager.set_input_controls_enabled(True)
+        self.chat_window.chat_components.add_system_message(
+            f"🧠 Proposed behavior ({behavior_id}):\n  {behavior_text}"
+        )
+
+        dialog = QDialog(self.chat_window)
+        dialog.setWindowTitle("Learn Behavior Confirmation")
+        dialog.setMinimumWidth(450)
+        layout = QVBoxLayout()
+
+        label = QLabel(f"Store this behavior?\n\n{behavior_text}")
+        label.setWordWrap(True)
+        layout.addWidget(label)
+
+        button_layout = QGridLayout()
+
+        global_btn = QPushButton("Confirm (Global)")
+        project_btn = QPushButton("Confirm (Project)")
+        skip_btn = QPushButton("Skip")
+
+        global_btn.clicked.connect(dialog.accept)
+        global_btn.clicked.connect(lambda: setattr(dialog, "_choice", "global"))
+        project_btn.clicked.connect(dialog.accept)
+        project_btn.clicked.connect(lambda: setattr(dialog, "_choice", "project"))
+        skip_btn.clicked.connect(dialog.accept)
+        skip_btn.clicked.connect(lambda: setattr(dialog, "_choice", "skip"))
+
+        button_layout.addWidget(global_btn, 0, 0)
+        button_layout.addWidget(project_btn, 0, 1)
+        button_layout.addWidget(skip_btn, 0, 2)
+        layout.addLayout(button_layout)
+        dialog.setLayout(layout)
+
+        dialog.setStyleSheet(self.chat_window.style_provider.get_config_window_style())
+        dialog._choice = None
+        dialog.exec()
+
+        choice = getattr(dialog, "_choice", None)
+        if choice in ("global", "project"):
+            self.chat_window.message_handler.resolve_learn_confirmation(
+                confirmation_id, {"action": "confirm", "scope": choice}
+            )
+        else:
+            self.chat_window.message_handler.resolve_learn_confirmation(
+                confirmation_id, {"action": "skip"}
+            )
