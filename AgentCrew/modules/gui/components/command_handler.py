@@ -1,6 +1,5 @@
 import json
 from typing import Any
-import pyperclip
 from PySide6.QtWidgets import (
     QApplication,
     QDialog,
@@ -40,12 +39,6 @@ class CommandHandler:
         # Clear command
         if user_input.startswith("/clear"):
             self.clear_chat()
-            self.chat_window.ui_state_manager.set_input_controls_enabled(True)
-            return True
-
-        # Copy command
-        elif user_input.startswith("/copy"):
-            self.chat_window.llm_worker.process_request.emit(user_input)
             self.chat_window.ui_state_manager.set_input_controls_enabled(True)
             return True
 
@@ -90,11 +83,6 @@ class CommandHandler:
             "Invalid command: type /help to view all available commands"
         )
         return True
-
-    @Slot()
-    def copy_last_response(self):
-        """Copy the last assistant response to clipboard."""
-        self.chat_window.llm_worker.process_request.emit("/copy")
 
     @Slot()
     def handle_clear_request(self):
@@ -378,12 +366,6 @@ class CommandHandler:
 
         elif event == "exit_requested":
             QApplication.quit()
-            return True
-
-        elif event == "copy_requested":
-            if isinstance(data, str):
-                pyperclip.copy(data)
-                self.chat_window.display_status_message("Text copied to clipboard!")
             return True
 
         elif event == "debug_requested":

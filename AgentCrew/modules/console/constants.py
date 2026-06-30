@@ -31,7 +31,6 @@ COMMAND_HELP_MESSAGES = [
     "Use '/usage' to show current provider usage limits.",
     "Use '/debug [agent|chat|system]' to show debug information.",
     "Use '/jump <turn_number>' to rewind the conversation to a previous turn.",
-    "Use '/copy <number>' to copy the nth-latest assistant response to clipboard.",
     "Use '/agent [agent_name]' to switch agents or list available agents.",
     "Use '/export_agent <agent_names> <output_file>' to export selected agents to a TOML file (comma-separated names).",
     "Use '/import_agent <file_or_url>' to import/replace agent configuration from a file or URL.",

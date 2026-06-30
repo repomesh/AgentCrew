@@ -235,7 +235,6 @@ Inside the chat interface, type:
 - `/agent <name>` — switch to another agent
 - `/clear` — start a new conversation
 - `/file <path>` — attach a file
-- `/copy` — copy the last response
 - `/think <low|medium|high|xhigh>` — enable reasoning mode
 - `/voice` — start voice recording
 - `/help` - show all available commands

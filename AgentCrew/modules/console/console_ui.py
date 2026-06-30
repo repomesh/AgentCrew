@@ -239,8 +239,6 @@ class ConsoleUI(Observer):
             self.session_cost = 0
             self._token_usage = TokenUsage()
             self._total_cost = 0
-        elif event == "copy_requested":
-            self.copy_to_clipboard(data)  # data is the text to copy
         elif event == "debug_requested":
             self.display_handlers.display_debug_info(
                 data
