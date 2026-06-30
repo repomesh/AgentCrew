@@ -38,8 +38,6 @@ class CommandProcessor:
         elif user_input.lower() == "/clear":
             self.message_handler.start_new_conversation()
             return CommandResult(handled=True, clear_flag=True)
-        elif user_input.lower().startswith("/copy"):
-            return await self.utility_commands.handle_copy(user_input)
         elif user_input.lower().startswith("/debug"):
             return self.utility_commands.handle_debug(user_input)
         elif user_input.lower().startswith("/think"):
@@ -48,6 +46,9 @@ class CommandProcessor:
             return await self.utility_commands.handle_usage(user_input)
         elif user_input.lower().startswith("/clean_behaviors"):
             return await self.utility_commands.handle_clean_behaviors(user_input)
+        elif user_input.lower().startswith("/learn"):
+            await self.message_handler.start_learn_review()
+            return CommandResult(handled=True, clear_flag=True)
         elif user_input.lower().startswith("/consolidate"):
             return await self.conversation_commands.handle_consolidate(user_input)
         elif user_input.lower().startswith("/evolve"):

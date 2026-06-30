@@ -410,11 +410,9 @@ class ChatWindow(QMainWindow, Observer):
         context_menu.setStyleSheet(self.style_provider.get_context_menu_style())
 
         # Add menu actions
-        copy_action = context_menu.addAction("Copy Last Response")
         clear_action = context_menu.addAction("Clear Chat")
 
         # Connect actions to slots
-        copy_action.triggered.connect(self.command_handler.copy_last_response)
         clear_action.triggered.connect(self.command_handler.clear_chat)
 
         # Show the menu at the cursor position
@@ -545,7 +543,6 @@ class ChatWindow(QMainWindow, Observer):
         command_events = [
             "clear_requested",
             "exit_requested",
-            "copy_requested",
             "debug_requested",
             "agent_changed",
             "agent_command_result",
@@ -557,6 +554,7 @@ class ChatWindow(QMainWindow, Observer):
             "evolution_summary_ready",
             "evolution_applied",
             "evolution_declined",
+            "learn_behavior_confirmation",
         ]
 
         if event in message_events:

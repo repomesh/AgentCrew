@@ -142,7 +142,6 @@ class GuiCommandCompleter:
     def __init__(self):
         self.commands = [
             "/clear",
-            "/copy",
             "/debug",
             "/think",
             "/usage",
@@ -161,6 +160,7 @@ class GuiCommandCompleter:
             "/toggle_transfer",
             "/agent_mode",
             "/evolve",
+            "/learn",
             "/exit",
             "/quit",
         ]

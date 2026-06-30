@@ -218,50 +218,6 @@ class UtilityCommands:
             self.message_handler._notify("error", f"Error cleaning behaviors: {str(e)}")
         return CommandResult(handled=True, clear_flag=True)
 
-    async def handle_copy(self, user_input: str) -> CommandResult:
-        copy_idx = user_input[5:].strip() or 1
-        user_input_idxs = [
-            turn.message_index for turn in self.message_handler.conversation_turns
-        ]
-
-        asssistant_messages_iterator = reversed(
-            [
-                msg
-                for i, msg in enumerate(self.message_handler.streamline_messages)
-                if msg.get("role") == "assistant"
-                and (
-                    i + 1 in user_input_idxs
-                    if i + 1 < len(self.message_handler.streamline_messages)
-                    else True
-                )
-            ]
-        )
-        latest_assistant_blk = None
-        try:
-            for _ in range(int(copy_idx)):
-                latest_assistant_blk = next(asssistant_messages_iterator, None)
-
-            if latest_assistant_blk:
-                latest_content_blk = latest_assistant_blk.get("content", "")
-                if isinstance(latest_content_blk, list):
-                    latest_content = next(
-                        (
-                            c.get("text", "")
-                            for c in latest_content_blk
-                            if isinstance(c, dict) and c.get("type", "") == "text"
-                        ),
-                        "",
-                    )
-                else:
-                    latest_content = latest_content_blk
-
-                self.message_handler._notify("copy_requested", latest_content)
-        except Exception as e:
-            self.message_handler._notify("error", f"Failed to copy message: {str(e)}")
-            return CommandResult(handled=True, clear_flag=True)
-
-        return CommandResult(handled=True, clear_flag=True)
-
     def handle_debug(self, user_input: str) -> CommandResult:
         """Handle /debug command with optional filtering.
 

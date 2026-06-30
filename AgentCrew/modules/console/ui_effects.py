@@ -5,6 +5,8 @@ Handles loading animations, live displays, and other visual effects.
 
 from __future__ import annotations
 
+import colorsys
+import math
 import time
 import threading
 import itertools
@@ -16,7 +18,12 @@ from rich.markdown import Markdown
 from rich.panel import Panel
 from rich.text import Text
 
-from .constants import CODE_THEME, RICH_STYLE_GRAY, RICH_STYLE_GREEN
+from .constants import (
+    CODE_THEME,
+    RICH_STYLE_GRAY,
+    RICH_STYLE_GREEN,
+    COMMAND_HELP_MESSAGES,
+)
 
 from typing import TYPE_CHECKING
 
@@ -112,6 +119,50 @@ class UIEffects:
         self._delegate_stop_event: threading.Event | None = None
         self._delegate_thread: threading.Thread | None = None
 
+    # Hue oscillates between (h_start - h_range/2) and (h_start + h_range/2)
+    # using a cosine wave, so both ends of the string share the same hue →
+    # zero jump at wrap-around and small per-character steps for smoothness.
+    _GRADIENT_HUE_START = 0.45
+    _GRADIENT_HUE_RANGE = 0.25
+    _GRADIENT_SATURATION = 0.70
+    _GRADIENT_VALUE = 1.0
+
+    def _gradient_text(self, text: str, offset: float = 0.0) -> Text:
+        """Create a Text with a left-to-right hue gradient that flows over time.
+
+        Uses a cosine wave in HSV hue space for smooth cyclic transitions.
+        Both ends of the string share the same hue, so there is no color
+        jump at wrap-around, and the limited hue range keeps per-character
+        steps small for a visually smooth gradient.
+
+        Args:
+            text: The string to render.
+            offset: Normalized position offset (0.0–1.0) that shifts the gradient,
+                creating a flowing effect when incremented per frame.
+        """
+        result = Text(text)
+        n = len(text)
+        if n == 0:
+            return result
+
+        h_start = self._GRADIENT_HUE_START
+        h_range = self._GRADIENT_HUE_RANGE
+        s = self._GRADIENT_SATURATION
+        v = self._GRADIENT_VALUE
+
+        for i in range(n):
+            pos = ((i / max(n - 1, 1)) - offset) % 1.0
+            # cosine wave: 0 → +1 → 0 → -1 → 0 across one full cycle
+            wave = math.cos(2 * math.pi * pos)
+            hue = (h_start + wave * h_range / 2) % 1.0
+            r_f, g_f, b_f = colorsys.hsv_to_rgb(hue, s, v)
+            r = int(r_f * 255)
+            g = int(g_f * 255)
+            b = int(b_f * 255)
+            result.stylize(f"rgb({r},{g},{b})", i, i + 1)
+
+        return result
+
     def _loading_animation(self, stop_event):
         """Display a loading animation in the terminal."""
         fun_words = [
@@ -133,13 +184,30 @@ class UIEffects:
             "Imagining",
         ]
         fun_word = random.choice(fun_words)
+        tips = COMMAND_HELP_MESSAGES
+        tip_index = random.randint(0, len(tips) - 1)
+        tip_timer = 0.0
+        tip_interval = 5.0
+        gradient_offset = 0.0
 
         with Live(
-            "", console=self.console, auto_refresh=True, refresh_per_second=10
+            "", console=self.console, auto_refresh=True, refresh_per_second=30
         ) as live:
             while not stop_event.is_set():
-                live.update(f" {fun_word} {next(self.spinner)}")
-                time.sleep(0.1)  # Control animation speed
+                spin = next(self.spinner)
+                tip_line = self._gradient_text(
+                    f"  💡 {tips[tip_index]}", gradient_offset
+                )
+                spinner_line = self._gradient_text(
+                    f"  {fun_word} {spin}", gradient_offset
+                )
+                live.update(Group(spinner_line, tip_line))
+                time.sleep(0.1)
+                tip_timer += 0.1
+                gradient_offset = (gradient_offset + 0.02) % 1.0
+                if tip_timer >= tip_interval:
+                    tip_timer = 0.0
+                    tip_index = (tip_index + 1) % len(tips)
             live.update("")  # Clear the live display when done
             live.stop()  # Stop the live display
             import sys
