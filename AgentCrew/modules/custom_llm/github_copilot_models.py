@@ -287,6 +287,17 @@ GITHUB_COPILOT_MODELS = [
         output_token_price_1m=0.0,
     ),
     Model(
+        id="claude-sonnet-5",
+        provider="github_copilot",
+        service_name="github_copilot",
+        name="Claude Sonnet 5",
+        description="",
+        capabilities=["tool_use", "vision", "stream", "thinking"],
+        default=False,
+        input_token_price_1m=0.0,
+        output_token_price_1m=0.0,
+    ),
+    Model(
         id="claude-opus-4.5",
         provider="github_copilot",
         service_name="github_copilot",
