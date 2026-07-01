@@ -73,6 +73,18 @@ ANTHROPIC_MODELS = [
         output_token_price_1m=15.0,
     ),
     Model(
+        id="claude-sonnet-5",
+        provider="claude",
+        name="Claude 5 Sonnet",
+        description="The most agentic Sonnet model yet with near-Opus performance for complex agents and coding",
+        capabilities=["thinking", "tool_use", "vision", "stream"],
+        max_context_token=200_000,
+        default=False,
+        input_token_price_1m=3.0,
+        cached_token_price_1m=0.3,
+        output_token_price_1m=15.0,
+    ),
+    Model(
         id="claude-haiku-4-5",
         provider="claude",
         name="Claude 4.5 Haiku",

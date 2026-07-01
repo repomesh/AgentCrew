@@ -58,6 +58,7 @@ class MCPService:
         self.file_handler: FileHandler | None = None
         self._config_manager: MCPConfigManager | None = None
         self._acp_server_configs: dict[str, MCPServerConfig] = {}
+        self._oauth_locks: dict[str, asyncio.Lock] = {}
 
     def _get_file_handler(self) -> FileHandler:
         if self.file_handler is None:
@@ -80,14 +81,36 @@ class MCPService:
                 return config
         return None
 
+    def _get_oauth_lock(self, server_name: str) -> asyncio.Lock:
+        """Get or create a per-server asyncio.Lock for serializing OAuth flows."""
+        if server_name not in self._oauth_locks:
+            self._oauth_locks[server_name] = asyncio.Lock()
+        return self._oauth_locks[server_name]
+
     async def _create_session(
         self, server_config: MCPServerConfig
     ) -> tuple[ClientSession, Any]:
         """Create a temporary MCP client session.
 
+        For streaming (HTTP/SSE) servers, session creation is serialized per
+        server via an asyncio.Lock. This prevents concurrent OAuth flows from
+        conflicting on the same callback port: the first call triggers OAuth
+        and saves the token, while subsequent calls wait for the lock, then
+        find a valid token and skip OAuth entirely.
+
         Returns ``(session, ctx)`` where ``ctx`` is the transport context
         manager. The caller must call :meth:`_close_session` when done.
         """
+        if server_config.streaming_server:
+            lock = self._get_oauth_lock(server_config.name)
+            async with lock:
+                return await self._create_session_impl(server_config)
+        return await self._create_session_impl(server_config)
+
+    async def _create_session_impl(
+        self, server_config: MCPServerConfig
+    ) -> tuple[ClientSession, Any]:
+        """Internal session creation (called under per-server OAuth lock for streaming servers)."""
         if server_config.streaming_server:
             headers = server_config.headers or {}
             token_storage = self._build_token_storage(server_config)
