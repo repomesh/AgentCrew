@@ -8,6 +8,28 @@ from AgentCrew.modules.llm.types import Model, SampleParam
 
 DEEPINFRA_MODELS = [
     Model(
+        id="XiaomiMiMo/MiMo-V2.6-Pro",
+        provider="deepinfra",
+        name="MiMo V2.6 Pro",
+        description="Xiaomi MiMo V2.6 Pro on DeepInfra — flagship multimodal reasoning model for agentic coding",
+        capabilities=["tool_use", "thinking", "vision", "stream", "structured_output"],
+        max_context_token=400_000,
+        input_token_price_1m=0.435,
+        output_token_price_1m=0.87,
+        cached_token_price_1m=0.004,
+    ),
+    Model(
+        id="XiaomiMiMo/MiMo-V2.6-Flash",
+        provider="deepinfra",
+        name="MiMo V2.6 Flash",
+        description="Xiaomi MiMo V2.6 Flash on DeepInfra — efficient multimodal model for agentic coding",
+        capabilities=["tool_use", "thinking", "vision", "stream", "structured_output"],
+        max_context_token=400_000,
+        input_token_price_1m=0.14,
+        output_token_price_1m=0.28,
+        cached_token_price_1m=0.003,
+    ),
+    Model(
         id="google/gemma-4-31B-it",
         provider="deepinfra",
         name="Gemma 4 31B",
