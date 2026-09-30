@@ -38,6 +38,7 @@ class VisualModeUI:
         self._selection_start: tuple[int, int] | None = None
         self._selection_end: tuple[int, int] | None = None
         self._visual_mode = False
+        self._linewise_selection = False
         self._live: Live | None = None
         self._layout: Layout | None = None
         self._search_mode = False
@@ -74,6 +75,7 @@ class VisualModeUI:
         self._selection_start = None
         self._selection_end = None
         self._visual_mode = False
+        self._linewise_selection = False
         self._search_mode = False
         self._search_query = ""
         self._search_matches = []
@@ -194,13 +196,17 @@ class VisualModeUI:
             self._adjust_scroll()
             self._adjust_horizontal_scroll()
 
-    def toggle_visual_mode(self):
-        if self._visual_mode:
+    def toggle_visual_mode(self, linewise: bool | None = None):
+        if self._visual_mode and (linewise is None or self._linewise_selection == linewise):
             self._visual_mode = False
+            self._linewise_selection = False
             self._selection_start = None
             self._selection_end = None
+        elif self._visual_mode:
+            self._linewise_selection = linewise
         else:
             self._visual_mode = True
+            self._linewise_selection = bool(linewise)
             self._selection_start = (self._cursor_line, self._cursor_col)
             self._selection_end = (self._cursor_line, self._cursor_col)
 
@@ -216,6 +222,10 @@ class VisualModeUI:
 
         start_line, start_col = self._selection_start
         end_line, end_col = self._selection_end
+
+        if self._linewise_selection:
+            first, last = sorted((start_line, end_line))
+            return "\n".join(self._lines[i][0] for i in range(first, last + 1))
 
         if (start_line, start_col) > (end_line, end_col):
             start_line, start_col, end_line, end_col = (
@@ -356,7 +366,10 @@ class VisualModeUI:
         if self._search_mode:
             mode_text.append("-- SEARCH --", style="bold cyan")
         elif self._visual_mode:
-            mode_text.append("-- VISUAL --", style="bold yellow")
+            mode_text.append(
+                "-- VISUAL LINE --" if self._linewise_selection else "-- VISUAL --",
+                style="bold yellow",
+            )
         else:
             mode_text.append("-- NORMAL --", style="bold green")
 
@@ -379,6 +392,9 @@ class VisualModeUI:
 
         start_line, start_col = self._selection_start
         end_line, end_col = self._selection_end
+
+        if self._linewise_selection:
+            return min(start_line, end_line) <= line <= max(start_line, end_line)
 
         if (start_line, start_col) > (end_line, end_col):
             start_line, start_col, end_line, end_col = (
@@ -412,16 +428,6 @@ class VisualModeUI:
         end_line = min(self._scroll_offset + self.viewport_height, self.total_lines)
         visible_width = self.viewport_width - 6
 
-        sel_start = None
-        sel_end = None
-        if self._selection_start is not None and self._selection_end is not None:
-            s_line, s_col = self._selection_start
-            e_line, e_col = self._selection_end
-            if (s_line, s_col) > (e_line, e_col):
-                s_line, s_col, e_line, e_col = e_line, e_col, s_line, s_col
-            sel_start = (s_line, s_col)
-            sel_end = (e_line, e_col)
-
         for i in range(self._scroll_offset, end_line):
             line_text, _, _ = self._lines[i]
             base_style = self._line_styles[i]
@@ -435,6 +441,12 @@ class VisualModeUI:
 
             if not visible_text and i == self._cursor_line and self._cursor_col == 0:
                 content.append(" ", style="reverse")
+            elif (
+                not visible_text
+                and self._linewise_selection
+                and self._is_position_selected(i, 0)
+            ):
+                content.append(" ", style="on blue")
             else:
                 segment_start = 0
                 current_style = None
@@ -444,16 +456,7 @@ class VisualModeUI:
                     is_cursor = (
                         i == self._cursor_line and actual_col == self._cursor_col
                     )
-                    is_selected = False
-                    if sel_start and sel_end:
-                        if sel_start[0] == sel_end[0] == i:
-                            is_selected = sel_start[1] <= actual_col <= sel_end[1]
-                        elif sel_start[0] == i:
-                            is_selected = actual_col >= sel_start[1]
-                        elif sel_end[0] == i:
-                            is_selected = actual_col <= sel_end[1]
-                        elif sel_start[0] < i < sel_end[0]:
-                            is_selected = True
+                    is_selected = self._is_position_selected(i, actual_col)
                     is_match = (i, actual_col) in self._cached_search_set
 
                     if is_cursor:
@@ -542,12 +545,12 @@ class VisualModeUI:
             nav_text.append(": move  ")
             nav_text.append("w/b", style="bold")
             nav_text.append(": word  ")
-            nav_text.append("0/$", style="bold")
+            nav_text.append("^/$", style="bold")
             nav_text.append(": line start/end")
 
             action_text = Text()
-            action_text.append("v", style="bold")
-            action_text.append(": visual  ")
+            action_text.append("v/V", style="bold")
+            action_text.append(": visual/line  ")
             action_text.append("y", style="bold")
             action_text.append(": yank  ")
             action_text.append("/", style="bold")

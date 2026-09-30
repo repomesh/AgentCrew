@@ -94,10 +94,10 @@ class VisualModeInputHandler:
             self._ui.move_cursor("word_backward")
             self._ui.render()
 
-        @kb.add("0")
+        @kb.add("^")
         def _(event):
             if self._ui._search_mode:
-                self._ui.append_search_char("0")
+                self._ui.append_search_char("^")
                 self._ui.render()
                 return
             self._g_pressed = False
@@ -176,7 +176,17 @@ class VisualModeInputHandler:
                 self._ui.render()
                 return
             self._g_pressed = False
-            self._ui.toggle_visual_mode()
+            self._ui.toggle_visual_mode(linewise=False)
+            self._ui.render()
+
+        @kb.add("V")
+        def _(event):
+            if self._ui._search_mode:
+                self._ui.append_search_char("V")
+                self._ui.render()
+                return
+            self._g_pressed = False
+            self._ui.toggle_visual_mode(linewise=True)
             self._ui.render()
 
         @kb.add("y")

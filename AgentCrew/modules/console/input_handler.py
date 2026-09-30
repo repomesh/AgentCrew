@@ -412,7 +412,18 @@ class InputHandler:
                     if not self.is_message_processing and not voice_recording_active
                     else ""
                 )
-                user_input = session.prompt(prompt_text)
+
+                def cancel_if_stopping(session=session):
+                    if self._input_stop_event.is_set():
+                        session.app.exit()
+
+                try:
+                    user_input = session.prompt(
+                        prompt_text, pre_run=cancel_if_stopping
+                    )
+                finally:
+                    if self._current_prompt_session is session:
+                        self._current_prompt_session = None
 
                 if not user_input:
                     continue
@@ -445,8 +456,14 @@ class InputHandler:
     def _start_input_thread(self):
         """Start the input thread if not already running."""
         with self._input_thread_lock:
-            if self._input_thread is not None and self._input_thread.is_alive():
-                self._stop_input_thread_locked()
+            if (
+                self._input_thread is not None
+                and self._input_thread.is_alive()
+                and not self._stop_input_thread_locked()
+            ):
+                raise RuntimeError(
+                    "Cannot start input while the previous input thread is running"
+                )
             self._input_stop_event.clear()
             self._input_thread = Thread(target=self._input_thread_worker, daemon=True)
             self._input_thread.start()
@@ -454,35 +471,37 @@ class InputHandler:
     def _stop_input_thread(self):
         """Stop the input thread cleanly."""
         with self._input_thread_lock:
-            self._stop_input_thread_locked()
+            return self._stop_input_thread_locked()
 
-    def _stop_input_thread_locked(self):
-        """Internal stop implementation — caller must hold _input_thread_lock."""
+    def _stop_input_thread_locked(self) -> bool:
+        """Stop the tracked worker; caller must hold _input_thread_lock."""
         if not self._input_thread or not self._input_thread.is_alive():
-            return
-
-        if threading.current_thread() == self._input_thread:
-            self._input_stop_event.set()
-            return
+            return True
 
         self._input_stop_event.set()
-        if self._current_prompt_session:
-            try:
-                if (
-                    hasattr(self._current_prompt_session, "app")
-                    and self._current_prompt_session.app
-                ):
-                    self._current_prompt_session.app.exit()
-            except Exception:
-                logger.debug("Failed to exit prompt session")
+        if threading.current_thread() == self._input_thread:
+            return False
 
-        self._input_thread.join(timeout=1.5)
+        session = self._current_prompt_session
+        if session is not None:
+            app = session.app
+            loop = app.loop
+            if loop is not None:
 
+                def exit_running_prompt():
+                    if app.future is not None and not app.future.done():
+                        app.exit()
+
+                try:
+                    loop.call_soon_threadsafe(exit_running_prompt)
+                except RuntimeError:
+                    logger.debug("Prompt event loop closed during shutdown")
+
+        self._input_thread.join(timeout=3)
         if self._input_thread.is_alive():
-            logger.warning(
-                "Input thread did not stop within 3s timeout — "
-                "forcing continuation. Old thread may compete for stdin."
-            )
+            logger.warning("Input thread did not stop within 3s timeout")
+            return False
+        return True
 
     def set_current_buffer(self, content: str):
         self._jumped_user_message = content

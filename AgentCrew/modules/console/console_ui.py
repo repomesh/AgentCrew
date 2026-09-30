@@ -841,7 +841,15 @@ class ConsoleUI:
                         self.conversation_handler.update_cached_conversations(
                             conversations
                         )
-                        self.input_handler._stop_input_thread()
+                        if not self.input_handler._stop_input_thread():
+                            self.console.print(
+                                Text(
+                                    "Cannot open /list: chat input is still active. "
+                                    "Try again.",
+                                    style=RICH_STYLE_YELLOW_BOLD,
+                                )
+                            )
+                            continue
                         try:
                             selected_id = self.display_handlers.display_conversations(
                                 conversations,
@@ -873,7 +881,15 @@ class ConsoleUI:
                             self.conversation_handler.update_cached_conversations(
                                 conversations
                             )
-                            self.input_handler._stop_input_thread()
+                            if not self.input_handler._stop_input_thread():
+                                self.console.print(
+                                    Text(
+                                        "Cannot open /list: chat input is still active. "
+                                        "Try again.",
+                                        style=RICH_STYLE_YELLOW_BOLD,
+                                    )
+                                )
+                                continue
                             try:
                                 selected_id = self.display_handlers.display_conversations(
                                     conversations,
@@ -894,8 +910,16 @@ class ConsoleUI:
                         continue
 
                     elif user_input.strip() == "/visual":
+                        if not self.input_handler._stop_input_thread():
+                            self.console.print(
+                                Text(
+                                    "Cannot open /visual: chat input is still active. "
+                                    "Try again.",
+                                    style=RICH_STYLE_YELLOW_BOLD,
+                                )
+                            )
+                            continue
                         try:
-                            self.input_handler._stop_input_thread()
                             from .visual_mode import VisualModeViewer
 
                             viewer = VisualModeViewer(
