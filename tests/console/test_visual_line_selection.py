@@ -24,7 +24,8 @@ def _viewer() -> tuple[VisualModeUI, VisualModeInputHandler, list[str]]:
 
 def _press(handler: VisualModeInputHandler, key: str | Keys) -> None:
     binding = next(
-        binding for binding in handler._create_key_bindings().bindings
+        binding
+        for binding in handler._create_key_bindings().bindings
         if binding.keys == (key,)
     )
     handler._ui.render = lambda: None
@@ -49,7 +50,8 @@ def test_v_selects_entire_line_and_y_copies_it() -> None:
 
 @pytest.mark.parametrize("down,up", [("j", "k"), (Keys.Down, Keys.Up)])
 def test_v_extends_and_reverses_across_whole_lines(
-    down: str | Keys, up: str | Keys,
+    down: str | Keys,
+    up: str | Keys,
 ) -> None:
     ui, handler, _ = _viewer()
 

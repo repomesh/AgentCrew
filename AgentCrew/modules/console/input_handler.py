@@ -418,9 +418,7 @@ class InputHandler:
                         session.app.exit()
 
                 try:
-                    user_input = session.prompt(
-                        prompt_text, pre_run=cancel_if_stopping
-                    )
+                    user_input = session.prompt(prompt_text, pre_run=cancel_if_stopping)
                 finally:
                     if self._current_prompt_session is session:
                         self._current_prompt_session = None

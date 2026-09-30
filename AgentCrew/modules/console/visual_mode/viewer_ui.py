@@ -197,7 +197,9 @@ class VisualModeUI:
             self._adjust_horizontal_scroll()
 
     def toggle_visual_mode(self, linewise: bool | None = None):
-        if self._visual_mode and (linewise is None or self._linewise_selection == linewise):
+        if self._visual_mode and (
+            linewise is None or self._linewise_selection == linewise
+        ):
             self._visual_mode = False
             self._linewise_selection = False
             self._selection_start = None
