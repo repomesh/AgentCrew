@@ -573,6 +573,70 @@ class TestBaseServiceRequestConfig:
 
         assert captured["reasoning"] == {"effort": "medium", "summary": "auto"}
 
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("encrypted_content", [ENCRYPTED, None])
+    async def test_stream_encrypted_reasoning_roundtrip(
+        self, monkeypatch, encrypted_content
+    ):
+        monkeypatch.setattr(
+            ModelRegistry, "get_model_capabilities", lambda model_id: ["thinking"]
+        )
+        monkeypatch.setattr(
+            ModelRegistry, "get_model_sample_params", lambda model_id: None
+        )
+        requests: list[dict[str, Any]] = []
+
+        async def fake_create(**kwargs):
+            requests.append(kwargs)
+            return "stream"
+
+        svc = _make_service()
+        svc.client = SimpleNamespace(responses=SimpleNamespace(create=fake_create))
+        history = [{"role": "user", "content": "hello"}]
+
+        await svc.stream_assistant_response(history)
+        state = svc.create_stream_state()
+        svc.process_stream_chunk(
+            _event(
+                "response.output_item.done",
+                item=_reasoning_item(
+                    encrypted_content=encrypted_content,
+                    summary=[_summary_part("summary")],
+                ),
+                output_index=0,
+            ),
+            "",
+            [],
+            state,
+        )
+        assistant = {
+            "role": "assistant",
+            "content": [
+                {"type": "thinking", "thinking": "summary"},
+                {"type": "text", "text": "answer"},
+            ],
+        }
+        attach_stream_metadata(assistant, state)
+        history.extend([assistant, {"role": "user", "content": "follow-up"}])
+        original_history = copy.deepcopy(history)
+
+        await svc.stream_assistant_response(history)
+
+        assert requests[0]["include"] == ["reasoning.encrypted_content"]
+        assert requests[1]["include"] == ["reasoning.encrypted_content"]
+        assert requests[1]["reasoning"] == {"effort": "medium", "summary": "auto"}
+        replayed = requests[1]["input"]
+        reasoning_items = [item for item in replayed if item.get("type") == "reasoning"]
+        if encrypted_content:
+            assert len(reasoning_items) == 1
+            assert reasoning_items[0]["encrypted_content"] == encrypted_content
+            assert replayed[2]["content"] == [{"type": "output_text", "text": "answer"}]
+        else:
+            assert reasoning_items == []
+            assert METADATA_FIELD not in assistant
+            assert replayed[1]["content"][0]["text"] == "<think>summary</think>"
+        assert history == original_history
+
     def test_create_stream_state_carries_provider_identity(self):
         svc = _make_service(provider="openai", model="gpt-5.4")
         state = svc.create_stream_state()
