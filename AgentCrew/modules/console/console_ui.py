@@ -60,6 +60,7 @@ class ConsoleUI:
         self.message_handler = message_handler
         self.bus = EventBus.get_instance()
         self._subscriptions: list[Any] = []
+        self._stream_cancel_pending = False
 
         self._is_resizing = False
 
@@ -96,6 +97,7 @@ class ConsoleUI:
         assistant_response = None
 
         try:
+            self._stream_cancel_pending = False
             self.input_handler.is_message_processing = True
             should_exit, was_cleared = asyncio.run(
                 self.message_handler.process_user_input(transcript)
@@ -243,16 +245,20 @@ class ConsoleUI:
     # ── Streaming handlers ──
 
     def _on_thinking_started(self, **data):
-        self.ui_effects.stop_loading_animation()
+        if not self._stream_cancel_pending:
+            self.ui_effects.stop_loading_animation()
 
     def _on_thinking_chunk(self, chunk: str):
-        if chunk.strip():
+        if not self._stream_cancel_pending and chunk.strip():
             self.ui_effects.update_live_display(chunk, is_thinking=True)
 
     def _on_thinking_completed(self, content: str):
-        self.ui_effects.finish_response(content, is_thinking=True)
+        if not self._stream_cancel_pending:
+            self.ui_effects.finish_response(content, is_thinking=True)
 
     def _on_response_chunk(self, chunk: str, full_response: str):
+        if self._stream_cancel_pending:
+            return
         parsed = parse_agent_evaluation(full_response)
         self.ui_effects.stop_loading_animation()
         self.ui_effects.update_live_display(
@@ -261,6 +267,8 @@ class ConsoleUI:
         )
 
     def _on_response_completed(self, response: str):
+        if self._stream_cancel_pending:
+            return
         parsed = parse_agent_evaluation(response)
         self.ui_effects.finish_response(
             parsed["visible_content"],
@@ -269,6 +277,8 @@ class ConsoleUI:
         self._set_voice_processing_state(False)
 
     def _on_assistant_message_added(self, response: str):
+        if self._stream_cancel_pending:
+            return
         parsed = parse_agent_evaluation(response)
         self.ui_effects.finish_response(
             parsed["visible_content"],
@@ -276,6 +286,8 @@ class ConsoleUI:
         )
 
     def _on_stream_cancel_requested(self, **data):
+        self._stream_cancel_pending = True
+        self.ui_effects.cleanup()
         self.display_handlers.display_message(
             Text("Stopping current stream...", style=RICH_STYLE_YELLOW)
         )
@@ -302,6 +314,8 @@ class ConsoleUI:
         self.tool_display.display_tool_use(data)
 
     def _on_tool_result(self, **data):
+        if self._stream_cancel_pending:
+            return
         tool_result = data.get("tool_result")
         if isinstance(tool_result, list):
             for item in tool_result:
@@ -333,7 +347,8 @@ class ConsoleUI:
         self.tool_display.display_delegate_started(data)
 
     def _on_delegate_progress(self, run_id: str, agent_name: str, kind: str, text: str):
-        self.ui_effects.update_delegate_progress(run_id, agent_name, kind, text)
+        if not self._stream_cancel_pending:
+            self.ui_effects.update_delegate_progress(run_id, agent_name, kind, text)
 
     def _on_delegate_result(self, **data):
         tool_use = data.get("tool_use", {})
@@ -817,6 +832,7 @@ class ConsoleUI:
                     self.input_handler.is_message_processing = False
                     self.stop_loading_animation()  # Stop if any
                     user_input = self.get_user_input()
+                    self._stream_cancel_pending = False
 
                     # Handle list command directly
                     if user_input.strip() in ["/exit", "/quit"]:

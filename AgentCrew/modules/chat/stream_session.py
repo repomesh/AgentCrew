@@ -20,6 +20,10 @@ class StreamSession:
         self.task = task
         self.status = "opening"
 
+    def begin_segment(self) -> None:
+        self.first_chunk_received = False
+        self.status = "opening"
+
     def mark_streaming(self) -> None:
         self.first_chunk_received = True
         self.status = "streaming"

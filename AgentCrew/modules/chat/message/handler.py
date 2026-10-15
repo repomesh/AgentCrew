@@ -415,6 +415,8 @@ class MessageHandler:
         self.stream_generator = None
         response_stream = None
         request_agent = self.agent
+        assistant_message = None
+        final_assistant_message = None
 
         def process_result(_tool_uses, _token_usage):
             nonlocal tool_uses, token_usage
@@ -434,6 +436,9 @@ class MessageHandler:
                 )
 
         try:
+            if session.cancel_requested:
+                raise asyncio.CancelledError
+            session.begin_segment()
             response_stream = request_agent.process_messages(callback=process_result)
             self.stream_generator = response_stream
             stream_iter = response_stream.__aiter__()
@@ -567,8 +572,6 @@ class MessageHandler:
                         full_response=assistant_response,
                     )
 
-            if not session.finished.is_set():
-                session.finalize("completed")
             if self.stream_generator is response_stream:
                 self.stream_generator = None
 
@@ -615,15 +618,6 @@ class MessageHandler:
                 # Process each tool use
                 await self.tool_manager.execute_tools_batch(tool_uses)
 
-                # check the stop earlier to prevent double token merge
-                if has_stop_interupted:
-                    # return as soon as possible
-                    await self.bus.emit(
-                        AppEvents.RESPONSE_COMPLETED,
-                        response=assistant_response,
-                    )
-                    return assistant_response, token_usage
-
                 if token_usage:
                     await self.bus.emit(
                         AppEvents.UPDATE_TOKEN_USAGE,
@@ -631,7 +625,7 @@ class MessageHandler:
                         output_tokens=token_usage.output_tokens,
                         cached_tokens=token_usage.cached_tokens,
                     )
-                return await self.get_assistant_response(token_usage)
+                return await self._run_stream_response(session, token_usage)
 
             # prevent stream drop with bounded retry limit
             if assistant_response.strip() == "":
@@ -646,9 +640,8 @@ class MessageHandler:
                 logger.warning(
                     f"Empty assistant response (attempt {_empty_response_retry_count + 1}), retrying..."
                 )
-                return await self.get_assistant_response(
-                    token_usage,
-                    _empty_response_retry_count=_empty_response_retry_count + 1,
+                return await self._run_stream_response(
+                    session, token_usage, _empty_response_retry_count + 1
                 )
 
             final_assistant_message = response_stream.format_assistant_message(
@@ -692,12 +685,40 @@ class MessageHandler:
                     }
                 )
                 self.agent_manager.defered_transfer = ""
-                return await self.get_assistant_response(token_usage)
+                return await self._run_stream_response(session, token_usage)
 
+            session.finalize("completed")
             return assistant_response, token_usage
 
         except asyncio.CancelledError:
-            has_stop_interupted = True
+            if session.finished.is_set():
+                return assistant_response, token_usage
+            if assistant_message is not None and assistant_message.get("tool_calls"):
+                message_index = next(
+                    (
+                        index
+                        for index, message in enumerate(self.streamline_messages)
+                        if message is assistant_message
+                    ),
+                    len(self.streamline_messages),
+                )
+                resolved_ids = {
+                    message.get("tool_call_id")
+                    for message in self.streamline_messages[message_index + 1 :]
+                }
+                for tool_use in tool_uses_without_transfer:
+                    if tool_use["id"] not in resolved_ids:
+                        result = request_agent.format_message(
+                            MessageType.ToolResult,
+                            {
+                                "tool_use": tool_use,
+                                "tool_result": "Canceled before tool completion.",
+                                "is_error": True,
+                            },
+                        )
+                        if result is not None:
+                            self._messages_append(result)
+                            resolved_ids.add(tool_use["id"])
             if response_stream:
                 try:
                     await response_stream.aclose()
@@ -706,7 +727,11 @@ class MessageHandler:
             if not session.finished.is_set():
                 session.finalize("canceled")
 
-            if assistant_response.strip():
+            if (
+                assistant_response.strip()
+                and assistant_message is None
+                and final_assistant_message is None
+            ):
                 thinking_data = (
                     (thinking_content, thinking_signature) if thinking_content else None
                 )
@@ -757,28 +782,25 @@ class MessageHandler:
         except Exception as e:
             from openai import APIError
 
-            if isinstance(e, APIError):
-                if (
-                    e.code == "model_max_prompt_tokens_exceeded"
-                    or e.code == "context_length_exceeded"
-                    or e.message.find("This endpoint's maximum context length is") >= 0
-                    or e.message.find(
-                        "Your input exceeds the context window of this model."
-                    )
-                    >= 0
-                ):
-                    from AgentCrew.modules.agents import LocalAgent
-                    from AgentCrew.modules.llm.model_registry import ModelRegistry
+            if isinstance(e, APIError) and (
+                e.code == "model_max_prompt_tokens_exceeded"
+                or e.code == "context_length_exceeded"
+                or e.message.find("This endpoint's maximum context length is") >= 0
+                or e.message.find(
+                    "Your input exceeds the context window of this model."
+                )
+                >= 0
+            ):
+                from AgentCrew.modules.agents import LocalAgent
+                from AgentCrew.modules.llm.model_registry import ModelRegistry
 
-                    if isinstance(self.agent, LocalAgent):
-                        max_token = ModelRegistry.get_model_limit(
-                            self.agent.get_model()
-                        )
-                        self.agent.input_tokens_usage = max_token
-                        return await self.get_assistant_response(token_usage)
+                if isinstance(self.agent, LocalAgent):
+                    max_token = ModelRegistry.get_model_limit(self.agent.get_model())
+                    self.agent.input_tokens_usage = max_token
+                    return await self._run_stream_response(session, token_usage)
             # retry if internal server error from provider
-            elif isinstance(e, APIError) and str(e) == "Internal server error":
-                return await self.get_assistant_response(token_usage)
+            if isinstance(e, APIError) and str(e) == "Internal server error":
+                return await self._run_stream_response(session, token_usage)
             if self.current_user_input:
                 self.conversation_manager.store_conversation_turn(
                     self.current_user_input, self.current_user_input_idx

@@ -1,9 +1,39 @@
+import asyncio
+import logging
 import uuid
 from collections.abc import Callable
 from typing import Any
 
 from AgentCrew.modules.agents import AgentManager, run_agent_loop
 from AgentCrew.modules.events import AppEvents, EventBus
+
+logger = logging.getLogger(__name__)
+DELEGATE_CLEANUP_TIMEOUT = 1.0
+
+
+def _log_background_cleanup(task: asyncio.Task) -> None:
+    if not task.cancelled():
+        error = task.exception()
+        if error is not None:
+            logger.warning("Delegate cleanup task failed: %s", error)
+
+
+async def _bounded_delegate_cleanup(label: str, operation: Any) -> None:
+    """Give each owned cleanup operation or finish event at most one second."""
+    task = asyncio.create_task(operation)
+    done, _ = await asyncio.wait({task}, timeout=DELEGATE_CLEANUP_TIMEOUT)
+    if not done:
+        task.add_done_callback(_log_background_cleanup)
+        task.cancel()
+        logger.warning(
+            "Delegate %s cleanup timed out after %s seconds",
+            label,
+            DELEGATE_CLEANUP_TIMEOUT,
+        )
+    elif task.cancelled():
+        logger.warning("Delegate %s cleanup was cancelled", label)
+    elif error := task.exception():
+        logger.warning("Delegate %s cleanup failed: %s", label, error)
 
 
 def get_delegate_tool_definition() -> dict[str, Any]:
@@ -118,17 +148,7 @@ def get_delegate_tool_handler(agent_manager: AgentManager) -> Callable:
         fresh_llm = llm_manager.initialize_standalone_service(service_name)
         fresh_llm.model = target_agent.llm.model
 
-        clone = LocalAgent(
-            name=target_agent.name,
-            description=target_agent.description,
-            llm_service=fresh_llm,
-            services=target_agent.services,
-            tools=target_agent.tools,
-            temperature=target_agent.temperature,
-        )
-        clone.set_system_prompt(target_agent.system_prompt or "")
-        if target_agent.custom_system_prompt:
-            clone.set_custom_system_prompt(target_agent.custom_system_prompt)
+        clone = None
         run_id = uuid.uuid4().hex
         bus = EventBus.get_instance()
 
@@ -141,8 +161,29 @@ def get_delegate_tool_handler(agent_manager: AgentManager) -> Callable:
                 text=text,
             )
 
-        await progress("start", "")
+        async def cleanup() -> None:
+            try:
+                if clone is not None:
+                    await _bounded_delegate_cleanup(
+                        "agent deactivation", clone.deactivate_async()
+                    )
+                await _bounded_delegate_cleanup("LLM close", fresh_llm.close())
+            finally:
+                await _bounded_delegate_cleanup("finish event", progress("finish", ""))
+
         try:
+            clone = LocalAgent(
+                name=target_agent.name,
+                description=target_agent.description,
+                llm_service=fresh_llm,
+                services=target_agent.services,
+                tools=target_agent.tools,
+                temperature=target_agent.temperature,
+            )
+            clone.set_system_prompt(target_agent.system_prompt or "")
+            if target_agent.custom_system_prompt:
+                clone.set_custom_system_prompt(target_agent.custom_system_prompt)
+            await progress("start", "")
             await clone.activate_async()
             delegate_history = [
                 {
@@ -162,13 +203,9 @@ def get_delegate_tool_handler(agent_manager: AgentManager) -> Callable:
             return f"## Result from {target_agent_name}:\n\n{response}"
 
         finally:
-            try:
-                await clone.deactivate_async()
-            finally:
-                try:
-                    await fresh_llm.close()
-                finally:
-                    await progress("finish", "")
+            cleanup_task = asyncio.create_task(cleanup())
+            cleanup_task.add_done_callback(_log_background_cleanup)
+            await asyncio.shield(cleanup_task)
 
     return handler
 

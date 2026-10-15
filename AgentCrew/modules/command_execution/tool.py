@@ -189,7 +189,7 @@ def get_run_command_tool_handler(command_service: CommandExecutionService) -> Ca
         if not command:
             raise ValueError("Missing required parameter: command")
 
-        result = command_service.execute_command(
+        result = await command_service.execute_command_async(
             command=command, timeout=30, working_dir=working_dir, env_vars=env_vars
         )
 

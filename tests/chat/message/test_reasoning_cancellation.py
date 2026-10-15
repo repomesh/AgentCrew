@@ -198,14 +198,24 @@ async def test_normal_tool_call_completion_formats_tool_message_before_recursion
         token_usage=TokenUsage(input_tokens=5, output_tokens=3),
     )
     handler = _make_handler(agent)
-    handler.get_assistant_response = AsyncMock(
-        return_value=("final", TokenUsage(input_tokens=5, output_tokens=3))
-    )
+    original_process_messages = agent.process_messages
+    segments = 0
+
+    def process_messages(callback=None):
+        nonlocal segments
+        segments += 1
+        if segments == 2:
+            agent._chunks = [("final", "final", None)]
+            agent._tool_uses = []
+        return original_process_messages(callback)
+
+    agent.process_messages = process_messages
 
     response, _ = await handler._run_stream_response(session)
 
     assert response == "final"
-    assistant = history[-1]
+    assert segments == 2
+    assistant = history[-2]
     assert assistant["role"] == "assistant"
     assert assistant["tool_calls"] == [
         {"id": "call_1", "name": "read_file", "arguments": {"path": "x.py"}}
@@ -213,7 +223,7 @@ async def test_normal_tool_call_completion_formats_tool_message_before_recursion
     state = get_responses_provider_state(assistant)
     assert state is not None
     assert state["output_items"][0]["encrypted_content"] == ENCRYPTED
-    handler.get_assistant_response.assert_awaited_once()
+    assert history[-1]["role"] == "assistant"
 
 
 @pytest.mark.asyncio

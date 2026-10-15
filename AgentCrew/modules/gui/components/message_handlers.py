@@ -11,6 +11,7 @@ class MessageEventHandler:
 
         if isinstance(chat_window, ChatWindow):
             self.chat_window = chat_window
+        self._stream_cancel_pending = False
 
     def _update_planning_widget(self, planning_content: str):
         if not planning_content.strip():
@@ -31,6 +32,8 @@ class MessageEventHandler:
 
     def handle_response_chunk(self, data):
         """Handle response chunks with smooth streaming."""
+        if self._stream_cancel_pending:
+            return
         _, full_response = data
         parsed = parse_agent_evaluation(full_response)
 
@@ -55,6 +58,7 @@ class MessageEventHandler:
 
     def handle_user_message_created(self, data):
         """Handle user message creation."""
+        self._stream_cancel_pending = False
         if self.chat_window.bubble_state.current_user_bubble:
             self.chat_window.bubble_state.current_user_bubble.message_index = (
                 self.chat_window.message_handler.current_user_input_idx
@@ -66,6 +70,8 @@ class MessageEventHandler:
 
     def handle_response_completed(self, data):
         """Handle response completion."""
+        if self._stream_cancel_pending:
+            return
         parsed = parse_agent_evaluation(data)
         visible_content = parsed["visible_content"]
         planning_content = parsed["planning_content"]
@@ -98,6 +104,8 @@ class MessageEventHandler:
 
     def handle_thinking_started(self, data):
         """Handle thinking process started."""
+        if self._stream_cancel_pending:
+            return
         agent_name = data
         self.chat_window.chat_components.add_system_message(
             f"💭 {agent_name.upper()}'s thinking process started"
@@ -111,6 +119,8 @@ class MessageEventHandler:
 
     def handle_thinking_chunk(self, chunk):
         """Handle a chunk of the thinking process."""
+        if self._stream_cancel_pending:
+            return
         self.chat_window.stream_state.thinking_content += chunk
         if self.chat_window.bubble_state.current_thinking_bubble:
             self.chat_window.bubble_state.current_thinking_bubble.update_streaming_text(
@@ -119,6 +129,8 @@ class MessageEventHandler:
 
     def handle_thinking_completed(self):
         """Handle thinking process completion."""
+        if self._stream_cancel_pending:
+            return
         self.chat_window.display_status_message("Thinking completed.")
         # Finalize thinking stream if active
         if self.chat_window.bubble_state.current_thinking_bubble:
@@ -130,6 +142,11 @@ class MessageEventHandler:
         self.chat_window.stream_state.thinking_content = ""
 
     def handle_stream_cancel_requested(self):
+        self._stream_cancel_pending = True
+        if self.chat_window.bubble_state.current_response_bubble:
+            self.chat_window.bubble_state.current_response_bubble.stop_streaming()
+        if self.chat_window.bubble_state.current_thinking_bubble:
+            self.chat_window.bubble_state.current_thinking_bubble.stop_streaming()
         self.chat_window.display_status_message("Stopping current stream...")
 
     def handle_stream_canceled(self, data):

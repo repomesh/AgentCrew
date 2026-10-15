@@ -90,6 +90,48 @@ def _make_tool_use(
     return {"id": tool_id, "name": name, "input": input_ or {}, "type": "tool_call"}
 
 
+class _FakeAgentStream:
+    """Minimal process_messages stream with the runtime formatting lifecycle."""
+
+    def __init__(self, response, callback, tool_uses=None):
+        self.response = response
+        self.callback = callback
+        self.tool_uses = tool_uses
+
+    async def __aiter__(self):
+        if self.tool_uses is not None:
+            from AgentCrew.modules.llm.token_usage import TokenUsage
+
+            self.callback(self.tool_uses, TokenUsage())
+        yield (self.response, None, None)
+
+    async def aclose(self):
+        pass
+
+    def format_assistant_message(self, response, thinking=None, tool_uses=None):
+        message = {"role": "assistant", "content": response}
+        if thinking is not None:
+            message["thinking"] = thinking
+        if tool_uses is not None:
+            message["tool_uses"] = tool_uses
+        return message
+
+
+def _make_process_messages(
+    first_tool_uses, second_response="done", first_response="resp"
+):
+    call_count = 0
+
+    def process_messages(messages, callback=None):
+        nonlocal call_count
+        call_count += 1
+        if call_count == 1:
+            return _FakeAgentStream(first_response, callback, first_tool_uses)
+        return _FakeAgentStream(second_response, callback)
+
+    return process_messages
+
+
 def _make_agent(
     tool_defs: dict[str, Any] | None = None,
 ) -> MagicMock:
@@ -236,7 +278,6 @@ class TestExactlyOnceValidation:
     async def test_run_agent_loop_sequential_validates_once(self):
         """run_agent_loop validates each sequential tool exactly once."""
         from AgentCrew.modules.agents.agent_runner import run_agent_loop
-        from AgentCrew.modules.llm.token_usage import TokenUsage
 
         agent = _make_agent()
         validate_count = 0
@@ -249,25 +290,9 @@ class TestExactlyOnceValidation:
 
         agent.validate_tool_use = counting_validate
 
-        call_count = 0
-
-        async def stream(messages, callback=None):
-            nonlocal call_count
-            call_count += 1
-            if call_count == 1:
-                callback(
-                    [
-                        _make_tool_use(
-                            "run_command", {"command": "ls", "working_dir": "."}
-                        )
-                    ],
-                    TokenUsage(),
-                )
-                yield ("resp", None, None)
-            else:
-                yield ("done", None, None)
-
-        agent.process_messages = stream
+        agent.process_messages = _make_process_messages(
+            [_make_tool_use("run_command", {"command": "ls", "working_dir": "."})]
+        )
         history: list[dict[str, Any]] = []
         await run_agent_loop(agent, history)
         assert validate_count == 1, "sequential tool validated once"
@@ -350,21 +375,10 @@ class TestRunAgentLoopValidation:
     """Directly invokes ``run_agent_loop()`` with a controlled agent."""
 
     async def _make_stream(self, first_tool_uses, second_response="done"):
-        from AgentCrew.modules.llm.token_usage import TokenUsage
-
         agent = _make_agent()
-        call_count = 0
-
-        async def stream(messages, callback=None):
-            nonlocal call_count
-            call_count += 1
-            if call_count == 1:
-                callback(first_tool_uses, TokenUsage())
-                yield ("resp", None, None)
-            else:
-                yield (second_response, None, None)
-
-        agent.process_messages = stream
+        agent.process_messages = _make_process_messages(
+            first_tool_uses, second_response
+        )
         return agent
 
     async def test_sequential_invalid_becomes_error_result(self):
@@ -434,31 +448,19 @@ class TestRunAgentLoopValidation:
     async def test_mixed_batch_ordered_correctly(self):
         """[valid, invalid] → valid executed, invalid error, ordered results."""
         from AgentCrew.modules.agents.agent_runner import run_agent_loop
-        from AgentCrew.modules.llm.token_usage import TokenUsage
 
         agent = _make_agent()
-        call_count = 0
-
-        async def stream(messages, callback=None):
-            nonlocal call_count
-            call_count += 1
-            if call_count == 1:
-                callback(
-                    [
-                        _make_tool_use(
-                            "run_command",
-                            {"command": "a", "working_dir": "."},
-                            tool_id="valid_1",
-                        ),
-                        _make_tool_use("run_command", {}, tool_id="invalid_1"),
-                    ],
-                    TokenUsage(),
-                )
-                yield ("first", None, None)
-            else:
-                yield ("done", None, None)
-
-        agent.process_messages = stream
+        agent.process_messages = _make_process_messages(
+            [
+                _make_tool_use(
+                    "run_command",
+                    {"command": "a", "working_dir": "."},
+                    tool_id="valid_1",
+                ),
+                _make_tool_use("run_command", {}, tool_id="invalid_1"),
+            ],
+            first_response="first",
+        )
         executed: list[str] = []
 
         async def execute(use):

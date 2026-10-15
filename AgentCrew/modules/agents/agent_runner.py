@@ -1,6 +1,10 @@
+import asyncio
+import sys
 import uuid
 from collections.abc import Awaitable, Callable
 from typing import Any, Literal
+
+from loguru import logger
 
 from AgentCrew.modules.agents.base import MessageType
 from AgentCrew.modules.agents.local_agent import LocalAgent
@@ -13,6 +17,38 @@ from AgentCrew.modules.tools.parallel_executor import (
 
 ProgressKind = Literal["thinking", "response", "tool"]
 ProgressCallback = Callable[[ProgressKind, str], Awaitable[None]]
+
+STREAM_CLOSE_TIMEOUT_SECONDS = 0.5
+"""Maximum time allowed for closing a delegate's response stream."""
+
+
+async def _close_stream(stream, primary_error: BaseException | None) -> None:
+    close_task = asyncio.create_task(stream.aclose())
+
+    def report_late_failure(task: asyncio.Task) -> None:
+        if not task.cancelled():
+            error = task.exception()
+            if error is not None:
+                logger.warning("Delegate stream close failed after timeout: {}", error)
+
+    try:
+        done, _ = await asyncio.wait({close_task}, timeout=STREAM_CLOSE_TIMEOUT_SECONDS)
+        if not done:
+            raise TimeoutError(
+                f"Delegate stream close exceeded {STREAM_CLOSE_TIMEOUT_SECONDS}s"
+            )
+        await close_task
+    except BaseException as error:
+        if not close_task.done():
+            close_task.add_done_callback(report_late_failure)
+            close_task.cancel()
+        if primary_error is None:
+            raise
+        logger.warning(
+            "Delegate stream close failed during {}: {}",
+            type(primary_error).__name__,
+            error,
+        )
 
 
 async def _run_agent_loop(
@@ -53,23 +89,26 @@ async def _run_agent_loop(
 
     stream = agent.process_messages(history, callback=process_result)
 
-    async for (
-        response_message,
-        chunk_text,
-        thinking_chunk,
-    ) in stream:
-        if response_message:
-            current_response = response_message
-        if chunk_text and progress_callback is not None:
-            await progress_callback("response", chunk_text)
-        if thinking_chunk:
-            think_text_chunk, signature = thinking_chunk
-            if think_text_chunk:
-                thinking_content += think_text_chunk
-                if progress_callback is not None:
-                    await progress_callback("thinking", think_text_chunk)
-            if signature:
-                thinking_signature += signature
+    try:
+        async for (
+            response_message,
+            chunk_text,
+            thinking_chunk,
+        ) in stream:
+            if response_message:
+                current_response = response_message
+            if chunk_text and progress_callback is not None:
+                await progress_callback("response", chunk_text)
+            if thinking_chunk:
+                think_text_chunk, signature = thinking_chunk
+                if think_text_chunk:
+                    thinking_content += think_text_chunk
+                    if progress_callback is not None:
+                        await progress_callback("thinking", think_text_chunk)
+                if signature:
+                    thinking_signature += signature
+    finally:
+        await _close_stream(stream, sys.exc_info()[1])
 
     thinking_data = (thinking_content, thinking_signature) if thinking_content else None
 

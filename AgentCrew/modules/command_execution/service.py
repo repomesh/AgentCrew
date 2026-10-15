@@ -1,3 +1,4 @@
+import asyncio
 import atexit
 import hashlib
 import os
@@ -273,26 +274,8 @@ class CommandExecutionService:
         finally:
             stream.close()
 
-    def execute_command(
-        self,
-        command: str,
-        timeout: int = 5,
-        working_dir: str | None = None,
-        env_vars: dict[str, str] | None = None,
-    ) -> dict[str, Any]:
-        """
-        Execute shell command with timeout and security controls.
-
-        Args:
-            command: Shell command to execute
-            timeout: Timeout in seconds (default: 5)
-            working_dir: Working directory for command execution
-            env_vars: Additional environment variables
-
-        Returns:
-            dict with status, command_id (if still running), output, exit_code
-        """
-
+    def _start_command(self, command, working_dir, env_vars):
+        """Validate and register a command before yielding its owned process."""
         start_time = time.time()
 
         is_valid, error_msg = self._validate_command(command)
@@ -320,7 +303,7 @@ class CommandExecutionService:
 
         command_id = f"cmd_{uuid.uuid4().hex[:12]}"
         cmd_process = None
-
+        process = None
         try:
             shell_executable, shell_args = self._get_shell_config()
 
@@ -388,74 +371,175 @@ class CommandExecutionService:
                 name=f"stderr-reader-{command_id}",
             )
 
-            stdout_thread.start()
-            stderr_thread.start()
-
             cmd_process.reader_threads = [stdout_thread, stderr_thread]
-            cmd_process.transition_to(CommandState.RUNNING)
-
             with self._instance_lock:
                 self._instances[command_id] = cmd_process
 
-            process.wait(timeout=timeout)
+            stdout_thread.start()
+            stderr_thread.start()
+            cmd_process.transition_to(CommandState.RUNNING)
 
-            cmd_process.exit_code = process.returncode
-            cmd_process.transition_to(CommandState.COMPLETING)
-
-            # Get output from persistent storage (thread-safe)
-            with cmd_process.output_lock:
-                output = "".join(cmd_process.stdout_lines)
-                error_output = "".join(cmd_process.stderr_lines)
-
-            duration = time.time() - start_time
-
-            cmd_process.transition_to(CommandState.COMPLETED)
-
-            self._audit_log(
-                command,
-                "completed",
-                command_id,
-                duration,
-                len(output) + len(error_output),
-            )
-
-            self._cleanup_command_internal(command_id)
-
-            result = {
-                "status": "completed",
-                "command_id": command_id,
-                "output": output,
-                "error": error_output if error_output else None,
-                "exit_code": process.returncode,
-                "duration_seconds": round(duration, 3),
-            }
-
-            return result
-
-        except subprocess.TimeoutExpired:
-            if cmd_process:
-                cmd_process.transition_to(CommandState.RUNNING)
-
-            logger.debug(f"Command {command_id} still running after {timeout}s")
-
-            self._audit_log(command, "timeout_waiting", command_id)
-
-            return {
-                "status": "running",
-                "command_id": command_id,
-                "message": f"Command still running after {timeout} seconds. Use check_command_status to monitor.",
-                "timeout_seconds": timeout,
-            }
-
+            return cmd_process
         except Exception as e:
             logger.error(f"Command execution error: {e}")
-
             self._audit_log(command, "error", command_id)
-
-            if command_id in self._instances:
+            with self._instance_lock:
+                registered = command_id in self._instances
+            if registered:
                 self._cleanup_command_internal(command_id)
-
+            elif process:
+                process.kill()
+                process.wait()
+                for stream in (process.stdin, process.stdout, process.stderr):
+                    if stream:
+                        stream.close()
             return {"status": "error", "error": f"Execution failed: {e!s}"}
+
+    def _finish_command(self, cmd_process):
+        """Format a completed command and release its registry entry."""
+        command = cmd_process.command
+        command_id = cmd_process.id
+        process = cmd_process.process
+        start_time = cmd_process.start_time
+        cmd_process.exit_code = process.returncode
+        cmd_process.transition_to(CommandState.COMPLETING)
+        for thread in cmd_process.reader_threads:
+            thread.join(timeout=2.0)
+
+        with cmd_process.output_lock:
+            output = "".join(cmd_process.stdout_lines)
+            error_output = "".join(cmd_process.stderr_lines)
+
+        duration = time.time() - start_time
+
+        cmd_process.transition_to(CommandState.COMPLETED)
+
+        self._audit_log(
+            command,
+            "completed",
+            command_id,
+            duration,
+            len(output) + len(error_output),
+        )
+
+        self._cleanup_command_internal(command_id)
+
+        result = {
+            "status": "completed",
+            "command_id": command_id,
+            "output": output,
+            "error": error_output if error_output else None,
+            "exit_code": process.returncode,
+            "duration_seconds": round(duration, 3),
+        }
+
+        return result
+
+    def _running_command(self, cmd_process, timeout):
+        """Return the existing timeout response while leaving the command managed."""
+        command_id = cmd_process.id
+        command = cmd_process.command
+        cmd_process.transition_to(CommandState.RUNNING)
+        logger.debug(f"Command {command_id} still running after {timeout}s")
+        self._audit_log(command, "timeout_waiting", command_id)
+        return {
+            "status": "running",
+            "command_id": command_id,
+            "message": f"Command still running after {timeout} seconds. Use check_command_status to monitor.",
+            "timeout_seconds": timeout,
+        }
+
+    def execute_command(
+        self,
+        command: str,
+        timeout: int = 5,
+        working_dir: str | None = None,
+        env_vars: dict[str, str] | None = None,
+    ) -> dict[str, Any]:
+        """Execute a command synchronously, preserving the existing API."""
+        started = self._start_command(command, working_dir, env_vars)
+        if isinstance(started, dict):
+            return started
+        try:
+            started.process.wait(timeout=timeout)
+            return self._finish_command(started)
+        except subprocess.TimeoutExpired:
+            return self._running_command(started, timeout)
+        except Exception as e:
+            logger.error(f"Command execution error: {e}")
+            self._audit_log(command, "error", started.id)
+            self._cleanup_command_internal(started.id)
+            return {"status": "error", "error": f"Execution failed: {e!s}"}
+
+    async def execute_command_async(
+        self,
+        command: str,
+        timeout: int = 5,
+        working_dir: str | None = None,
+        env_vars: dict[str, str] | None = None,
+    ) -> dict[str, Any]:
+        """Execute without blocking the event loop during the process wait."""
+        started = self._start_command(command, working_dir, env_vars)
+        if isinstance(started, dict):
+            return started
+        try:
+            await asyncio.to_thread(started.process.wait, timeout=timeout)
+            return self._finish_command(started)
+        except asyncio.CancelledError:
+            cleanup = asyncio.create_task(
+                asyncio.to_thread(self._cancel_command, started)
+            )
+            while not cleanup.done():
+                try:
+                    await asyncio.shield(cleanup)
+                except asyncio.CancelledError:
+                    pass
+            cleanup.result()
+            raise
+        except subprocess.TimeoutExpired:
+            return self._running_command(started, timeout)
+        except Exception as e:
+            logger.error(f"Command execution error: {e}")
+            self._audit_log(command, "error", started.id)
+            self._cleanup_command_internal(started.id)
+            return {"status": "error", "error": f"Execution failed: {e!s}"}
+
+    def _cancel_command(self, cmd_process: CommandProcess):
+        """Stop this command's group, reap its leader and release reader resources."""
+        import signal
+
+        process = cmd_process.process
+        cmd_process.stop_event.set()
+        try:
+            if self._is_windows:
+                if process.poll() is None:
+                    process.terminate()
+                try:
+                    process.wait(timeout=0.5)
+                except subprocess.TimeoutExpired:
+                    process.kill()
+                    process.wait(timeout=0.5)
+            else:
+                try:
+                    os.killpg(process.pid, signal.SIGTERM)
+                except ProcessLookupError:
+                    pass
+                try:
+                    process.wait(timeout=0.5)
+                except subprocess.TimeoutExpired:
+                    pass
+                try:
+                    os.killpg(process.pid, signal.SIGKILL)
+                except ProcessLookupError:
+                    pass
+                if process.poll() is None:
+                    process.wait(timeout=0.5)
+            cmd_process.transition_to(CommandState.KILLED)
+        except Exception as e:
+            logger.error(f"Cancellation termination error for {cmd_process.id}: {e}")
+        finally:
+            self._audit_log(cmd_process.command, "cancelled", cmd_process.id)
+            self._cleanup_command_internal(cmd_process.id)
 
     def get_command_status(self, command_id: str) -> dict[str, Any]:
         """

@@ -21,6 +21,9 @@ class FakeStream:
             yield event
         self.callback(self.tools, TokenUsage())
 
+    async def aclose(self):
+        pass
+
     def format_assistant_message(self, response, **kwargs):
         return {"role": "assistant", "content": response}
 
