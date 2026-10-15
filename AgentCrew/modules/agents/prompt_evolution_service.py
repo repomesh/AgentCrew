@@ -86,7 +86,7 @@ Return ONLY valid JSON:
 2. PRESERVE all existing role definitions, mission statements, and identity descriptions
 3. PRESERVE all tool/safety/transfer/approval rules unchanged
 4. PRESERVE all placeholders exactly: {{current_date}}, {{cwd}}, {{current_agent_name}}, {{current_agent_description}}
-5. PRESERVE any XML-like structural tags (e.g., <Agent_Instructions>, <Transferable_Agents>)
+5. PRESERVE any XML-like structural tags (e.g., <Agent_Instructions>, <Agents_Pool>)
 6. INTEGRATE the approved improvements naturally into existing sections where they fit best
 7. If no existing section fits, add a concise new section near the end (before any closing tags)
 8. CONSOLIDATE overlapping instructions instead of appending near-duplicates

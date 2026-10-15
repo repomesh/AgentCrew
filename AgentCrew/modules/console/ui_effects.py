@@ -25,6 +25,7 @@ from .constants import (
     COMMAND_HELP_MESSAGES,
     RICH_STYLE_GRAY,
     RICH_STYLE_GREEN,
+    RICH_STYLE_WHITE,
 )
 
 if TYPE_CHECKING:
@@ -112,12 +113,9 @@ class UIEffects:
         self.spinner = itertools.cycle(["⣾", "⣽", "⣻", "⢿", "⡿", "⣟", "⣯", "⣷"])
         self.updated_text = ""
         self.updated_planning_text = ""
-        # Delegate animation state
-        # key: tool_use_id, value: (agent_name, start_time)
-        self._delegate_agents: dict[str, tuple[str, float]] = {}
-        self._delegate_lock = threading.Lock()
-        self._delegate_stop_event: threading.Event | None = None
-        self._delegate_thread: threading.Thread | None = None
+        self._delegate_agents: dict[str, tuple[str, list[tuple[str, str]]]] = {}
+        self._delegate_lock = threading.RLock()
+        self._delegate_live: Live | None = None
 
     # Hue oscillates between (h_start - h_range/2) and (h_start + h_range/2)
     # using a cosine wave, so both ends of the string share the same hue →
@@ -215,60 +213,57 @@ class UIEffects:
             sys.stdout.write("\x1b[1A")  # cursor up one line
             sys.stdout.write("\x1b[2K")
 
-    def _delegate_animation(self, stop_event):
-        """Animate active delegate agents with per-agent spinners and elapsed time."""
-        spinner = itertools.cycle(["⣾", "⣽", "⣻", "⢿", "⡿", "⣟", "⣯", "⣷"])
-        with Live(
-            "", console=self.console, auto_refresh=True, refresh_per_second=10
-        ) as live:
-            while not stop_event.is_set():
-                spin = next(spinner)
-                with self._delegate_lock:
-                    agents = dict(self._delegate_agents)
-                if agents:
-                    now = time.time()
-                    parts = []
-                    for agent_name, start in agents.values():
-                        elapsed = int(now - start)
-                        parts.append(
-                            f"📋 [bold yellow]{agent_name}[/] [dim]{spin} {elapsed}s[/]"
-                        )
-                    live.update("   " + "   [dim]|[/]   ".join(parts))
+    def _render_delegate_progress(self) -> Group:
+        previews = []
+        width = max(1, self.console.width - 4)
+        for agent_name, entries in self._delegate_agents.values():
+            content = Text()
+            for kind, chunk in entries:
+                if kind == "tool":
+                    content.append(f"\nTool: {chunk}\n", style=RICH_STYLE_GRAY)
                 else:
-                    live.update("")
-                time.sleep(0.1)
-            live.update("")
-            live.stop()
-            import sys
+                    content.append(
+                        chunk,
+                        style=RICH_STYLE_GRAY
+                        if kind == "thinking"
+                        else RICH_STYLE_WHITE,
+                    )
+            rows = content.wrap(self.console, width)
+            previews.append(
+                Group(Text(f"📋 {agent_name}", style="bold yellow"), *rows[-4:])
+            )
+        return Group(*previews)
 
-            sys.stdout.write("\x1b[1A")
-            sys.stdout.write("\x1b[2K")
-
-    def start_delegate_animation(self, tool_use_id: str, agent_name: str):
-        """Register a delegation by tool_use_id and start/keep the animation running."""
+    def update_delegate_progress(
+        self, run_id: str, agent_name: str, kind: str, text: str
+    ) -> None:
+        """Update the shared live preview for a single delegate run."""
         with self._delegate_lock:
-            self._delegate_agents[tool_use_id] = (agent_name, time.time())
-        if self._delegate_thread and self._delegate_thread.is_alive():
-            return  # Already running
-        self._delegate_stop_event = threading.Event()
-        self._delegate_thread = threading.Thread(
-            target=self._delegate_animation, args=(self._delegate_stop_event,)
-        )
-        self._delegate_thread.daemon = True
-        self._delegate_thread.start()
-
-    def stop_delegate_animation(self, tool_use_id: str):
-        """Unregister a delegation by tool_use_id. Stop animation only when all are done."""
-        with self._delegate_lock:
-            self._delegate_agents.pop(tool_use_id, None)
-            any_remaining = bool(self._delegate_agents)
-        if not any_remaining:
-            if self._delegate_stop_event:
-                self._delegate_stop_event.set()
-                self._delegate_stop_event = None
-            if self._delegate_thread and self._delegate_thread.is_alive():
-                self._delegate_thread.join(timeout=0.5)
-                self._delegate_thread = None
+            if kind == "finish":
+                self._delegate_agents.pop(run_id, None)
+                if not self._delegate_agents:
+                    if self._delegate_live is not None:
+                        self._delegate_live.stop()
+                        self._delegate_live = None
+                    return
+            elif kind == "start":
+                self._delegate_agents[run_id] = (agent_name, [])
+            elif run_id in self._delegate_agents:
+                entries = self._delegate_agents[run_id][1]
+                entries.append((kind, text))
+                total = sum(len(chunk) for _, chunk in entries)
+                while total > 8192 and len(entries) > 1:
+                    total -= len(entries.pop(0)[1])
+                if total > 8192:
+                    entries[0] = (entries[0][0], entries[0][1][-(8192):])
+            else:
+                return
+            if self._delegate_live is None:
+                self._delegate_live = Live(
+                    "", console=self.console, auto_refresh=False, transient=True
+                )
+                self._delegate_live.start()
+            self._delegate_live.update(self._render_delegate_progress(), refresh=True)
 
     def start_loading_animation(self):
         """Start the loading animation."""
@@ -550,9 +545,6 @@ class UIEffects:
         self.finish_live_update()
         with self._delegate_lock:
             self._delegate_agents.clear()
-        if self._delegate_stop_event:
-            self._delegate_stop_event.set()
-            self._delegate_stop_event = None
-        if self._delegate_thread and self._delegate_thread.is_alive():
-            self._delegate_thread.join(timeout=0.5)
-            self._delegate_thread = None
+            if self._delegate_live is not None:
+                self._delegate_live.stop()
+                self._delegate_live = None

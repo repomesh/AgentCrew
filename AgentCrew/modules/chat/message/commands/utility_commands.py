@@ -149,7 +149,7 @@ class UtilityCommands:
             return str(value)
         if timestamp > 10_000_000_000:
             timestamp = timestamp / 1000
-        return datetime.fromtimestamp(timestamp).strftime("%Y-%m-%d %H:%M")  # noqa: DTZ006 - display formatting for user-facing timestamps
+        return datetime.fromtimestamp(timestamp).strftime("%Y-%m-%d %H:%M")
 
     @classmethod
     def _format_usage_message(cls, usage: dict[str, Any]) -> str:

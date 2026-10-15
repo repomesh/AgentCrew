@@ -23,7 +23,7 @@ def get_transfer_tool_definition() -> dict[str, Any]:
     tool_arguments = {
         "target_agent": {
             "type": "string",
-            "description": "The unique identifier or name of the specialized agent to transfer the task to. Refer to the official <Transferable_Agents> tags for available specialist agents and their capabilities.",
+            "description": "The unique identifier or name of the specialized agent to transfer the task to. Refer to the official <Agents_Pool> tags for available specialist agents and their capabilities.",
         },
         "task_description": {
             "type": "string",

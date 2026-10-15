@@ -1,7 +1,9 @@
+import uuid
 from collections.abc import Callable
 from typing import Any
 
 from AgentCrew.modules.agents import AgentManager, run_agent_loop
+from AgentCrew.modules.events import AppEvents, EventBus
 
 
 def get_delegate_tool_definition() -> dict[str, Any]:
@@ -17,7 +19,7 @@ def get_delegate_tool_definition() -> dict[str, Any]:
             "type": "string",
             "description": (
                 "The name of the agent to delegate to. "
-                "Refer to <Transferable_Agents> for options."
+                "Refer to <Agents_Pool> for options."
             ),
         },
         "task_description": {
@@ -127,9 +129,21 @@ def get_delegate_tool_handler(agent_manager: AgentManager) -> Callable:
         clone.set_system_prompt(target_agent.system_prompt or "")
         if target_agent.custom_system_prompt:
             clone.set_custom_system_prompt(target_agent.custom_system_prompt)
-        await clone.activate_async()
+        run_id = uuid.uuid4().hex
+        bus = EventBus.get_instance()
 
+        async def progress(kind: str, text: str) -> None:
+            await bus.emit(
+                AppEvents.DELEGATE_PROGRESS,
+                run_id=run_id,
+                agent_name=target_agent_name,
+                kind=kind,
+                text=text,
+            )
+
+        await progress("start", "")
         try:
+            await clone.activate_async()
             delegate_history = [
                 {
                     "role": "user",
@@ -142,13 +156,19 @@ def get_delegate_tool_handler(agent_manager: AgentManager) -> Callable:
                 history=delegate_history,
                 tool_filter=lambda t: t["name"] not in ["transfer", "delegate"],
                 request_usage_callback=target_agent.record_conversation_usage,
+                progress_callback=progress,
             )
 
             return f"## Result from {target_agent_name}:\n\n{response}"
 
         finally:
-            await clone.deactivate_async()
-            await fresh_llm.close()
+            try:
+                await clone.deactivate_async()
+            finally:
+                try:
+                    await fresh_llm.close()
+                finally:
+                    await progress("finish", "")
 
     return handler
 

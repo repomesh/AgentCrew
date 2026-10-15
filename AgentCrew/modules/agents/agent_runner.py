@@ -1,6 +1,6 @@
 import uuid
-from collections.abc import Callable
-from typing import Any
+from collections.abc import Awaitable, Callable
+from typing import Any, Literal
 
 from AgentCrew.modules.agents.base import MessageType
 from AgentCrew.modules.agents.local_agent import LocalAgent
@@ -11,6 +11,9 @@ from AgentCrew.modules.tools.parallel_executor import (
     is_sequential_tool,
 )
 
+ProgressKind = Literal["thinking", "response", "tool"]
+ProgressCallback = Callable[[ProgressKind, str], Awaitable[None]]
+
 
 async def _run_agent_loop(
     agent: LocalAgent,
@@ -19,6 +22,7 @@ async def _run_agent_loop(
     tool_filter: Callable[[dict[str, Any]], bool] | None = None,
     prior_token_usage: TokenUsage | None = None,
     request_usage_callback: Callable[[TokenUsage], None] | None = None,
+    progress_callback: ProgressCallback | None = None,
 ) -> tuple[str, TokenUsage]:
     """Run a full agent loop, returning the final response and merged usage.
 
@@ -31,6 +35,7 @@ async def _run_agent_loop(
             LLM request's TokenUsage before it is merged into the returned
             control-flow usage. Used by local-agent delegation to attribute
             consumption to the registered target agent.
+        progress_callback: Optional async callback for incremental delegate output.
     """
     current_response = ""
     thinking_content = ""
@@ -55,10 +60,14 @@ async def _run_agent_loop(
     ) in stream:
         if response_message:
             current_response = response_message
+        if chunk_text and progress_callback is not None:
+            await progress_callback("response", chunk_text)
         if thinking_chunk:
             think_text_chunk, signature = thinking_chunk
             if think_text_chunk:
                 thinking_content += think_text_chunk
+                if progress_callback is not None:
+                    await progress_callback("thinking", think_text_chunk)
             if signature:
                 thinking_signature += signature
 
@@ -85,6 +94,7 @@ async def _run_agent_loop(
                 tool_filter=tool_filter,
                 prior_token_usage=token_usage,
                 request_usage_callback=request_usage_callback,
+                progress_callback=progress_callback,
             )
         return current_response, token_usage
 
@@ -111,6 +121,8 @@ async def _run_agent_loop(
     parallel_buffer: list[dict[str, Any]] = []
 
     for tool_use in filtered:
+        if progress_callback is not None:
+            await progress_callback("tool", tool_use["name"])
         # --- Validate each tool exactly once before dispatch --------------
         error_text = agent.validate_tool_use(tool_use)
         if error_text is not None:
@@ -221,6 +233,7 @@ async def _run_agent_loop(
         tool_filter=tool_filter,
         prior_token_usage=token_usage,
         request_usage_callback=request_usage_callback,
+        progress_callback=progress_callback,
     )
 
 
@@ -231,6 +244,7 @@ async def run_agent_loop(
     tool_filter: Callable[[dict[str, Any]], bool] | None = None,
     prior_token_usage: TokenUsage | None = None,
     request_usage_callback: Callable[[TokenUsage], None] | None = None,
+    progress_callback: ProgressCallback | None = None,
     scope_id: str | None = None,
 ) -> tuple[str, TokenUsage]:
     from AgentCrew.modules.agents.tool_result_summary import (
@@ -246,6 +260,7 @@ async def run_agent_loop(
             tool_filter=tool_filter,
             prior_token_usage=prior_token_usage,
             request_usage_callback=request_usage_callback,
+            progress_callback=progress_callback,
         )
     finally:
         reset_inference_scope(token)

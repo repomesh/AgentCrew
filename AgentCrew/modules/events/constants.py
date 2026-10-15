@@ -12,7 +12,7 @@ Adding a new event:
 
 from __future__ import annotations
 
-from typing import Any, TypedDict
+from typing import Any, Literal, TypedDict
 
 # ──────────────────────────────────────────────
 #  Event string constants (grouped by domain)
@@ -42,6 +42,7 @@ class _ToolEvents:
     TOOL_ERROR = "tool_error"
     TOOL_DENIED = "tool_denied"
     TOOL_CONFIRMATION_REQ = "tool_confirmation_required"
+    DELEGATE_PROGRESS = "delegate_progress"
 
 
 class _ConversationEvents:
@@ -175,6 +176,13 @@ class StreamOpenTimeoutPayload(TypedDict):
 
 class StreamingStoppedPayload(TypedDict):
     response: str
+
+
+class DelegateProgressPayload(TypedDict):
+    run_id: str
+    agent_name: str
+    kind: Literal["start", "thinking", "response", "tool", "finish"]
+    text: str
 
 
 class ToolUsePayload(TypedDict):
@@ -384,6 +392,7 @@ EVENT_PAYLOAD_MAP: dict[str, type[Any] | None] = {
     AppEvents.STREAM_CANCELED: StreamCanceledPayload,
     AppEvents.STREAM_OPEN_TIMEOUT: StreamOpenTimeoutPayload,
     AppEvents.STREAMING_STOPPED: StreamingStoppedPayload,
+    AppEvents.DELEGATE_PROGRESS: DelegateProgressPayload,
     AppEvents.TOOL_USE: ToolUsePayload,
     AppEvents.TOOL_RESULT: ToolResultPayload,
     AppEvents.TOOL_ERROR: ToolErrorPayload,

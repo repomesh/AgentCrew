@@ -665,9 +665,9 @@ When system access is requested:
             # else:
             agent_desc += "\n  </agent>"
             agent_descriptions.append(agent_desc)
-        return f"""<Transferable_Agents>
+        return f"""<Agents_Pool>
 {"\n".join(agent_descriptions)}
-</Transferable_Agents>"""
+</Agents_Pool>"""
 
     def get_delegate_system_prompt(self):
         """
@@ -679,22 +679,21 @@ When system access is requested:
 
         return """<Delegate_Tool_Instruction>
   <Purpose>
-    Delegate tasks to specialist agents for independent execution.
+    Delegate tasks to specialist agents from <Agents_Pool> for independent execution.
     You stay active and receive results as tool output.
     Speed up big task by devined it into sub-tasks and run in parallel.
   </Purpose>
 
   <When_To_Delegate>
-    - Task needs expertise from a specialist agent
+    - Task needs expertise from a specialist agent from <Agents_Pool>
+    - Another agent has better suited for current step
     - Multiple independent sub-tasks can run in parallel
     - You need results from another agent without giving up control
   </When_To_Delegate>
 
   <Parallel_Delegation>
-    To delegate to multiple agents simultaneously, call the delegate tool multiple times with parallel tool calls. 
+    To delegate to multiple agents simultaneously, call the delegate tool multiple times in the same response. 
     All delegations execute concurrently and you receive all results before your next response.
-
-    Example: To research 3 topics, emit 3 delegate calls in one turn — each targeting the appropriate agent with its specific task.
   </Parallel_Delegation>
 
   <Rules>
@@ -702,6 +701,8 @@ When system access is requested:
     2. Include only necessary context — delegated agents start fresh
     3. Review and synthesize results before presenting to the user
     4. Each delegated agent cannot delegate further
+    5. You can delegate to yourself as well
+    6. There are no limit number of delegate
   </Rules>
 
   <Tool_Usage>
@@ -733,7 +734,7 @@ When system access is requested:
         """
         transfer_prompt = """<Transfer_Tool_Instruction>
   <Decision_Rule>
-    When a specialist agent from <Transferable_Agents> is better suited for the user's request, transfer immediately using the `transfer` tool.
+    When a specialist agent from <Agents_Pool> is better suited for the user's request, transfer immediately using the `transfer` tool.
     Stay engaged only if no better-suited specialist exists or the task is squarely within your own expertise.
   </Decision_Rule>
 
@@ -746,7 +747,7 @@ When system access is requested:
 
   <Tool_Usage>
     Required parameters for the `transfer` tool:
-    • `target_agent`  — exact agent name from <Transferable_Agents>
+    • `target_agent`  — exact agent name from <Agents_Pool>
     • `task_description` — action-oriented, self-contained objective with full context
     • `post_action`  — (optional) next step after task completion
   </Tool_Usage>

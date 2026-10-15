@@ -145,6 +145,7 @@ class ConsoleUI:
             self.bus.on(AppEvents.STREAM_OPEN_TIMEOUT, self._on_stream_open_timeout),
             self.bus.on(AppEvents.STREAMING_STOPPED, self._on_streaming_stopped),
             # ── Tools ──
+            self.bus.on(AppEvents.DELEGATE_PROGRESS, self._on_delegate_progress),
             self.bus.on(
                 AppEvents.TOOL_USE,
                 self._on_delegate_started,
@@ -330,19 +331,12 @@ class ConsoleUI:
     def _on_delegate_started(self, **data):
         self.ui_effects.stop_loading_animation()
         self.tool_display.display_delegate_started(data)
-        params = data.get("input") or data.get("arguments", {})
-        agent_name = (
-            params.get("target_agent", "Agent") if isinstance(params, dict) else "Agent"
-        )
-        self.ui_effects.start_delegate_animation(data.get("id", agent_name), agent_name)
+
+    def _on_delegate_progress(self, run_id: str, agent_name: str, kind: str, text: str):
+        self.ui_effects.update_delegate_progress(run_id, agent_name, kind, text)
 
     def _on_delegate_result(self, **data):
         tool_use = data.get("tool_use", {})
-        params = tool_use.get("input") or tool_use.get("arguments", {})
-        agent_name = (
-            params.get("target_agent", "Agent") if isinstance(params, dict) else "Agent"
-        )
-        self.ui_effects.stop_delegate_animation(tool_use.get("id", agent_name))
         self.tool_display.display_delegate_completed(tool_use)
 
     # ── Conversation handlers ──
