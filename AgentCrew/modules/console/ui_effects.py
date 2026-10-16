@@ -13,7 +13,7 @@ import threading
 import time
 from typing import TYPE_CHECKING, ClassVar
 
-from rich.box import HORIZONTALS, SQUARE
+from rich.box import HORIZONTALS
 from rich.console import Group
 from rich.live import Live
 from rich.markdown import Markdown
@@ -214,15 +214,22 @@ class UIEffects:
             sys.stdout.write("\x1b[2K")
 
     def _render_delegate_progress(self) -> Group:
-        previews = []
-        width = max(1, self.console.width - 4)
+        heading = Text("📋 Delegating → ", style="bold yellow")
+        indent = " " * heading.cell_len
+        width = max(1, self.console.width - heading.cell_len)
+        preview = []
         for index, (agent_name, entries) in enumerate(
             self._delegate_agents.values(), start=1
         ):
+            label = heading.copy() if index == 1 else Text(indent)
+            label.append(f"#{index} {agent_name}:", style="bold yellow")
+            preview.append(label)
             content = Text()
             for kind, chunk in entries:
                 if kind == "tool":
-                    content.append(f"\nTool: {chunk}\n", style=RICH_STYLE_GRAY)
+                    if content and not content.plain.endswith("\n"):
+                        content.append("\n")
+                    content.append(f"Tool: {chunk}\n", style=RICH_STYLE_GRAY)
                 else:
                     content.append(
                         chunk,
@@ -230,16 +237,12 @@ class UIEffects:
                         if kind == "thinking"
                         else RICH_STYLE_WHITE,
                     )
-            rows = content.wrap(self.console, width)
-            previews.append(
-                Panel(
-                    Group(*rows[-4:]),
-                    title=Text(f"#{index} {agent_name}", style="bold yellow"),
-                    box=SQUARE,
-                    padding=(0, 1),
-                )
-            )
-        return Group(*previews)
+            rows = [row for row in content.wrap(self.console, width) if row.plain]
+            for row in rows[-2:]:
+                line = Text(indent)
+                line.append_text(row)
+                preview.append(line)
+        return Group(*preview)
 
     def update_delegate_progress(
         self, run_id: str, agent_name: str, kind: str, text: str

@@ -344,7 +344,6 @@ class ConsoleUI:
 
     def _on_delegate_started(self, **data):
         self.ui_effects.stop_loading_animation()
-        self.tool_display.display_delegate_started(data)
 
     def _on_delegate_progress(self, run_id: str, agent_name: str, kind: str, text: str):
         if not self._stream_cancel_pending:
