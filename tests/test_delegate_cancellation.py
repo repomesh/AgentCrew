@@ -268,8 +268,15 @@ async def test_delegate_cancellation_closes_owned_resources_once(
     service_module = import_module("AgentCrew.modules.llm.service_manager")
     registry_module = import_module("AgentCrew.modules.llm.model_registry")
     events = []
+    finished = asyncio.Event()
     bus = EventBus()
-    bus.on(AppEvents.DELEGATE_PROGRESS, lambda **data: events.append(data))
+
+    def record_progress(**data):
+        events.append(data)
+        if data["kind"] == "finish":
+            finished.set()
+
+    bus.on(AppEvents.DELEGATE_PROGRESS, record_progress)
     monkeypatch.setattr(delegate.EventBus, "get_instance", lambda: bus)
 
     instances = []
@@ -348,8 +355,11 @@ async def test_delegate_cancellation_closes_owned_resources_once(
     assert [stream.closed for stream in clone.streams] == [1]
     assert clone.deactivated == fresh.closed == 1
     assert shared.closed == 0
+    await asyncio.wait_for(finished.wait(), 1)
+    assert [event["kind"] for event in events] == (
+        ["start", "response", "tool", "finish"] if nested_tool else ["start", "finish"]
+    )
     assert [event["kind"] for event in events].count("finish") == 1
-    assert events[0]["kind"] == "start"
     assert len({event["run_id"] for event in events}) == 1
 
 
@@ -360,8 +370,15 @@ async def test_delegate_cleanup_timeout_preserves_original_error_and_finishes(
     delegate = import_module("AgentCrew.modules.agents.tools.delegate")
     monkeypatch.setattr(delegate, "DELEGATE_CLEANUP_TIMEOUT", 0.01)
     events = []
+    finished = asyncio.Event()
     bus = EventBus()
-    bus.on(AppEvents.DELEGATE_PROGRESS, lambda **data: events.append(data))
+
+    def record_progress(**data):
+        events.append(data)
+        if data["kind"] == "finish":
+            finished.set()
+
+    bus.on(AppEvents.DELEGATE_PROGRESS, record_progress)
     monkeypatch.setattr(delegate.EventBus, "get_instance", lambda: bus)
     local_module = import_module("AgentCrew.modules.agents.local_agent")
     service_module = import_module("AgentCrew.modules.llm.service_manager")
@@ -424,5 +441,7 @@ async def test_delegate_cleanup_timeout_preserves_original_error_and_finishes(
             1,
         )
     assert fresh.closed
+    await asyncio.wait_for(finished.wait(), 1)
+    assert [event["kind"] for event in events] == ["start", "finish"]
     assert [event["kind"] for event in events].count("finish") == 1
     assert "deactivation cleanup timed out" in caplog.text
