@@ -13,7 +13,7 @@ import threading
 import time
 from typing import TYPE_CHECKING, ClassVar
 
-from rich.box import HORIZONTALS
+from rich.box import HORIZONTALS, SQUARE
 from rich.console import Group
 from rich.live import Live
 from rich.markdown import Markdown
@@ -216,7 +216,9 @@ class UIEffects:
     def _render_delegate_progress(self) -> Group:
         previews = []
         width = max(1, self.console.width - 4)
-        for agent_name, entries in self._delegate_agents.values():
+        for index, (agent_name, entries) in enumerate(
+            self._delegate_agents.values(), start=1
+        ):
             content = Text()
             for kind, chunk in entries:
                 if kind == "tool":
@@ -230,7 +232,12 @@ class UIEffects:
                     )
             rows = content.wrap(self.console, width)
             previews.append(
-                Group(Text(f"📋 {agent_name}", style="bold yellow"), *rows[-4:])
+                Panel(
+                    Group(*rows[-4:]),
+                    title=Text(f"#{index} {agent_name}", style="bold yellow"),
+                    box=SQUARE,
+                    padding=(0, 1),
+                )
             )
         return Group(*previews)
 

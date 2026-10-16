@@ -700,9 +700,8 @@ When system access is requested:
     1. Write clear task_description starting with action verbs
     2. Include only necessary context — delegated agents start fresh
     3. Review and synthesize results before presenting to the user
-    4. Each delegated agent cannot delegate further
-    5. You can delegate to yourself as well
-    6. There are no limit number of delegate
+    4. You can delegate to yourself as well
+    5. There are no limit of parallel agents running as the same time
   </Rules>
 
   <Tool_Usage>

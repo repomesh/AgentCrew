@@ -97,10 +97,14 @@ class AgentToolRegistrar:
                         agent.tool_prompts.append(browser_instruction_prompt())
                     elif tool_name == "file_editing":
                         from AgentCrew.modules.file_editing.tool import (
+                            file_editing_instruction_prompt,
+                        )
+                        from AgentCrew.modules.file_editing.tool import (
                             register as register_file_editing,
                         )
 
                         register_file_editing(service, agent)
+                        agent.tool_prompts.append(file_editing_instruction_prompt())
                     elif tool_name == "command_execution":
                         from AgentCrew.modules.command_execution.tool import (
                             register as register_command_execution,

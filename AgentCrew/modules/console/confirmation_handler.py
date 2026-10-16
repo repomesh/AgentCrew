@@ -130,7 +130,8 @@ class ConfirmationHandler:
                 Text(
                     f"\n❓ {nav_prefix}Agent is asking for clarification:",
                     style=RICH_STYLE_BLUE_BOLD,
-                )
+                ),
+                markup=False,
             )
 
             # Determine choices: guided answers + submit only (nav via keyboard)

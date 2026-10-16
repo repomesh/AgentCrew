@@ -8,6 +8,114 @@ from collections.abc import Callable
 from typing import Any
 
 from .service import FileEditingService
+from .worktree_service import WorktreeService
+
+
+def file_editing_instruction_prompt() -> str:
+    return """<FileEditing_Worktree_Instruction>
+  <Workflow>
+    - Prefer Git worktrees for file/code changes in a Git repository; editing in the current checkout is also allowed.
+    - After creating a worktree, perform reads, writes, and commands within the returned worktree path.
+    - Use list_worktree to discover or recover registered worktree paths and branches.
+    - Close a worktree only after committing or discarding changes so it is clean; closing preserves its branch.
+  </Workflow>
+</FileEditing_Worktree_Instruction>"""
+
+
+def get_create_worktree_tool_definition() -> dict[str, Any]:
+    return {
+        "type": "function",
+        "function": {
+            "name": "create_worktree",
+            "description": "Create a linked Git worktree and a new local branch at a start point. The branch and destination must not already exist.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "repository_path": {
+                        "type": "string",
+                        "description": "Path inside the Git repository.",
+                        "default": ".",
+                    },
+                    "worktree_path": {
+                        "type": "string",
+                        "description": "New destination path for the linked worktree.",
+                    },
+                    "branch_name": {
+                        "type": "string",
+                        "description": "Name of a new local branch.",
+                    },
+                    "start_point": {
+                        "type": "string",
+                        "description": "Commit or ref to branch from.",
+                        "default": "HEAD",
+                    },
+                },
+                "required": ["worktree_path", "branch_name"],
+            },
+        },
+    }
+
+
+def get_list_worktree_tool_definition() -> dict[str, Any]:
+    return {
+        "type": "function",
+        "function": {
+            "name": "list_worktree",
+            "description": "List registered Git worktrees with paths, branches, HEAD commits, and lock/prune metadata.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "repository_path": {
+                        "type": "string",
+                        "description": "Path inside the Git repository.",
+                        "default": ".",
+                    },
+                },
+                "required": [],
+            },
+        },
+    }
+
+
+def get_close_worktree_tool_definition() -> dict[str, Any]:
+    return {
+        "type": "function",
+        "function": {
+            "name": "close_worktree",
+            "description": "Remove a clean registered linked Git worktree without deleting its branch. Refuses dirty or main worktrees.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "worktree_path": {
+                        "type": "string",
+                        "description": "Path to the registered linked worktree to close.",
+                    },
+                },
+                "required": ["worktree_path"],
+            },
+        },
+    }
+
+
+def get_create_worktree_tool_handler(service: WorktreeService) -> Callable:
+    async def handler(**params) -> str:
+        return service.create_worktree(**params)
+
+    return handler
+
+
+def get_list_worktree_tool_handler(service: WorktreeService) -> Callable:
+    async def handler(**params) -> str:
+        return service.list_worktree(**params)
+
+    return handler
+
+
+def get_close_worktree_tool_handler(service: WorktreeService) -> Callable:
+    async def handler(**params) -> str:
+        return service.close_worktree(**params)
+
+    return handler
 
 
 def is_full_content_mode(blocks: list[dict[str, str]]) -> bool:
@@ -194,5 +302,24 @@ def register(service_instance: FileEditingService | None = None, agent=None):
         get_file_write_or_edit_tool_definition,
         get_file_write_or_edit_tool_handler,
         service_instance,
+        agent,
+    )
+    worktree_service = WorktreeService()
+    register_tool(
+        get_create_worktree_tool_definition,
+        get_create_worktree_tool_handler,
+        worktree_service,
+        agent,
+    )
+    register_tool(
+        get_close_worktree_tool_definition,
+        get_close_worktree_tool_handler,
+        worktree_service,
+        agent,
+    )
+    register_tool(
+        get_list_worktree_tool_definition,
+        get_list_worktree_tool_handler,
+        worktree_service,
         agent,
     )

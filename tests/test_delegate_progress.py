@@ -1,7 +1,9 @@
 from types import SimpleNamespace
 
 import pytest
-from rich.console import Console
+from rich.box import SQUARE
+from rich.console import Console, Group
+from rich.panel import Panel
 from rich.text import Text
 
 from AgentCrew.modules.agents.agent_runner import run_agent_loop
@@ -82,32 +84,41 @@ async def test_runner_progress_survives_empty_response_and_tool_recursion():
 def test_delegate_preview_wraps_four_lines_and_isolates_parallel_runs():
     console = Console(width=24, force_terminal=False)
     effects = UIEffects(SimpleNamespace(console=console, message_handler=None))
-    effects.update_delegate_progress("one", "Agent", "start", "")
-    effects.update_delegate_progress("two", "Agent", "start", "")
-    effects.update_delegate_progress("one", "Agent", "thinking", "a" * 90)
-    effects.update_delegate_progress("two", "Agent", "response", "other")
-    effects.update_delegate_progress("one", "Agent", "tool", "read_file")
+    effects.update_delegate_progress("one", "ResearchAgent", "start", "")
+    effects.update_delegate_progress("two", "WriterAgent", "start", "")
+    effects.update_delegate_progress("one", "ResearchAgent", "thinking", "a" * 90)
+    effects.update_delegate_progress("two", "WriterAgent", "response", "other")
+    effects.update_delegate_progress("one", "ResearchAgent", "tool", "read_file")
     renderable = effects._render_delegate_progress()
+    assert isinstance(renderable, Group)
     assert len(renderable.renderables) == 2
     first, second = renderable.renderables
-    assert len(first.renderables) == 5
-    assert first.renderables[1].plain == "a" * 20
-    assert first.renderables[1].spans[0].style == RICH_STYLE_GRAY
-    assert len(second.renderables) <= 5
-    assert second.renderables[-1].spans[0].style == RICH_STYLE_WHITE
+    assert all(isinstance(panel, Panel) for panel in (first, second))
+    assert first.box == second.box == SQUARE
+    assert first.title.plain == "#1 ResearchAgent"
+    assert second.title.plain == "#2 WriterAgent"
+    assert isinstance(first.renderable, Group)
+    first_rows = first.renderable.renderables
+    second_rows = second.renderable.renderables
+    assert len(first_rows) == 4
+    assert all(isinstance(row, Text) for row in first_rows)
+    assert first_rows[0].plain == "a" * 20
+    assert first_rows[0].spans[0].style == RICH_STYLE_GRAY
     assert any(
-        "read_file" in line.plain
-        for line in first.renderables
-        if isinstance(line, Text)
+        "read_file" in row.plain and row.spans[0].style == RICH_STYLE_GRAY
+        for row in first_rows
     )
-    assert all(
-        "read_file" not in line.plain
-        for line in second.renderables
-        if isinstance(line, Text)
-    )
-    effects.update_delegate_progress("one", "Agent", "finish", "")
+    assert len(second_rows) == 1
+    assert second_rows[0].plain == "other"
+    assert second_rows[0].spans[0].style == RICH_STYLE_WHITE
+    assert all("read_file" not in row.plain for row in second_rows)
+    effects.update_delegate_progress("one", "ResearchAgent", "finish", "")
     assert set(effects._delegate_agents) == {"two"}
-    effects.update_delegate_progress("two", "Agent", "finish", "")
+    remaining = effects._render_delegate_progress().renderables
+    assert len(remaining) == 1
+    assert remaining[0].title.plain == "#1 WriterAgent"
+    assert remaining[0].renderable.renderables[0].plain == "other"
+    effects.update_delegate_progress("two", "WriterAgent", "finish", "")
     assert not effects._delegate_agents
     assert effects._delegate_live is None
 
