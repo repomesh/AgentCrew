@@ -1,3 +1,4 @@
+import asyncio
 from io import StringIO
 from types import SimpleNamespace
 
@@ -216,8 +217,18 @@ def test_large_delegate_chunk_preserves_latest_text_and_cleanup():
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("fails", [False, True])
-async def test_delegate_handler_finishes_run_on_success_and_error(monkeypatch, fails):
+@pytest.mark.parametrize(
+    "fails,blocked,cancelled",
+    [
+        (False, False, False),
+        (True, False, False),
+        (False, True, False),
+        (False, False, True),
+    ],
+)
+async def test_delegate_handler_finishes_run_on_success_error_and_cancellation(
+    monkeypatch, fails, blocked, cancelled
+):
     from importlib import import_module
 
     from AgentCrew.modules.agents.tools.delegate import get_delegate_tool_handler
@@ -228,9 +239,24 @@ async def test_delegate_handler_finishes_run_on_success_and_error(monkeypatch, f
     llm_module = import_module("AgentCrew.modules.llm.service_manager")
     registry_module = import_module("AgentCrew.modules.llm.model_registry")
     events = []
+    finished = asyncio.Event()
+    started = asyncio.Event()
+    loop_entered = asyncio.Event()
+    cleaned = asyncio.Event()
     bus = EventBus()
-    bus.on(AppEvents.DELEGATE_PROGRESS, lambda **data: events.append(data))
+
+    async def subscriber(**data):
+        if blocked and data["kind"] == "start":
+            started.set()
+            await asyncio.Event().wait()
+        events.append(data)
+        if data["kind"] == "finish":
+            finished.set()
+
+    bus.on(AppEvents.DELEGATE_PROGRESS, subscriber)
     monkeypatch.setattr(module.EventBus, "get_instance", lambda: bus)
+    if blocked:
+        monkeypatch.setattr(module, "DELEGATE_PROGRESS_TIMEOUT", 0.2)
 
     class Clone:
         def __init__(self, **kwargs):
@@ -244,7 +270,7 @@ async def test_delegate_handler_finishes_run_on_success_and_error(monkeypatch, f
                 raise RuntimeError("activation failed")
 
         async def deactivate_async(self):
-            pass
+            cleaned.set()
 
     class FreshLLM:
         model = "model"
@@ -282,21 +308,44 @@ async def test_delegate_handler_finishes_run_on_success_and_error(monkeypatch, f
     )
 
     async def fake_run_agent_loop(**kwargs):
+        if blocked:
+            await asyncio.wait_for(started.wait(), 1)
+        if cancelled:
+            loop_entered.set()
+            await asyncio.Event().wait()
         await kwargs["progress_callback"]("response", "answer")
         return "answer", TokenUsage()
 
     monkeypatch.setattr(module, "run_agent_loop", fake_run_agent_loop)
     handler = get_delegate_tool_handler(manager)
     description = "  test\n details  "
-    if fails:
-        with pytest.raises(RuntimeError, match="activation failed"):
-            await handler(target_agent="Target", task_description=description)
-    else:
-        assert "answer" in await handler(
-            target_agent="Target", task_description=description
+    if cancelled:
+        task = asyncio.create_task(
+            handler(target_agent="Target", task_description=description)
         )
+        await asyncio.wait_for(loop_entered.wait(), 1)
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await asyncio.wait_for(task, 1)
+        await asyncio.wait_for(cleaned.wait(), 1)
+    elif fails:
+        with pytest.raises(RuntimeError, match="activation failed"):
+            await asyncio.wait_for(
+                handler(target_agent="Target", task_description=description), 1
+            )
+    else:
+        assert "answer" in await asyncio.wait_for(
+            handler(target_agent="Target", task_description=description),
+            0.1 if blocked else 1,
+        )
+    await asyncio.wait_for(finished.wait(), 1)
     assert [e["kind"] for e in events] == (
-        ["start", "finish"] if fails else ["start", "response", "finish"]
+        ["response", "finish"]
+        if blocked
+        else ["start", "finish"]
+        if fails or cancelled
+        else ["start", "response", "finish"]
     )
     assert len({e["run_id"] for e in events}) == 1
-    assert events[0]["text"] == description
+    if not blocked:
+        assert events[0]["text"] == description

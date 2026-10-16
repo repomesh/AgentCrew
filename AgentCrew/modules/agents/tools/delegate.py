@@ -9,6 +9,78 @@ from AgentCrew.modules.events import AppEvents, EventBus
 
 logger = logging.getLogger(__name__)
 DELEGATE_CLEANUP_TIMEOUT = 1.0
+DELEGATE_PROGRESS_TIMEOUT = 0.25
+
+
+class _DelegateProgressPublisher:
+    """Publish one delegate's progress in order without blocking its execution."""
+
+    def __init__(
+        self, bus: EventBus, run_id: str, agent_name: str, timeout: float
+    ) -> None:
+        self.bus = bus
+        self.run_id = run_id
+        self.agent_name = agent_name
+        self.timeout = timeout
+        self.queue: asyncio.Queue[tuple[str, str]] = asyncio.Queue()
+        self.task: asyncio.Task | None = None
+        self.finished = False
+
+    def enqueue(self, kind: str, text: str) -> None:
+        if self.finished:
+            return
+        self.queue.put_nowait((kind, text))
+        if kind == "finish":
+            self.finished = True
+        if self.task is None:
+            self.task = asyncio.create_task(self._publish())
+            self.task.add_done_callback(_log_background_progress)
+
+    async def _publish(self) -> None:
+        while True:
+            kind, text = await self.queue.get()
+            try:
+                dispatch = asyncio.create_task(
+                    self.bus.emit(
+                        AppEvents.DELEGATE_PROGRESS,
+                        run_id=self.run_id,
+                        agent_name=self.agent_name,
+                        kind=kind,
+                        text=text,
+                    )
+                )
+                done, _ = await asyncio.wait({dispatch}, timeout=self.timeout)
+                if not done:
+                    dispatch.add_done_callback(_log_background_progress)
+                    dispatch.cancel()
+                    logger.warning(
+                        "Delegate progress %s dispatch timed out after %s seconds",
+                        kind,
+                        self.timeout,
+                    )
+                elif dispatch.cancelled():
+                    logger.warning("Delegate progress %s dispatch was cancelled", kind)
+                elif error := dispatch.exception():
+                    logger.warning(
+                        "Delegate progress %s dispatch failed: %s", kind, error
+                    )
+            except asyncio.CancelledError:
+                dispatch.add_done_callback(_log_background_progress)
+                dispatch.cancel()
+                raise
+            except Exception:
+                logger.exception("Delegate progress %s publication failed", kind)
+            finally:
+                self.queue.task_done()
+            if kind == "finish":
+                return
+
+
+def _log_background_progress(task: asyncio.Task) -> None:
+    if not task.cancelled():
+        error = task.exception()
+        if error is not None:
+            logger.warning("Delegate progress task failed: %s", error)
 
 
 def _log_background_cleanup(task: asyncio.Task) -> None:
@@ -19,7 +91,7 @@ def _log_background_cleanup(task: asyncio.Task) -> None:
 
 
 async def _bounded_delegate_cleanup(label: str, operation: Any) -> None:
-    """Give each owned cleanup operation or finish event at most one second."""
+    """Give each owned cleanup operation at most one second."""
     task = asyncio.create_task(operation)
     done, _ = await asyncio.wait({task}, timeout=DELEGATE_CLEANUP_TIMEOUT)
     if not done:
@@ -150,16 +222,15 @@ def get_delegate_tool_handler(agent_manager: AgentManager) -> Callable:
 
         clone = None
         run_id = uuid.uuid4().hex
-        bus = EventBus.get_instance()
+        publisher = _DelegateProgressPublisher(
+            EventBus.get_instance(),
+            run_id,
+            target_agent_name,
+            DELEGATE_PROGRESS_TIMEOUT,
+        )
 
         async def progress(kind: str, text: str) -> None:
-            await bus.emit(
-                AppEvents.DELEGATE_PROGRESS,
-                run_id=run_id,
-                agent_name=target_agent_name,
-                kind=kind,
-                text=text,
-            )
+            publisher.enqueue(kind, text)
 
         async def cleanup() -> None:
             try:
@@ -169,7 +240,7 @@ def get_delegate_tool_handler(agent_manager: AgentManager) -> Callable:
                     )
                 await _bounded_delegate_cleanup("LLM close", fresh_llm.close())
             finally:
-                await _bounded_delegate_cleanup("finish event", progress("finish", ""))
+                publisher.enqueue("finish", "")
 
         try:
             clone = LocalAgent(
