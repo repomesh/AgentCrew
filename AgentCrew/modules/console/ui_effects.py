@@ -123,6 +123,7 @@ class UIEffects:
         self.updated_text = ""
         self.updated_planning_text = ""
         self._delegate_agents: dict[str, DelegateRun] = {}
+        self._delegate_calls: dict[str, tuple[str, str, str | None, bool]] = {}
         self._delegate_lock = threading.RLock()
         self._delegate_live: Live | None = None
 
@@ -252,12 +253,68 @@ class UIEffects:
             preview.extend(rows[-5:])
         return Panel(Group(*preview), title="Delegating", border_style="yellow")
 
+    def register_delegate_call(
+        self, tool_id: str | None, agent_name: str, description: str
+    ) -> None:
+        """Record a delegate tool invocation in registration order."""
+        if not tool_id:
+            return
+        with self._delegate_lock:
+            self._delegate_calls[tool_id] = (agent_name, description, None, False)
+            while len(self._delegate_calls) > 256:
+                oldest = next(
+                    (
+                        call_id
+                        for call_id, (_, _, run_id, _) in self._delegate_calls.items()
+                        if run_id not in self._delegate_agents
+                    ),
+                    None,
+                )
+                if oldest is None:
+                    break
+                self._delegate_calls.pop(oldest)
+
+    def complete_delegate_call(self, tool_id: str | None) -> None:
+        """Reconcile an actual tool completion with its progress run."""
+        if not tool_id:
+            return
+        with self._delegate_lock:
+            call = self._delegate_calls.get(tool_id)
+            if call is None:
+                return
+            agent_name, description, run_id, _ = call
+            if run_id is None:
+                self._delegate_calls[tool_id] = (agent_name, description, None, True)
+                return
+            self.update_delegate_progress(run_id, agent_name, "finish", "")
+            self._delegate_calls.pop(tool_id, None)
+
     def update_delegate_progress(
         self, run_id: str, agent_name: str, kind: str, text: str
     ) -> None:
         """Update the shared live preview for a single delegate run."""
         with self._delegate_lock:
             if kind == "start":
+                if run_id in self._delegate_agents:
+                    return
+                for tool_id, (agent, description, matched_run, completed) in list(
+                    self._delegate_calls.items()
+                ):
+                    if (
+                        agent == agent_name
+                        and description == text
+                        and matched_run is None
+                    ):
+                        if completed:
+                            self._delegate_calls.pop(tool_id)
+                            return
+                        self._delegate_calls[tool_id] = (
+                            agent,
+                            description,
+                            run_id,
+                            False,
+                        )
+                        break
                 self._delegate_agents[run_id] = DelegateRun(agent_name, text)
             elif run_id not in self._delegate_agents:
                 return
@@ -566,6 +623,7 @@ class UIEffects:
         self.finish_live_update()
         with self._delegate_lock:
             self._delegate_agents.clear()
+            self._delegate_calls.clear()
             if self._delegate_live is not None:
                 self._delegate_live.stop()
                 self._delegate_live = None

@@ -158,7 +158,10 @@ def test_delegate_start_stops_loading_without_static_output():
     stopped = []
     ui = SimpleNamespace(
         console=console,
-        ui_effects=SimpleNamespace(stop_loading_animation=lambda: stopped.append(True)),
+        ui_effects=SimpleNamespace(
+            stop_loading_animation=lambda: stopped.append(True),
+            register_delegate_call=lambda *args: None,
+        ),
     )
     ConsoleUI._on_delegate_started(
         ui,
@@ -181,7 +184,8 @@ async def test_delegate_result_does_not_print_standalone_completion():
     ui.bus = EventBus()
     ui._stream_cancel_pending = False
     ui.ui_effects = SimpleNamespace(
-        start_loading_animation=lambda: started.append(True)
+        start_loading_animation=lambda: started.append(True),
+        complete_delegate_call=lambda *args: None,
     )
     ui._register_subscriptions()
 
@@ -349,3 +353,151 @@ async def test_delegate_handler_finishes_run_on_success_error_and_cancellation(
     assert len({e["run_id"] for e in events}) == 1
     if not blocked:
         assert events[0]["text"] == description
+
+
+def delegate_effects():
+    output = StringIO()
+    console = Console(width=60, force_terminal=False, file=output)
+    return UIEffects(SimpleNamespace(console=console, message_handler=None)), output
+
+
+def test_actual_delegate_completion_reconciles_missing_finish():
+    effects, output = delegate_effects()
+    effects.register_delegate_call("a", "Agent", "task a")
+    effects.register_delegate_call("b", "Agent", "task b")
+    effects.update_delegate_progress("run-a", "Agent", "start", "task a")
+    effects.update_delegate_progress("run-b", "Agent", "start", "task b")
+    effects.update_delegate_progress("run-a", "Agent", "response", "ongoing")
+    effects.complete_delegate_call("a")
+    assert effects._delegate_agents["run-a"].completed
+    assert not effects._delegate_agents["run-b"].completed
+    effects.complete_delegate_call("b")
+    assert not effects._delegate_agents
+    assert effects._delegate_live is None
+    assert "#1 Agent: task a ✅ Completed" in output.getvalue()
+    assert "#2 Agent: task b ✅ Completed" in output.getvalue()
+    assert not effects._delegate_calls
+
+
+def test_delegate_completion_before_start_does_not_leave_stale_run():
+    effects, output = delegate_effects()
+    effects.register_delegate_call("a", "Agent", "task")
+    effects.complete_delegate_call("a")
+    effects.update_delegate_progress("late", "Agent", "start", "task")
+    effects.update_delegate_progress("late", "Agent", "response", "late chunk")
+    assert not effects._delegate_agents
+    assert not effects._delegate_calls
+    assert effects._delegate_live is None
+    assert output.getvalue() == ""
+
+
+def test_completed_identical_delegate_consumes_its_delayed_start_in_order():
+    effects, _ = delegate_effects()
+    effects.register_delegate_call("first", "Agent", "same")
+    effects.register_delegate_call("second", "Agent", "same")
+    effects.complete_delegate_call("first")
+    effects.update_delegate_progress("late-first", "Agent", "start", "same")
+    effects.update_delegate_progress("run-second", "Agent", "start", "same")
+    assert "late-first" not in effects._delegate_agents
+    assert effects._delegate_calls["second"][2] == "run-second"
+    effects.complete_delegate_call("second")
+    assert not effects._delegate_agents
+    assert not effects._delegate_calls
+
+
+def test_parallel_identical_delegates_correlate_by_registration_order():
+    effects, _ = delegate_effects()
+    effects.register_delegate_call("first", "Agent", "same")
+    effects.register_delegate_call("second", "Agent", "same")
+    effects.update_delegate_progress("run-1", "Agent", "start", "same")
+    effects.update_delegate_progress("run-2", "Agent", "start", "same")
+    assert effects._delegate_calls["first"][2] == "run-1"
+    assert effects._delegate_calls["second"][2] == "run-2"
+    effects.complete_delegate_call("second")
+    assert effects._delegate_agents["run-2"].completed
+    assert not effects._delegate_agents["run-1"].completed
+    effects.complete_delegate_call("first")
+    assert not effects._delegate_agents
+
+
+def test_normal_delegate_finish_then_actual_completion_is_idempotent():
+    effects, output = delegate_effects()
+    effects.register_delegate_call("id", "Agent", "task")
+    effects.update_delegate_progress("run", "Agent", "start", "task")
+    effects.update_delegate_progress("run", "Agent", "finish", "")
+    final = output.getvalue()
+    effects.complete_delegate_call("id")
+    effects.complete_delegate_call("id")
+    effects.update_delegate_progress("run", "Agent", "finish", "")
+    assert output.getvalue() == final
+    assert not effects._delegate_calls
+    assert effects._delegate_live is None
+
+
+def test_delegate_correlation_cleanup_and_bounded_completed_registrations():
+    effects, _ = delegate_effects()
+    for index in range(300):
+        tool_id = str(index)
+        effects.register_delegate_call(tool_id, "Agent", str(index))
+        effects.complete_delegate_call(tool_id)
+    assert len(effects._delegate_calls) <= 256
+    effects.update_delegate_progress("run", "Agent", "start", "299")
+    effects.register_delegate_call("active", "Other", "task")
+    effects.cleanup()
+    assert not effects._delegate_calls
+    assert not effects._delegate_agents
+    assert effects._delegate_live is None
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("event", ["result", "error"])
+async def test_delegate_completion_subscription_schedules_without_blocking_emit_sync(
+    event,
+):
+    from AgentCrew.modules.events import AppEvents, EventBus
+
+    ui = ConsoleUI.__new__(ConsoleUI)
+    ui.console = Console(file=StringIO(), force_terminal=False)
+    ui.bus = EventBus()
+    ui._stream_cancel_pending = False
+    ui.ui_effects = UIEffects(SimpleNamespace(console=ui.console, message_handler=None))
+    errors = []
+    ui.tool_display = SimpleNamespace(
+        display_tool_error=lambda data: errors.append(data)
+    )
+    ui._register_subscriptions()
+    tool_use = {
+        "id": "id",
+        "name": "delegate",
+        "input": {"target_agent": "Agent", "task_description": "task"},
+    }
+    await ui.bus.emit(AppEvents.TOOL_USE, **tool_use)
+    await ui.bus.emit(
+        AppEvents.DELEGATE_PROGRESS,
+        run_id="run",
+        agent_name="Agent",
+        kind="start",
+        text="task",
+    )
+    completed = asyncio.Event()
+    original = ui.ui_effects.complete_delegate_call
+
+    def reconcile(tool_id):
+        original(tool_id)
+        completed.set()
+
+    ui.ui_effects.complete_delegate_call = reconcile
+    payload = {"tool_use": tool_use, "message": {}}
+    payload.update(tool_result="done" if event == "result" else None)
+    if event == "error":
+        payload.pop("tool_result")
+        payload["error"] = "failed"
+    ui.bus.emit_sync(
+        AppEvents.TOOL_RESULT if event == "result" else AppEvents.TOOL_ERROR, **payload
+    )
+    assert not completed.is_set()
+    await asyncio.wait_for(completed.wait(), 1)
+    assert not ui.ui_effects._delegate_agents
+    assert not ui.ui_effects._delegate_calls
+    assert len(errors) == (1 if event == "error" else 0)
+    ui.ui_effects.cleanup()

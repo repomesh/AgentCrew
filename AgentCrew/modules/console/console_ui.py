@@ -12,6 +12,7 @@ import signal
 import sys
 import threading
 import time
+import weakref
 from typing import TYPE_CHECKING, Any
 
 from loguru import logger
@@ -130,6 +131,13 @@ class ConsoleUI:
 
     def _register_subscriptions(self):
         """Register per-event handler methods with EventBus."""
+        ui_ref = weakref.ref(self)
+
+        async def on_delegate_completed(**data):
+            ui = ui_ref()
+            if ui is not None:
+                await ui._on_delegate_completed(**data)
+
         self._subscriptions = [
             # ── Streaming ──
             self.bus.on(AppEvents.THINKING_STARTED, self._on_thinking_started),
@@ -163,6 +171,20 @@ class ConsoleUI:
                 self._on_tool_result,
                 filter_func=lambda e, d: (
                     d.get("tool_use", {}).get("name") != "delegate"
+                ),
+            ),
+            self.bus.on(
+                AppEvents.TOOL_RESULT,
+                on_delegate_completed,
+                filter_func=lambda e, d: (
+                    d.get("tool_use", {}).get("name") == "delegate"
+                ),
+            ),
+            self.bus.on(
+                AppEvents.TOOL_ERROR,
+                on_delegate_completed,
+                filter_func=lambda e, d: (
+                    d.get("tool_use", {}).get("name") == "delegate"
                 ),
             ),
             self.bus.on(AppEvents.TOOL_ERROR, self._on_tool_error),
@@ -337,6 +359,15 @@ class ConsoleUI:
 
     def _on_delegate_started(self, **data):
         self.ui_effects.stop_loading_animation()
+        tool_input = data.get("input", {})
+        self.ui_effects.register_delegate_call(
+            data.get("id"),
+            tool_input.get("target_agent", ""),
+            tool_input.get("task_description", ""),
+        )
+
+    async def _on_delegate_completed(self, tool_use: dict, **data):
+        self.ui_effects.complete_delegate_call(tool_use.get("id"))
 
     def _on_delegate_progress(self, run_id: str, agent_name: str, kind: str, text: str):
         if not self._stream_cancel_pending:
