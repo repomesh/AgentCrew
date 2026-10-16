@@ -193,8 +193,14 @@ class AgentToolRegistrar:
                     register as register_ask,
                 )
 
-                register_ask(agent)
-                agent.tool_prompts.append(ask_tool_prompt())
+                register_ask(agent, responder=agent.ask_responder)
+                agent.tool_prompts.append(
+                    ask_tool_prompt(
+                        "source/main agent"
+                        if agent.ask_responder is not None
+                        else "user"
+                    )
+                )
 
             # agent.tool_prompts.append(
             #     agent.services["agent_manager"].get_context_awareness_prompt()

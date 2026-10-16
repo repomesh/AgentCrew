@@ -1,4 +1,5 @@
 import asyncio
+import copy
 import logging
 import uuid
 from collections.abc import Callable
@@ -49,25 +50,28 @@ class _DelegateProgressPublisher:
                         text=text,
                     )
                 )
-                done, _ = await asyncio.wait({dispatch}, timeout=self.timeout)
-                if not done:
+                try:
+                    done, _ = await asyncio.wait({dispatch}, timeout=self.timeout)
+                    if not done:
+                        dispatch.add_done_callback(_log_background_progress)
+                        dispatch.cancel()
+                        logger.warning(
+                            "Delegate progress %s dispatch timed out after %s seconds",
+                            kind,
+                            self.timeout,
+                        )
+                    elif dispatch.cancelled():
+                        logger.warning(
+                            "Delegate progress %s dispatch was cancelled", kind
+                        )
+                    elif error := dispatch.exception():
+                        logger.warning(
+                            "Delegate progress %s dispatch failed: %s", kind, error
+                        )
+                except asyncio.CancelledError:
                     dispatch.add_done_callback(_log_background_progress)
                     dispatch.cancel()
-                    logger.warning(
-                        "Delegate progress %s dispatch timed out after %s seconds",
-                        kind,
-                        self.timeout,
-                    )
-                elif dispatch.cancelled():
-                    logger.warning("Delegate progress %s dispatch was cancelled", kind)
-                elif error := dispatch.exception():
-                    logger.warning(
-                        "Delegate progress %s dispatch failed: %s", kind, error
-                    )
-            except asyncio.CancelledError:
-                dispatch.add_done_callback(_log_background_progress)
-                dispatch.cancel()
-                raise
+                    raise
             except Exception:
                 logger.exception("Delegate progress %s publication failed", kind)
             finally:
@@ -106,6 +110,94 @@ async def _bounded_delegate_cleanup(label: str, operation: Any) -> None:
         logger.warning("Delegate %s cleanup was cancelled", label)
     elif error := task.exception():
         logger.warning("Delegate %s cleanup failed: %s", label, error)
+
+
+class _ParentClarificationSession:
+    """Private, tool-free source-agent context for one delegated run."""
+
+    def __init__(self, source_agent: Any, delegation_message: str) -> None:
+        self.source_agent = source_agent
+        self.messages = copy.deepcopy(getattr(source_agent, "history", []))
+        for index in range(len(self.messages) - 1, -1, -1):
+            message = self.messages[index]
+            if message.get("role") == "assistant":
+                calls = message.get("tool_calls") or []
+                if calls:
+                    call_ids = {call.get("id") for call in calls}
+                    completed_ids = {
+                        item.get("tool_call_id")
+                        for item in self.messages[index + 1 :]
+                        if item.get("role") == "tool"
+                    }
+                    if not call_ids <= completed_ids:
+                        del self.messages[index:]
+                break
+        self.delegation_message = delegation_message
+        self.llm = None
+        self.lock = asyncio.Lock()
+
+    async def answer(self, questions: list[dict[str, Any]]) -> str:
+        """Ask the source agent's isolated model and preserve completed clarifications."""
+        from AgentCrew.modules.llm.model_registry import ModelRegistry
+        from AgentCrew.modules.llm.service_manager import ServiceManager
+
+        async with self.lock:
+            if self.llm is None:
+                source = self.source_agent
+                if not source or not getattr(source, "llm", None):
+                    raise ValueError(
+                        "Source agent LLM is unavailable for clarification"
+                    )
+                model = ModelRegistry.get_instance().get_model(source.get_model())
+                service_name = (
+                    model.resolved_service_name() if model else source.llm.provider_name
+                )
+                self.llm = ServiceManager.get_instance().initialize_standalone_service(
+                    service_name
+                )
+                self.llm.model = source.llm.model
+                self.llm.temperature = (
+                    source.temperature if source.temperature is not None else 0.4
+                )
+                system_prompt = (
+                    f"<Name>{source.name}</Name>\n"
+                    f"<Description>{source.description}</Description>\n"
+                    f"<Instructions>\n{source.get_system_prompt()}\n</Instructions>"
+                )
+                if source.custom_system_prompt:
+                    system_prompt += f"\n\n{source.custom_system_prompt}"
+                system_prompt += (
+                    "\n\nAnswer the delegated agent's clarification using only the completed "
+                    "source conversation and delegation task/context. Do not use tools, "
+                    "delegate, or ask the user. If information is insufficient, say so explicitly."
+                )
+                self.llm.set_system_prompt(system_prompt)
+
+            request = (
+                f"Delegation task and context:\n{self.delegation_message}\n\n"
+                f"Questions from delegated agent:\n{questions!r}\n\n"
+                "Answer each question directly. If the available context is insufficient, "
+                "say so explicitly; do not ask the user."
+            )
+            message = {"role": "user", "content": [{"type": "text", "text": request}]}
+            response = await self.llm.process_message([*self.messages, message])
+            if not isinstance(response, str) or not response.strip():
+                raise ValueError("Source agent returned no clarification")
+            self.messages.extend(
+                [
+                    message,
+                    {
+                        "role": "assistant",
+                        "content": [{"type": "text", "text": response}],
+                    },
+                ]
+            )
+            return response
+
+    async def close(self) -> None:
+        """Close the privately owned LLM, if a clarification was requested."""
+        if self.llm is not None:
+            await self.llm.close()
 
 
 def get_delegate_tool_definition() -> dict[str, Any]:
@@ -206,6 +298,9 @@ def get_delegate_tool_handler(agent_manager: AgentManager) -> Callable:
             "Complete the task above. Provide a thorough, complete response."
         )
 
+        parent_session = _ParentClarificationSession(
+            agent_manager.current_agent, delegation_message
+        )
         llm_manager = LLMServiceManager.get_instance()
         from AgentCrew.modules.llm.model_registry import ModelRegistry
 
@@ -234,11 +329,22 @@ def get_delegate_tool_handler(agent_manager: AgentManager) -> Callable:
 
         async def cleanup() -> None:
             try:
-                if clone is not None:
-                    await _bounded_delegate_cleanup(
-                        "agent deactivation", clone.deactivate_async()
-                    )
-                await _bounded_delegate_cleanup("LLM close", fresh_llm.close())
+                operations = (
+                    ("agent deactivation", clone.deactivate_async if clone else None),
+                    (
+                        "parent LLM close",
+                        parent_session.close
+                        if parent_session.llm is not None
+                        else None,
+                    ),
+                    ("LLM close", fresh_llm.close),
+                )
+                for label, operation in operations:
+                    if operation is not None:
+                        try:
+                            await _bounded_delegate_cleanup(label, operation())
+                        except Exception:
+                            logger.exception("Delegate %s cleanup failed", label)
             finally:
                 publisher.enqueue("finish", "")
 
@@ -251,6 +357,7 @@ def get_delegate_tool_handler(agent_manager: AgentManager) -> Callable:
                 tools=target_agent.tools,
                 temperature=target_agent.temperature,
                 excluded_tools={"delegate", "transfer"},
+                ask_responder=parent_session.answer,
             )
             clone.set_system_prompt(target_agent.system_prompt or "")
             if target_agent.custom_system_prompt:

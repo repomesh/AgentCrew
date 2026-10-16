@@ -1,14 +1,10 @@
-"""
-Ask tool for eliciting more details from users.
-This tool allows agents to request additional information from users with guided answer options.
-Supports multiple questions in a single call to reduce round trips.
-"""
+"""Ask for guided clarification from the user or a delegate's source agent."""
 
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from typing import Any
 
 
-def get_ask_tool_definition() -> dict[str, Any]:
+def get_ask_tool_definition(recipient: str = "user") -> dict[str, Any]:
     """
     Get the definition for the ask tool.
 
@@ -24,6 +20,13 @@ def get_ask_tool_definition() -> dict[str, Any]:
         "Bundle up to 10 related, independent questions in the `questions` array."
     )
 
+    if recipient != "user":
+        tool_description = (
+            f"Ask the {recipient} for clarification on the delegated task. "
+            "The answer is returned directly to this delegate; do not ask the user. "
+            "Bundle up to 10 related, independent questions in the `questions` array."
+        )
+
     tool_arguments = {
         "questions": {
             "type": "array",
@@ -32,7 +35,7 @@ def get_ask_tool_definition() -> dict[str, Any]:
                 "properties": {
                     "question": {
                         "type": "string",
-                        "description": "The question to ask the user. Be clear, specific, and concise.",
+                        "description": f"The question to ask the {recipient}. Be clear, specific, and concise.",
                     },
                     "guided_answers": {
                         "type": "array",
@@ -68,13 +71,27 @@ def get_ask_tool_definition() -> dict[str, Any]:
     }
 
 
-def ask_tool_prompt() -> str:
+def ask_tool_prompt(recipient: str = "user") -> str:
     """
     Get the system prompt instructions for the ask tool.
 
     Returns:
         System prompt describing when and how to use the ask tool
     """
+    if recipient != "user":
+        return f"""
+<Ask_Tool_Instruction>
+  <Purpose>
+    Ask the {recipient} for clarification when the delegated task is unclear or blocked.
+    The answer is returned as the ask tool result. Do not ask the user or escalate.
+    If the {recipient} lacks the information, use that limitation in your response.
+  </Purpose>
+  <Best_Practices>
+    - Ask focused questions with 2-6 guided answers each
+    - Bundle related independent questions in one call
+  </Best_Practices>
+</Ask_Tool_Instruction>
+"""
     return """
 <Ask_Tool_Instruction>
   <Purpose>
@@ -99,12 +116,14 @@ def ask_tool_prompt() -> str:
 """
 
 
-def get_ask_tool_handler() -> Callable:
+def get_ask_tool_handler(
+    responder: Callable[[list[dict[str, Any]]], Awaitable[str]] | None = None,
+) -> Callable:
     """
     Get the handler function for the ask tool.
 
-    Note: The actual user interaction is handled by the UI layer (console/GUI).
-    This handler serves as a placeholder that signals the need for user input.
+    Without a responder, the UI handles user interaction and this handler returns
+    a placeholder. Delegated clones await their injected source-agent responder.
 
     Returns:
         The handler function
@@ -114,15 +133,14 @@ def get_ask_tool_handler() -> Callable:
         """
         Handle an ask request.
 
-        This function doesn't directly interact with the user - that's handled
-        by the UI layer through the confirmation flow. Instead, it prepares
-        the questions for presentation.
+        Validate guided questions before either the UI confirmation flow or
+        the delegate's source-agent clarification.
 
         Args:
             questions: list of {question, guided_answers} objects
 
         Returns:
-            A string describing the questions (actual response comes from user)
+            The source-agent answer, or a placeholder for UI confirmation.
         """
         questions = params.get("questions", [])
 
@@ -156,6 +174,9 @@ def get_ask_tool_handler() -> Callable:
                     f"Error: Question at index {i} cannot have more than 6 guided answers"
                 )
 
+        if responder is not None:
+            return await responder(questions)
+
         # This return value is a placeholder - the actual response
         # will be injected by the UI layer after user interaction
         count = len(questions)
@@ -164,13 +185,24 @@ def get_ask_tool_handler() -> Callable:
     return handler
 
 
-def register(agent=None):
+def register(
+    agent=None,
+    responder: Callable[[list[dict[str, Any]]], Awaitable[str]] | None = None,
+):
     """
-    Register the ask tool with all agents or a specific agent.
+    Register the ask tool with a specific agent.
 
     Args:
         agent: Specific agent to register with (optional)
     """
     from AgentCrew.modules.tools.registration import register_tool
 
-    register_tool(get_ask_tool_definition, get_ask_tool_handler, None, agent)
+    if responder is not None:
+        from functools import partial
+
+        definition = partial(get_ask_tool_definition, "source/main agent")
+        handler_factory = partial(get_ask_tool_handler, responder)
+    else:
+        definition = get_ask_tool_definition
+        handler_factory = get_ask_tool_handler
+    register_tool(definition, handler_factory, None, agent)
