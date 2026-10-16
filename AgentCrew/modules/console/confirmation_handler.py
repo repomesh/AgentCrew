@@ -9,6 +9,7 @@ import textwrap
 import time
 from typing import TYPE_CHECKING
 
+from loguru import logger
 from prompt_toolkit.formatted_text import HTML
 from rich.box import HORIZONTALS
 from rich.console import Group
@@ -92,125 +93,124 @@ class ConfirmationHandler:
 
     def _handle_ask_tool(self, tool_use, confirmation_id, message_handler):
         """Handle the ask tool - display one question at a time with navigation."""
-        questions = tool_use["input"].get("questions", [])
-        if isinstance(questions, str):
-            import json
+        response_payload = {"action": "answer", "answer": "Cancelled by user"}
+        input_stopped = False
+        try:
+            questions = tool_use["input"].get("questions", [])
+            if isinstance(questions, str):
+                import json
 
-            try:
-                questions = json.loads(questions)
-            except (json.JSONDecodeError, TypeError):
-                questions = []
+                try:
+                    questions = json.loads(questions)
+                except (json.JSONDecodeError, TypeError):
+                    questions = []
 
-        if not questions or not isinstance(questions, list):
-            questions = [{"question": "(missing questions)", "guided_answers": ["OK"]}]
+            if not questions or not isinstance(questions, list):
+                questions = [{"question": "(missing questions)", "guided_answers": ["OK"]}]
 
-        # Normalize each question's guided_answers
-        for q in questions:
-            answers = q.get("guided_answers", [])
-            if isinstance(answers, str):
-                q["guided_answers"] = answers.strip("\n ").splitlines()
+            for q in questions:
+                answers = q.get("guided_answers", [])
+                if isinstance(answers, str):
+                    q["guided_answers"] = answers.strip("\n ").splitlines()
 
-        total = len(questions)
-        current_idx = 0
-        answers: dict[str, str] = {}
+            total = len(questions)
+            current_idx = 0
+            answers: dict[str, str] = {}
 
-        self.input_handler._stop_input_thread()
-
-        while current_idx < total:
-            q = questions[current_idx]
-            question_text = q.get("question", "")
-            guided_answers = list(q.get("guided_answers", []))
-
-            # Build navigation prefix
-            nav_prefix = f"[{current_idx + 1}/{total}] " if total > 1 else ""
-
-            guided_answers.append("Custom your answer")
-
-            self.console.print(
-                Text(
-                    f"\n❓ {nav_prefix}Agent is asking for clarification:",
-                    style=RICH_STYLE_BLUE_BOLD,
-                ),
-                markup=False,
-            )
-
-            # Determine choices: guided answers + submit only (nav via keyboard)
-            max_width = self.console.width - 4
-            choices = [
-                "\n".join(textwrap.wrap(a, width=max_width)) for a in guided_answers
-            ]
-            choices.append("Submit all answers")
-
-            has_next = total > 1 and current_idx < total - 1
-            has_prev = total > 1 and current_idx > 0
-
-            bottom_toolbar = None
-            if has_next or has_prev:
-                parts = []
-                if has_next:
-                    parts.append("<b>[Tab]</b> next")
-                if has_prev:
-                    parts.append("<b>[Bksp]</b> back")
-                bottom_toolbar = HTML(", ".join(parts))
-
-            wrapped = "\n".join(
-                textwrap.wrap(f"{nav_prefix}{question_text}", width=max_width)
-            )
-
-            response = self.input_handler.get_choice_input(
-                wrapped,
-                choices,
-                tab_forward="Next →" if has_next else None,
-                tab_backward="← Back" if has_prev else None,
-                bottom_toolbar=bottom_toolbar,
-            )
-
-            if response == "Custom your answer":
-                custom_answer = self.input_handler.get_prompt_input(
-                    f"Input your answer {self.input_handler.prompt_submit_hint}:"
-                )
-                if custom_answer:
-                    answers[str(current_idx)] = custom_answer
-                current_idx += 1
-
-            elif response == "← Back":
-                current_idx -= 1
-
-            elif response == "Next →":
-                current_idx += 1
-
-            elif response == "Submit all answers":
-                break
-
-            elif response:
-                answers[str(current_idx)] = response
-                current_idx += 1
-
-            else:
-                # User cancelled mid-way
-                message_handler.resolve_tool_confirmation(
-                    confirmation_id,
-                    {"action": "answer", "answer": "Cancelled by user"},
-                )
-                self._ui.start_loading_animation()
-                self.input_handler._start_input_thread()
+            input_stopped = self.input_handler._stop_input_thread()
+            if not input_stopped:
                 return
 
-        # Build structured result
-        answer_lines = []
-        for i, q in enumerate(questions):
-            idx_str = str(i)
-            ans = answers.get(idx_str, "(skipped)")
-            answer_lines.append(f"- {q['question']}: {ans}")
+            while current_idx < total:
+                q = questions[current_idx]
+                question_text = q.get("question", "")
+                guided_answers = list(q.get("guided_answers", []))
 
-        result = "Answers:\n" + "\n".join(answer_lines)
+                nav_prefix = f"[{current_idx + 1}/{total}] " if total > 1 else ""
 
-        message_handler.resolve_tool_confirmation(
-            confirmation_id, {"action": "answer", "answer": result}
-        )
+                guided_answers.append("Custom your answer")
 
-        self._ui.start_loading_animation()
-        self.input_handler._start_input_thread()
+                self.console.print(
+                    Text(
+                        f"\n❓ {nav_prefix}Agent is asking for clarification:",
+                        style=RICH_STYLE_BLUE_BOLD,
+                    )
+                )
+
+                max_width = self.console.width - 4
+                choices = [
+                    "\n".join(textwrap.wrap(a, width=max_width)) for a in guided_answers
+                ]
+                choices.append("Submit all answers")
+
+                has_next = total > 1 and current_idx < total - 1
+                has_prev = total > 1 and current_idx > 0
+
+                bottom_toolbar = None
+                if has_next or has_prev:
+                    parts = []
+                    if has_next:
+                        parts.append("<b>[Tab]</b> next")
+                    if has_prev:
+                        parts.append("<b>[Bksp]</b> back")
+                    bottom_toolbar = HTML(", ".join(parts))
+
+                wrapped = "\n".join(
+                    textwrap.wrap(f"{nav_prefix}{question_text}", width=max_width)
+                )
+
+                response = self.input_handler.get_choice_input(
+                    wrapped,
+                    choices,
+                    tab_forward="Next →" if has_next else None,
+                    tab_backward="← Back" if has_prev else None,
+                    bottom_toolbar=bottom_toolbar,
+                )
+
+                if response == "Custom your answer":
+                    custom_answer = self.input_handler.get_prompt_input(
+                        f"Input your answer {self.input_handler.prompt_submit_hint}:"
+                    )
+                    if not custom_answer:
+                        return
+                    answers[str(current_idx)] = custom_answer
+                    current_idx += 1
+
+                elif response == "← Back":
+                    current_idx -= 1
+
+                elif response == "Next →":
+                    current_idx += 1
+
+                elif response == "Submit all answers":
+                    break
+
+                elif response:
+                    answers[str(current_idx)] = response
+                    current_idx += 1
+
+                else:
+                    return
+
+            answer_lines = []
+            for i, q in enumerate(questions):
+                idx_str = str(i)
+                ans = answers.get(idx_str, "(skipped)")
+                answer_lines.append(f"- {q['question']}: {ans}")
+
+            result = "Answers:\n" + "\n".join(answer_lines)
+            response_payload = {"action": "answer", "answer": result}
+        except Exception:
+            logger.exception("Failed to collect console ask response")
+        finally:
+            try:
+                message_handler.resolve_tool_confirmation(confirmation_id, response_payload)
+            finally:
+                if input_stopped:
+                    try:
+                        self._ui.start_loading_animation()
+                    finally:
+                        self.input_handler._start_input_thread()
 
     def _display_write_file_diff(self, tool_use, file_path, blocks):
         """Display split diff view for write_or_edit_file tool."""

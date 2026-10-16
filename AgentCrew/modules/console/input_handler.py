@@ -325,7 +325,7 @@ class InputHandler:
                 event.app.exit(result=tab_backward, style="class:accepted")
 
         choice_input = ChoiceInput(
-            message=HTML(f"<ansiyellow>{message}</ansiyellow> "),
+            message=HTML("<ansiyellow>{}</ansiyellow> ").format(message),
             options=[(v, v) for v in values],
             default=default,
             style=style,
@@ -386,7 +386,7 @@ class InputHandler:
                 event.current_buffer.validate_and_handle()
 
         return prompt(
-            HTML(f"<ansiblue>{prompt_message}</ansiblue> "),
+            HTML("<ansiblue>{}</ansiblue> ").format(prompt_message),
             default=default,
             key_bindings=kb,
             multiline=True,
