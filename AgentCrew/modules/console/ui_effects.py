@@ -11,6 +11,7 @@ import math
 import random
 import threading
 import time
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, ClassVar
 
 from rich.box import HORIZONTALS
@@ -30,6 +31,14 @@ from .constants import (
 
 if TYPE_CHECKING:
     from .console_ui import ConsoleUI
+
+
+@dataclass
+class DelegateRun:
+    agent_name: str
+    description: str
+    entries: list[tuple[str, str]] = field(default_factory=list)
+    completed: bool = False
 
 
 class UIEffects:
@@ -113,7 +122,7 @@ class UIEffects:
         self.spinner = itertools.cycle(["⣾", "⣽", "⣻", "⢿", "⡿", "⣟", "⣯", "⣷"])
         self.updated_text = ""
         self.updated_planning_text = ""
-        self._delegate_agents: dict[str, tuple[str, list[tuple[str, str]]]] = {}
+        self._delegate_agents: dict[str, DelegateRun] = {}
         self._delegate_lock = threading.RLock()
         self._delegate_live: Live | None = None
 
@@ -213,19 +222,21 @@ class UIEffects:
             sys.stdout.write("\x1b[1A")  # cursor up one line
             sys.stdout.write("\x1b[2K")
 
-    def _render_delegate_progress(self) -> Group:
-        heading = Text("📋 Delegating → ", style="bold yellow")
-        indent = " " * heading.cell_len
-        width = max(1, self.console.width - heading.cell_len)
+    def _render_delegate_progress(self) -> Panel:
+        width = max(1, self.console.width - 4)
         preview = []
-        for index, (agent_name, entries) in enumerate(
-            self._delegate_agents.values(), start=1
-        ):
-            label = heading.copy() if index == 1 else Text(indent)
-            label.append(f"#{index} {agent_name}:", style="bold yellow")
+        for index, run in enumerate(self._delegate_agents.values(), start=1):
+            description = " ".join(run.description.split())
+            if len(description) > 80:
+                description = description[:77].rstrip() + "..."
+            label = Text(f"#{index} {run.agent_name}:", style="bold yellow").append(
+                f" {description}", style=RICH_STYLE_GRAY
+            )
+            if run.completed:
+                label.append(" ✅ Completed", style=RICH_STYLE_GREEN)
             preview.append(label)
             content = Text()
-            for kind, chunk in entries:
+            for kind, chunk in run.entries:
                 if kind == "tool":
                     if content and not content.plain.endswith("\n"):
                         content.append("\n")
@@ -238,42 +249,42 @@ class UIEffects:
                         else RICH_STYLE_WHITE,
                     )
             rows = [row for row in content.wrap(self.console, width) if row.plain]
-            for row in rows[-2:]:
-                line = Text(indent)
-                line.append_text(row)
-                preview.append(line)
-        return Group(*preview)
+            preview.extend(rows[-5:])
+        return Panel(Group(*preview), title="Delegating", border_style="yellow")
 
     def update_delegate_progress(
         self, run_id: str, agent_name: str, kind: str, text: str
     ) -> None:
         """Update the shared live preview for a single delegate run."""
         with self._delegate_lock:
-            if kind == "finish":
-                self._delegate_agents.pop(run_id, None)
-                if not self._delegate_agents:
-                    if self._delegate_live is not None:
-                        self._delegate_live.stop()
-                        self._delegate_live = None
+            if kind == "start":
+                self._delegate_agents[run_id] = DelegateRun(agent_name, text)
+            elif run_id not in self._delegate_agents:
+                return
+            elif kind == "finish":
+                if self._delegate_agents[run_id].completed:
                     return
-            elif kind == "start":
-                self._delegate_agents[run_id] = (agent_name, [])
-            elif run_id in self._delegate_agents:
-                entries = self._delegate_agents[run_id][1]
+                self._delegate_agents[run_id].completed = True
+            elif not self._delegate_agents[run_id].completed:
+                entries = self._delegate_agents[run_id].entries
                 entries.append((kind, text))
                 total = sum(len(chunk) for _, chunk in entries)
                 while total > 8192 and len(entries) > 1:
                     total -= len(entries.pop(0)[1])
                 if total > 8192:
-                    entries[0] = (entries[0][0], entries[0][1][-(8192):])
+                    entries[0] = (entries[0][0], entries[0][1][-8192:])
             else:
                 return
             if self._delegate_live is None:
                 self._delegate_live = Live(
-                    "", console=self.console, auto_refresh=False, transient=True
+                    "", console=self.console, auto_refresh=False, transient=False
                 )
                 self._delegate_live.start()
             self._delegate_live.update(self._render_delegate_progress(), refresh=True)
+            if all(run.completed for run in self._delegate_agents.values()):
+                self._delegate_live.stop()
+                self._delegate_live = None
+                self._delegate_agents.clear()
 
     def start_loading_animation(self):
         """Start the loading animation."""

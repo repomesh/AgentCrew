@@ -51,20 +51,6 @@ class ToolDisplayHandlers:
         }
         return tool_icons.get(tool_name, "🔧")
 
-    def display_delegate_completed(self, tool_use: dict):
-        """Display a compact 'done' line when a delegate tool finishes."""
-        params = tool_use.get("input") or tool_use.get("arguments", {})
-        target_agent = (
-            params.get("target_agent", "Unknown")
-            if isinstance(params, dict)
-            else "Unknown"
-        )
-
-        line = Text("✅ ", style=RICH_STYLE_GREEN)
-        line.append(target_agent, style="bold green")
-        line.append(" completed", style=RICH_STYLE_GREEN)
-        self.console.print(line)
-
     def display_tool_use(self, tool_use: dict):
         """Display information about a tool being used."""
         tool_icon = self.get_tool_icon(tool_use["name"])

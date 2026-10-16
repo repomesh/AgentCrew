@@ -183,7 +183,7 @@ def get_delegate_tool_handler(agent_manager: AgentManager) -> Callable:
             clone.set_system_prompt(target_agent.system_prompt or "")
             if target_agent.custom_system_prompt:
                 clone.set_custom_system_prompt(target_agent.custom_system_prompt)
-            await progress("start", "")
+            await progress("start", task_description)
             await clone.activate_async()
             delegate_history = [
                 {

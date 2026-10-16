@@ -3,6 +3,7 @@ from types import SimpleNamespace
 
 import pytest
 from rich.console import Console, Group
+from rich.panel import Panel
 from rich.text import Text
 
 from AgentCrew.modules.agents.agent_runner import run_agent_loop
@@ -81,56 +82,73 @@ async def test_runner_progress_survives_empty_response_and_tool_recursion():
     assert agent.turn == 3
 
 
-def test_delegate_preview_shows_latest_two_wrapped_rows_and_parallel_isolation():
-    console = Console(width=40, force_terminal=False, file=StringIO())
+def test_delegate_panel_previews_parallel_runs_and_retains_final_output():
+    output = StringIO()
+    console = Console(width=40, force_terminal=False, file=output)
     effects = UIEffects(SimpleNamespace(console=console, message_handler=None))
-    effects.update_delegate_progress("one", "ResearchAgent", "start", "")
-    effects.update_delegate_progress("two", "WriterAgent", "start", "")
-    effects.update_delegate_progress("one", "ResearchAgent", "thinking", "a" * 65)
-    effects.update_delegate_progress("two", "WriterAgent", "response", "b" * 65)
+    effects.update_delegate_progress("unknown", "Other", "finish", "")
+    effects.update_delegate_progress(
+        "one", "ResearchAgent", "start", "  find\n facts  "
+    )
+    effects.update_delegate_progress("two", "WriterAgent", "start", "draft answer")
+    effects.update_delegate_progress("one", "ResearchAgent", "thinking", "a" * 85)
+    effects.update_delegate_progress("two", "WriterAgent", "response", "b" * 85)
 
-    heading, *rows = effects._render_delegate_progress().renderables
-    assert heading.plain == "📋 Delegating → #1 ResearchAgent:"
-    assert [row.plain.strip() for row in rows[:2]] == ["a" * 24, "a" * 17]
+    panel = effects._render_delegate_progress()
+    assert isinstance(panel, Panel)
+    assert panel.title == "Delegating"
+    assert isinstance(panel.renderable, Group)
+    first, *rows = panel.renderable.renderables
+    assert all(isinstance(row, Text) for row in panel.renderable.renderables)
+    assert first.plain == "#1 ResearchAgent: find facts"
+    assert first.style == "bold yellow"
+    assert [row.plain for row in rows[:2]] == ["a" * 36, "a" * 13]
     assert all(row.spans[-1].style == RICH_STYLE_GRAY for row in rows[:2])
-    assert rows[2].plain.strip() == "#2 WriterAgent:"
-    assert [row.plain.strip() for row in rows[3:]] == ["b" * 24, "b" * 17]
+    assert rows[2].plain == "#2 WriterAgent: draft answer"
+    assert [row.plain for row in rows[3:]] == ["b" * 36, "b" * 13]
     assert all(row.spans[-1].style == RICH_STYLE_WHITE for row in rows[3:])
 
     effects.update_delegate_progress("one", "ResearchAgent", "tool", "read_file")
-    renderable = effects._render_delegate_progress()
-    assert isinstance(renderable, Group)
-    assert all(isinstance(row, Text) for row in renderable.renderables)
-    first, thinking, tool, second, *responses = renderable.renderables
-    assert first.plain.count("Delegating →") == 1
-    assert thinking.plain.strip() == "a" * 17
-    assert thinking.spans[-1].style == RICH_STYLE_GRAY
-    assert tool.plain.strip() == "Tool: read_file"
-    assert tool.spans[-1].style == RICH_STYLE_GRAY
-    assert second.plain.strip() == "#2 WriterAgent:"
-    assert [row.plain.strip() for row in responses] == ["b" * 24, "b" * 17]
-    assert all(row.spans[-1].style == RICH_STYLE_WHITE for row in responses)
-    assert all("read_file" not in row.plain for row in (second, *responses))
-    rendered = StringIO()
-    Console(width=40, force_terminal=False, file=rendered).print(renderable)
-    assert rendered.getvalue().count("Delegating →") == 1
-    assert rendered.getvalue().splitlines()[0].startswith("📋 Delegating → #1")
-    assert all(
-        line.startswith(" " * Text("📋 Delegating → ").cell_len)
-        for line in rendered.getvalue().splitlines()[1:]
+    first, thinking, tool, second, *responses = (
+        effects._render_delegate_progress().renderable.renderables
     )
+    assert first.plain == "#1 ResearchAgent: find facts"
+    assert thinking.plain == "a" * 13
+    assert thinking.spans[-1].style == RICH_STYLE_GRAY
+    assert tool.plain == "Tool: read_file"
+    assert tool.spans[-1].style == RICH_STYLE_GRAY
+    assert second.plain == "#2 WriterAgent: draft answer"
+    assert [row.plain for row in responses] == ["b" * 36, "b" * 13]
+    assert all(row.spans[-1].style == RICH_STYLE_WHITE for row in responses)
 
     effects.update_delegate_progress("one", "ResearchAgent", "finish", "")
-    assert set(effects._delegate_agents) == {"two"}
-    remaining = effects._render_delegate_progress().renderables
-    assert [row.plain.strip() for row in remaining] == [
-        "📋 Delegating → #1 WriterAgent:",
-        "b" * 24,
-        "b" * 17,
-    ]
+    assert list(effects._delegate_agents) == ["one", "two"]
+    assert effects._delegate_agents["one"].completed
+    assert effects._delegate_live is not None
+    first, *others = effects._render_delegate_progress().renderable.renderables
+    assert first.plain == "#1 ResearchAgent: find facts ✅ Completed"
+    assert any(row.plain == "#2 WriterAgent: draft answer" for row in others)
+    effects.update_delegate_progress("one", "ResearchAgent", "finish", "")
+    effects.update_delegate_progress("one", "ResearchAgent", "response", "ignored")
+    assert effects._delegate_live is not None
+
     effects.update_delegate_progress("two", "WriterAgent", "finish", "")
     assert not effects._delegate_agents
     assert effects._delegate_live is None
+    final = output.getvalue()
+    assert final.count("Delegating") == 1
+    assert "#1 ResearchAgent: find facts ✅" in final
+    assert "#2 WriterAgent: draft answer ✅" in final
+    assert final.count("Completed") == 2
+    assert "✅ ResearchAgent completed" not in final
+
+    effects.update_delegate_progress("one", "ResearchAgent", "finish", "")
+    assert effects._delegate_live is None
+    effects.update_delegate_progress("next", "NewAgent", "start", "new task")
+    rows = effects._render_delegate_progress().renderable.renderables
+    assert [row.plain for row in rows] == ["#1 NewAgent: new task"]
+    effects.cleanup()
+    effects.cleanup()
 
 
 def test_delegate_start_stops_loading_without_static_output():
@@ -151,12 +169,47 @@ def test_delegate_start_stops_loading_without_static_output():
     assert output.getvalue() == ""
 
 
+@pytest.mark.asyncio
+async def test_delegate_result_does_not_print_standalone_completion():
+    from AgentCrew.modules.events import AppEvents, EventBus
+
+    output = StringIO()
+    started = []
+    ui = ConsoleUI.__new__(ConsoleUI)
+    ui.console = Console(file=output, force_terminal=False)
+    ui.bus = EventBus()
+    ui._stream_cancel_pending = False
+    ui.ui_effects = SimpleNamespace(
+        start_loading_animation=lambda: started.append(True)
+    )
+    ui._register_subscriptions()
+
+    await ui.bus.emit(
+        AppEvents.TOOL_RESULT,
+        tool_use={"name": "delegate", "input": {"target_agent": "ResearchAgent"}},
+        tool_result="done",
+    )
+    assert output.getvalue() == ""
+    assert not started
+    await ui.bus.emit(
+        AppEvents.TOOL_RESULT, tool_use={"name": "read_file"}, tool_result="done"
+    )
+    assert started == [True]
+
+
 def test_large_delegate_chunk_preserves_latest_text_and_cleanup():
     console = Console(width=30, force_terminal=False)
     effects = UIEffects(SimpleNamespace(console=console, message_handler=None))
-    effects.update_delegate_progress("run", "Agent", "start", "")
+    effects.update_delegate_progress("run", "Agent", "start", "a" * 100)
     effects.update_delegate_progress("run", "Agent", "response", "a" * 9000 + "tail")
-    assert "tail" in effects._delegate_agents["run"][1][-1][1]
+    assert "tail" in effects._delegate_agents["run"].entries[-1][1]
+    assert len(effects._delegate_agents["run"].entries[-1][1]) <= 8192
+    assert (
+        effects._render_delegate_progress()
+        .renderable.renderables[0]
+        .plain.endswith("...")
+    )
+    effects.cleanup()
     effects.cleanup()
     assert not effects._delegate_agents
     assert effects._delegate_live is None
@@ -234,12 +287,16 @@ async def test_delegate_handler_finishes_run_on_success_and_error(monkeypatch, f
 
     monkeypatch.setattr(module, "run_agent_loop", fake_run_agent_loop)
     handler = get_delegate_tool_handler(manager)
+    description = "  test\n details  "
     if fails:
         with pytest.raises(RuntimeError, match="activation failed"):
-            await handler(target_agent="Target", task_description="test")
+            await handler(target_agent="Target", task_description=description)
     else:
-        assert "answer" in await handler(target_agent="Target", task_description="test")
+        assert "answer" in await handler(
+            target_agent="Target", task_description=description
+        )
     assert [e["kind"] for e in events] == (
         ["start", "finish"] if fails else ["start", "response", "finish"]
     )
     assert len({e["run_id"] for e in events}) == 1
+    assert events[0]["text"] == description

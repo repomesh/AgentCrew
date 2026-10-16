@@ -160,13 +160,6 @@ class ConsoleUI:
             ),
             self.bus.on(
                 AppEvents.TOOL_RESULT,
-                self._on_delegate_result,
-                filter_func=lambda e, d: (
-                    d.get("tool_use", {}).get("name") == "delegate"
-                ),
-            ),
-            self.bus.on(
-                AppEvents.TOOL_RESULT,
                 self._on_tool_result,
                 filter_func=lambda e, d: (
                     d.get("tool_use", {}).get("name") != "delegate"
@@ -348,10 +341,6 @@ class ConsoleUI:
     def _on_delegate_progress(self, run_id: str, agent_name: str, kind: str, text: str):
         if not self._stream_cancel_pending:
             self.ui_effects.update_delegate_progress(run_id, agent_name, kind, text)
-
-    def _on_delegate_result(self, **data):
-        tool_use = data.get("tool_use", {})
-        self.tool_display.display_delegate_completed(tool_use)
 
     # ── Conversation handlers ──
 
