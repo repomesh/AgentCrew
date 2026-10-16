@@ -257,7 +257,7 @@ You must analyze and plan out the steps then execute it with your available tool
     - Plan out the tool call strategy for this task: which tools you should call, in what order, and what inputs each needs.
     - The purpose of the planning is finding the optimal way to gather necessary information and organize steps to be taken to accomplished the task
     - Sum up what you get from tool results in your next messages.
-    - Can this request break into multiple sub-tasks and be delegated to specialist agents? If yes, delegate them.
+    - Can this task break into multiple sub-tasks and be delegated to specialist agents? If yes, create sub-tasks and delegate them.
     - Can multiple sub-tasks run in parallel? If yes, emit multiple delegate calls in one turn.
     Then execute your plan.
     Skip evaluation for: simple one-sentence answers, or when the request matches "when [condition], [action]" — call `learn_behavior` directly instead."""
