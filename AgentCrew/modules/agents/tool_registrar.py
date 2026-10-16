@@ -31,7 +31,11 @@ class AgentToolRegistrar:
         agent = self._agent
 
         voice_service = agent.services.get("voice")
-        if voice_service and getattr(agent, "voice_enabled", "disabled") != "disabled":
+        if (
+            voice_service
+            and "speak" not in agent.excluded_tools
+            and getattr(agent, "voice_enabled", "disabled") != "disabled"
+        ):
             from AgentCrew.modules.voice.tool import (
                 register as register_speak,
             )
@@ -43,6 +47,8 @@ class AgentToolRegistrar:
             agent.tool_prompts.append(speak_tool_prompt())
 
         for tool_name in agent.tools:
+            if tool_name in agent.excluded_tools:
+                continue
             if agent.services and tool_name in agent.services:
                 service = agent.services[tool_name]
                 if service:
@@ -125,7 +131,7 @@ class AgentToolRegistrar:
                 )
 
         skills_service = agent.services.get("skills")
-        if skills_service:
+        if skills_service and "skills" not in agent.excluded_tools:
             from AgentCrew.modules.skills.tool import register as register_skills
 
             register_skills(skills_service, agent)
@@ -134,7 +140,11 @@ class AgentToolRegistrar:
             from AgentCrew.modules.agents import AgentMode
 
             mode = agent.services["agent_manager"].agent_mode
-            if not agent.is_remoting_mode and mode == AgentMode.TRANSFER:
+            if (
+                not agent.is_remoting_mode
+                and mode == AgentMode.TRANSFER
+                and "transfer" not in agent.excluded_tools
+            ):
                 from AgentCrew.modules.agents.tools.transfer import (
                     register as register_transfer,
                 )
@@ -151,7 +161,9 @@ class AgentToolRegistrar:
                 )
                 agent._colaboration_mode = AgentMode.TRANSFER
             elif (
-                mode != AgentMode.NONE
+                (agent.is_remoting_mode or mode != AgentMode.TRANSFER)
+                and mode != AgentMode.NONE
+                and "delegate" not in agent.excluded_tools
                 and len(agent.services["agent_manager"].agents) > 1
             ):  # DELEGATE MODE for remoting mode also
                 from AgentCrew.modules.agents.tools.delegate import (
@@ -170,7 +182,10 @@ class AgentToolRegistrar:
                 )
                 agent._colaboration_mode = AgentMode.DELEGATE
 
-            if not agent.services["agent_manager"].one_turn_process:
+            if (
+                not agent.services["agent_manager"].one_turn_process
+                and "ask" not in agent.excluded_tools
+            ):
                 from AgentCrew.modules.agents.tools.ask import (
                     ask_tool_prompt,
                 )
@@ -194,6 +209,8 @@ class AgentToolRegistrar:
         """Add a single tool definition to the agent's local map."""
         tool_def = definition_func() if callable(definition_func) else definition_func
         tool_name = extract_tool_name(tool_def)
+        if tool_name in self._agent.excluded_tools:
+            return
         self._agent.tool_definitions[tool_name] = (
             definition_func,
             handler_factory,

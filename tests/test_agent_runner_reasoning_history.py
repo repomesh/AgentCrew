@@ -4,7 +4,7 @@ Uses a real ``LocalAgent`` plus a stubbed Responses-like LLM service that
 delegates chunk parsing to the real ``OpenAIResponseService`` so the whole
 pipeline is exercised:
 
-- thinking persists on no-tool completion and filtered-tool completion
+- thinking persists on no-tool completion and empty-response retry
 - ``_metadata`` provider state is attached to persisted assistant messages
 - the next Responses request replays the reasoning item exactly once
 """
@@ -197,22 +197,21 @@ async def test_no_tool_completion_persists_thinking_and_metadata():
 
 
 @pytest.mark.asyncio
-async def test_filtered_tool_completion_persists_thinking_and_metadata():
-    chunks = [
+async def test_empty_response_retry_persists_thinking_and_metadata():
+    empty_turn = [
+        _event("response.reasoning_summary_text.delta", delta="step one"),
         _event("response.output_item.done", item=_reasoning_item(), output_index=0),
-        *_function_call_events(),
-        _event("response.output_text.delta", delta="Answer", output_index=1),
         _completed_event(),
     ]
-    agent = _make_agent([chunks])
+    agent = _make_agent([empty_turn, _text_events("Answer")])
     history: list[dict[str, Any]] = [
         {"role": "user", "content": [{"type": "text", "text": "hi"}]}
     ]
 
-    response, _ = await run_agent_loop(agent, history, tool_filter=lambda t: False)
+    response, _ = await run_agent_loop(agent, history)
 
     assert response == "Answer"
-    assistant = history[-1]
+    assistant = history[1]
     assert assistant["role"] == "assistant"
 
     thinking_blocks = [
@@ -224,6 +223,7 @@ async def test_filtered_tool_completion_persists_thinking_and_metadata():
     state = get_responses_provider_state(assistant)
     assert state is not None
     assert state["output_items"][0]["encrypted_content"] == ENCRYPTED
+    assert history[-1]["role"] == "assistant"
 
 
 @pytest.mark.asyncio

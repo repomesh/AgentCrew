@@ -262,9 +262,12 @@ async def test_delegate_handler_finishes_run_on_success_error_and_cancellation(
     if blocked:
         monkeypatch.setattr(module, "DELEGATE_PROGRESS_TIMEOUT", 0.2)
 
+    clone_arguments = []
+    loop_arguments = []
+
     class Clone:
         def __init__(self, **kwargs):
-            pass
+            clone_arguments.append(kwargs)
 
         def set_system_prompt(self, prompt):
             pass
@@ -283,6 +286,7 @@ async def test_delegate_handler_finishes_run_on_success_error_and_cancellation(
             pass
 
     llm = FreshLLM()
+    services = {"agent_manager": object()}
     manager = SimpleNamespace(
         agents={"Target": object()},
         current_agent=SimpleNamespace(name="Source"),
@@ -290,7 +294,7 @@ async def test_delegate_handler_finishes_run_on_success_error_and_cancellation(
             name=name,
             description="test",
             llm=SimpleNamespace(model="model", provider_name="provider"),
-            services={},
+            services=services,
             tools=[],
             temperature=0,
             system_prompt="",
@@ -312,6 +316,7 @@ async def test_delegate_handler_finishes_run_on_success_error_and_cancellation(
     )
 
     async def fake_run_agent_loop(**kwargs):
+        loop_arguments.append(kwargs)
         if blocked:
             await asyncio.wait_for(started.wait(), 1)
         if cancelled:
@@ -343,6 +348,14 @@ async def test_delegate_handler_finishes_run_on_success_error_and_cancellation(
             0.1 if blocked else 1,
         )
     await asyncio.wait_for(finished.wait(), 1)
+    assert clone_arguments[0]["excluded_tools"] == {"delegate", "transfer"}
+    assert clone_arguments[0]["services"] is services
+    assert "agent_manager" in services
+    if fails:
+        assert not loop_arguments
+    else:
+        assert len(loop_arguments) == 1
+        assert "tool_filter" not in loop_arguments[0]
     assert [e["kind"] for e in events] == (
         ["response", "finish"]
         if blocked

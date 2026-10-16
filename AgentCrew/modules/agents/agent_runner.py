@@ -58,7 +58,6 @@ async def _run_agent_loop(
     agent: LocalAgent,
     history: list[dict[str, Any]],
     *,
-    tool_filter: Callable[[dict[str, Any]], bool] | None = None,
     prior_token_usage: TokenUsage | None = None,
     request_usage_callback: Callable[[TokenUsage], None] | None = None,
     progress_callback: ProgressCallback | None = None,
@@ -70,7 +69,6 @@ async def _run_agent_loop(
     Args:
         agent: The agent to execute the loop for.
         history: The conversation history for the loop.
-        tool_filter: Optional filter applied to tool calls before execution.
         prior_token_usage: Usage merged from earlier segments of the same loop.
         request_usage_callback: Optional hook invoked with each raw completed
             LLM request's TokenUsage before it is merged into the returned
@@ -153,7 +151,6 @@ async def _run_agent_loop(
             return await _run_agent_loop(
                 agent,
                 history,
-                tool_filter=tool_filter,
                 prior_token_usage=token_usage,
                 request_usage_callback=request_usage_callback,
                 progress_callback=progress_callback,
@@ -162,29 +159,14 @@ async def _run_agent_loop(
             )
         return current_response, token_usage
 
-    if tool_filter:
-        filtered = [t for t in tool_uses if tool_filter(t)]
-    else:
-        filtered = tool_uses
-
-    if not filtered:
-        assistant_message = stream.format_assistant_message(
-            current_response, thinking=thinking_data
-        )
-        append_assistant_message(assistant_message)
-
-        user_message = agent.extract_last_user_message_for_memory(history)
-        agent.store_memory_if_available(user_message, history, current_response)
-        return current_response, token_usage
-
     assistant_message = stream.format_assistant_message(
-        current_response, thinking=thinking_data, tool_uses=filtered
+        current_response, thinking=thinking_data, tool_uses=tool_uses
     )
     append_assistant_message(assistant_message)
 
     parallel_buffer: list[dict[str, Any]] = []
 
-    for tool_use in filtered:
+    for tool_use in tool_uses:
         if progress_callback is not None:
             await progress_callback("tool", tool_use["name"])
         # --- Validate each tool exactly once before dispatch --------------
@@ -294,7 +276,6 @@ async def _run_agent_loop(
     return await _run_agent_loop(
         agent,
         history,
-        tool_filter=tool_filter,
         prior_token_usage=token_usage,
         request_usage_callback=request_usage_callback,
         progress_callback=progress_callback,
@@ -306,7 +287,6 @@ async def run_agent_loop(
     agent: LocalAgent,
     history: list[dict[str, Any]],
     *,
-    tool_filter: Callable[[dict[str, Any]], bool] | None = None,
     prior_token_usage: TokenUsage | None = None,
     request_usage_callback: Callable[[TokenUsage], None] | None = None,
     progress_callback: ProgressCallback | None = None,
@@ -323,7 +303,6 @@ async def run_agent_loop(
         return await _run_agent_loop(
             agent,
             history,
-            tool_filter=tool_filter,
             prior_token_usage=prior_token_usage,
             request_usage_callback=request_usage_callback,
             progress_callback=progress_callback,

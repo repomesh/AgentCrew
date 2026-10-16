@@ -40,6 +40,7 @@ def test_registration_schemas_and_prompt():
         tools=["file_editing"],
         tool_prompts=[],
         tool_definitions={},
+        excluded_tools=frozenset(),
         voice_enabled="disabled",
         llm=None,
     )

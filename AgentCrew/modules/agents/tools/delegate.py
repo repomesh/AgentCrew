@@ -250,6 +250,7 @@ def get_delegate_tool_handler(agent_manager: AgentManager) -> Callable:
                 services=target_agent.services,
                 tools=target_agent.tools,
                 temperature=target_agent.temperature,
+                excluded_tools={"delegate", "transfer"},
             )
             clone.set_system_prompt(target_agent.system_prompt or "")
             if target_agent.custom_system_prompt:
@@ -266,7 +267,6 @@ def get_delegate_tool_handler(agent_manager: AgentManager) -> Callable:
             response, _ = await run_agent_loop(
                 agent=clone,
                 history=delegate_history,
-                tool_filter=lambda t: t["name"] not in ["transfer", "delegate"],
                 request_usage_callback=target_agent.record_conversation_usage,
                 progress_callback=progress,
             )

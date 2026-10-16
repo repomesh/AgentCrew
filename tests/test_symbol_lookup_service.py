@@ -274,6 +274,7 @@ def test_code_analysis_registration_appends_instruction_prompt():
             self.tools = ["code_analysis"]
             self.tool_prompts = []
             self.tool_definitions = {}
+            self.excluded_tools = frozenset()
             self.voice_enabled = "disabled"
             self.llm = None
             self.registered_tools = set()

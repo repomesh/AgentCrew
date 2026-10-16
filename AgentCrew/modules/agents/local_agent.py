@@ -17,7 +17,7 @@ from AgentCrew.modules.llm.token_usage import ConversationUsage, TokenUsage
 from .base import BaseAgent, MessageType
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
+    from collections.abc import Callable, Iterable
     from typing import Any
 
     from AgentCrew.modules.llm import BaseLLMService
@@ -48,6 +48,7 @@ class LocalAgent(BaseAgent):
         is_remoting_mode: bool = False,
         voice_enabled: Literal["enabled", "disabled"] = "disabled",
         voice_id: str | None = None,
+        excluded_tools: Iterable[str] | None = None,
     ):
         """
         Initialize a new agent.
@@ -59,12 +60,14 @@ class LocalAgent(BaseAgent):
             services: Dictionary of available services
             voice_enabled: Whether voice features are enabled for this agent
             voice_id: Voice ID to use for text-to-speech
+            excluded_tools: Tool registration names to omit for this agent
         """
         super().__init__(name, description)
         self.llm = llm_service
         self.temperature = temperature
         self.services = services
         self.tools: list[str] = tools  # list of tool names that the agent needs
+        self.excluded_tools: frozenset[str] = frozenset(excluded_tools or ())
         self.system_prompt = None
         self.custom_system_prompt = None
         self.tool_prompts = []
