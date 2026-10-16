@@ -18,16 +18,17 @@ def test_choice_prompt_escapes_dynamic_text_without_changing_style_or_spacing():
     handler = InputHandler.__new__(InputHandler)
     app = Mock(is_running=False, is_done=True)
     app.run.return_value = "yes"
-    with patch(
-        "prompt_toolkit.shortcuts.choice_input.ChoiceInput"
-    ) as choice_input:
+    with patch("prompt_toolkit.shortcuts.choice_input.ChoiceInput") as choice_input:
         choice_input.return_value._create_application.return_value = app
         assert handler.get_choice_input(PROMPT_TEXT, ["yes"]) == "yes"
 
     message = choice_input.call_args.kwargs["message"]
     assert isinstance(message, HTML)
     assert rendered(message) == PROMPT_TEXT + " "
-    assert message.__pt_formatted_text__() == [("class:ansiyellow", PROMPT_TEXT), ("", " ")]
+    assert message.__pt_formatted_text__() == [
+        ("class:ansiyellow", PROMPT_TEXT),
+        ("", " "),
+    ]
 
 
 def test_custom_prompt_escapes_dynamic_text_without_changing_style_or_spacing():
@@ -40,18 +41,30 @@ def test_custom_prompt_escapes_dynamic_text_without_changing_style_or_spacing():
     message = prompt.call_args.args[0]
     assert isinstance(message, HTML)
     assert rendered(message) == PROMPT_TEXT + " "
-    assert message.__pt_formatted_text__() == [("class:ansiblue", PROMPT_TEXT), ("", " ")]
+    assert message.__pt_formatted_text__() == [
+        ("class:ansiblue", PROMPT_TEXT),
+        ("", " "),
+    ]
 
 
 def make_ask(questions=None):
-    ui = SimpleNamespace(console=Mock(width=80), input_handler=Mock(), start_loading_animation=Mock())
+    ui = SimpleNamespace(
+        console=Mock(width=80), input_handler=Mock(), start_loading_animation=Mock()
+    )
     ui.input_handler._stop_input_thread.return_value = True
     ui.input_handler.prompt_submit_hint = "submit hint"
-    return ConfirmationHandler(ui), Mock(), {
-        "name": "ask",
-        "input": {"questions": questions or [{"question": "First?", "guided_answers": ["A"]}]},
-        "confirmation_id": 17,
-    }
+    return (
+        ConfirmationHandler(ui),
+        Mock(),
+        {
+            "name": "ask",
+            "input": {
+                "questions": questions
+                or [{"question": "First?", "guided_answers": ["A"]}]
+            },
+            "confirmation_id": 17,
+        },
+    )
 
 
 def assert_cleanup(ask, resolved, payload, restart=True):
@@ -65,16 +78,27 @@ def assert_cleanup(ask, resolved, payload, restart=True):
 
 
 def test_ask_answers_multiple_questions_and_resolves_once():
-    ask, resolved, tool = make_ask([
-        {"question": "First?", "guided_answers": ["A"]},
-        {"question": "Second?", "guided_answers": ["B"]},
-    ])
-    ask.input_handler.get_choice_input.side_effect = ["A", "← Back", "Next →", "Custom your answer"]
+    ask, resolved, tool = make_ask(
+        [
+            {"question": "First?", "guided_answers": ["A"]},
+            {"question": "Second?", "guided_answers": ["B"]},
+        ]
+    )
+    ask.input_handler.get_choice_input.side_effect = [
+        "A",
+        "← Back",
+        "Next →",
+        "Custom your answer",
+    ]
     ask.input_handler.get_prompt_input.return_value = "custom"
 
     ask.display_tool_confirmation_request(tool, resolved)
 
-    assert_cleanup(ask, resolved, {"action": "answer", "answer": "Answers:\n- First?: A\n- Second?: custom"})
+    assert_cleanup(
+        ask,
+        resolved,
+        {"action": "answer", "answer": "Answers:\n- First?: A\n- Second?: custom"},
+    )
     assert ask.input_handler.get_choice_input.call_count == 4
     ask.input_handler.get_prompt_input.assert_called_once()
 
@@ -89,11 +113,13 @@ def test_ask_cancel_resolves_once_and_restores_input():
 
 
 def test_empty_custom_answer_cancels_entire_ask_without_advancing():
-    ask, resolved, tool = make_ask([
-        {"question": "First?", "guided_answers": ["A"]},
-        {"question": "Second?", "guided_answers": ["B"]},
-        {"question": "Third?", "guided_answers": ["C"]},
-    ])
+    ask, resolved, tool = make_ask(
+        [
+            {"question": "First?", "guided_answers": ["A"]},
+            {"question": "Second?", "guided_answers": ["B"]},
+            {"question": "Third?", "guided_answers": ["C"]},
+        ]
+    )
     ask.input_handler.get_choice_input.side_effect = ["A", "Custom your answer"]
     ask.input_handler.get_prompt_input.return_value = ""
 
@@ -120,7 +146,9 @@ def test_ask_ui_failures_resolve_cancellation_and_restore_safe_lifecycle(failure
     ask.display_tool_confirmation_request(tool, resolved)
 
     assert_cleanup(
-        ask, resolved, {"action": "answer", "answer": "Cancelled by user"},
+        ask,
+        resolved,
+        {"action": "answer", "answer": "Cancelled by user"},
         restart=failure != "stop",
     )
     if failure == "stop":
@@ -135,7 +163,10 @@ def test_failed_stop_never_opens_competing_prompt_or_restarts_thread():
     ask.display_tool_confirmation_request(tool, resolved)
 
     assert_cleanup(
-        ask, resolved, {"action": "answer", "answer": "Cancelled by user"}, restart=False
+        ask,
+        resolved,
+        {"action": "answer", "answer": "Cancelled by user"},
+        restart=False,
     )
     ask.input_handler.get_choice_input.assert_not_called()
     ask.input_handler.get_prompt_input.assert_not_called()

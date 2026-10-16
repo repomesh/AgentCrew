@@ -106,7 +106,9 @@ class ConfirmationHandler:
                     questions = []
 
             if not questions or not isinstance(questions, list):
-                questions = [{"question": "(missing questions)", "guided_answers": ["OK"]}]
+                questions = [
+                    {"question": "(missing questions)", "guided_answers": ["OK"]}
+                ]
 
             for q in questions:
                 answers = q.get("guided_answers", [])
@@ -134,7 +136,8 @@ class ConfirmationHandler:
                     Text(
                         f"\n❓ {nav_prefix}Agent is asking for clarification:",
                         style=RICH_STYLE_BLUE_BOLD,
-                    )
+                    ),
+                    markup=False,
                 )
 
                 max_width = self.console.width - 4
@@ -204,7 +207,9 @@ class ConfirmationHandler:
             logger.exception("Failed to collect console ask response")
         finally:
             try:
-                message_handler.resolve_tool_confirmation(confirmation_id, response_payload)
+                message_handler.resolve_tool_confirmation(
+                    confirmation_id, response_payload
+                )
             finally:
                 if input_stopped:
                     try:

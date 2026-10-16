@@ -101,7 +101,9 @@ def test_registered_handlers_create_and_close(repo: Path):
     )
     list_factory, list_service = agent.tool_definitions["list_worktree"]
     assert list_service is service
-    assert str(path) in asyncio.run(list_factory(list_service)(repository_path=str(repo)))
+    assert str(path) in asyncio.run(
+        list_factory(list_service)(repository_path=str(repo))
+    )
     factory, service = agent.tool_definitions["close_worktree"]
     assert list_service is service
     assert "preserved" in asyncio.run(factory(service)(worktree_path=str(path)))
@@ -137,7 +139,10 @@ def test_list_detached_and_locked(repo: Path):
     head = git(repo, "rev-parse", "HEAD")
     lines = service.list_worktree(str(repo)).splitlines()
     assert lines[1] == f"{linked} | detached | HEAD {head} | locked: hold for review"
-    assert git(repo, "worktree", "list", "--porcelain").count("locked hold for review") == 1
+    assert (
+        git(repo, "worktree", "list", "--porcelain").count("locked hold for review")
+        == 1
+    )
 
 
 def test_list_prunable_metadata(repo: Path, monkeypatch):
@@ -150,7 +155,9 @@ def test_list_prunable_metadata(repo: Path, monkeypatch):
             return subprocess.CompletedProcess(
                 result.args,
                 result.returncode,
-                result.stdout.replace("\x00\x00", "\x00prunable missing directory\x00\x00", 1),
+                result.stdout.replace(
+                    "\x00\x00", "\x00prunable missing directory\x00\x00", 1
+                ),
                 result.stderr,
             )
         return result

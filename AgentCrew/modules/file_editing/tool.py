@@ -14,10 +14,10 @@ from .worktree_service import WorktreeService
 def file_editing_instruction_prompt() -> str:
     return """<FileEditing_Worktree_Instruction>
   <Workflow>
-    - Prefer Git worktrees for file/code changes in a Git repository; editing in the current checkout is also allowed.
+    - Prefer Git worktrees for file/code changes in a Git repository.
     - After creating a worktree, perform reads, writes, and commands within the returned worktree path.
     - Use list_worktree to discover or recover registered worktree paths and branches.
-    - Close a worktree only after committing or discarding changes so it is clean; closing preserves its branch.
+    - Always  commit or discard changes and close a worktree only after the task done.
   </Workflow>
 </FileEditing_Worktree_Instruction>"""
 

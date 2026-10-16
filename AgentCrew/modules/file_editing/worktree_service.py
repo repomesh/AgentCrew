@@ -58,20 +58,32 @@ class WorktreeService:
                 continue
             fields = entry.split("\x00")
             if not fields[0].startswith("worktree "):
-                raise ValueError("Could not parse Git worktree list; check the repository.")
+                raise ValueError(
+                    "Could not parse Git worktree list; check the repository."
+                )
             path = fields[0][len("worktree ") :]
-            head = next((field[5:] for field in fields if field.startswith("HEAD ")), None)
+            head = next(
+                (field[5:] for field in fields if field.startswith("HEAD ")), None
+            )
             if not path or not head:
-                raise ValueError("Could not parse Git worktree list; check the repository.")
+                raise ValueError(
+                    "Could not parse Git worktree list; check the repository."
+                )
             branch = next(
-                (field[len("branch refs/heads/") :] for field in fields if field.startswith("branch refs/heads/")),
+                (
+                    field[len("branch refs/heads/") :]
+                    for field in fields
+                    if field.startswith("branch refs/heads/")
+                ),
                 "detached",
             )
             details = [path, branch, f"HEAD {head}"]
             for field in fields:
                 for marker in ("locked", "prunable"):
                     if field == marker or field.startswith(f"{marker} "):
-                        details.append(field.replace(" ", ": ", 1) if field != marker else marker)
+                        details.append(
+                            field.replace(" ", ": ", 1) if field != marker else marker
+                        )
             lines.append(" | ".join(details))
         return "\n".join(lines)
 

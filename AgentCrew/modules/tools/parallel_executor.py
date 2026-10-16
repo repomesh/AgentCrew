@@ -5,7 +5,9 @@ from typing import Any
 
 from AgentCrew.modules.events.hooks import CancelOperation
 
-SEQUENTIAL_TOOLS = frozenset({"transfer", "ask", "create_worktree", "close_worktree", "list_worktree"})
+SEQUENTIAL_TOOLS = frozenset(
+    {"transfer", "ask", "create_worktree", "close_worktree", "list_worktree"}
+)
 SEQUENTIAL_PREFIXES = ("browser_",)
 
 
