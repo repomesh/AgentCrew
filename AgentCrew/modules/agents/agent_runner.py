@@ -21,6 +21,9 @@ ProgressCallback = Callable[[ProgressKind, str], Awaitable[None]]
 STREAM_CLOSE_TIMEOUT_SECONDS = 0.5
 """Maximum time allowed for closing a delegate's response stream."""
 
+FIRST_RESPONSE_TIMEOUT_SECONDS = 300
+MAX_EMPTY_RESPONSE_RETRIES = 5
+
 
 async def _close_stream(stream, primary_error: BaseException | None) -> None:
     close_task = asyncio.create_task(stream.aclose())
@@ -59,6 +62,8 @@ async def _run_agent_loop(
     prior_token_usage: TokenUsage | None = None,
     request_usage_callback: Callable[[TokenUsage], None] | None = None,
     progress_callback: ProgressCallback | None = None,
+    first_response_timeout: float = FIRST_RESPONSE_TIMEOUT_SECONDS,
+    empty_response_retries: int = 0,
 ) -> tuple[str, TokenUsage]:
     """Run a full agent loop, returning the final response and merged usage.
 
@@ -72,6 +77,8 @@ async def _run_agent_loop(
             control-flow usage. Used by local-agent delegation to attribute
             consumption to the registered target agent.
         progress_callback: Optional async callback for incremental delegate output.
+        first_response_timeout: Seconds to wait for the first item of each stream.
+        empty_response_retries: Consecutive empty responses already retried.
     """
     current_response = ""
     thinking_content = ""
@@ -90,11 +97,20 @@ async def _run_agent_loop(
     stream = agent.process_messages(history, callback=process_result)
 
     try:
-        async for (
-            response_message,
-            chunk_text,
-            thinking_chunk,
-        ) in stream:
+        iterator = aiter(stream)
+        try:
+            first_item = await asyncio.wait_for(
+                anext(iterator), timeout=first_response_timeout
+            )
+        except TimeoutError as error:
+            raise TimeoutError(
+                f"Agent response stream yielded no first item within {first_response_timeout}s"
+            ) from error
+        except StopAsyncIteration:
+            first_item = None
+
+        while first_item is not None:
+            response_message, chunk_text, thinking_chunk = first_item
             if response_message:
                 current_response = response_message
             if chunk_text and progress_callback is not None:
@@ -107,6 +123,10 @@ async def _run_agent_loop(
                         await progress_callback("thinking", think_text_chunk)
                 if signature:
                     thinking_signature += signature
+            try:
+                first_item = await anext(iterator)
+            except StopAsyncIteration:
+                break
     finally:
         await _close_stream(stream, sys.exc_info()[1])
 
@@ -125,8 +145,11 @@ async def _run_agent_loop(
 
         user_message = agent.extract_last_user_message_for_memory(history)
         agent.store_memory_if_available(user_message, history, current_response)
-        # Prevent agent loop exit with empty response
         if current_response.strip() == "":
+            if empty_response_retries >= MAX_EMPTY_RESPONSE_RETRIES:
+                raise RuntimeError(
+                    f"Agent returned an empty response after {MAX_EMPTY_RESPONSE_RETRIES} retries"
+                )
             return await _run_agent_loop(
                 agent,
                 history,
@@ -134,6 +157,8 @@ async def _run_agent_loop(
                 prior_token_usage=token_usage,
                 request_usage_callback=request_usage_callback,
                 progress_callback=progress_callback,
+                first_response_timeout=first_response_timeout,
+                empty_response_retries=empty_response_retries + 1,
             )
         return current_response, token_usage
 
@@ -273,6 +298,7 @@ async def _run_agent_loop(
         prior_token_usage=token_usage,
         request_usage_callback=request_usage_callback,
         progress_callback=progress_callback,
+        first_response_timeout=first_response_timeout,
     )
 
 
@@ -285,6 +311,7 @@ async def run_agent_loop(
     request_usage_callback: Callable[[TokenUsage], None] | None = None,
     progress_callback: ProgressCallback | None = None,
     scope_id: str | None = None,
+    first_response_timeout: float = FIRST_RESPONSE_TIMEOUT_SECONDS,
 ) -> tuple[str, TokenUsage]:
     from AgentCrew.modules.agents.tool_result_summary import (
         bind_inference_scope,
@@ -300,6 +327,7 @@ async def run_agent_loop(
             prior_token_usage=prior_token_usage,
             request_usage_callback=request_usage_callback,
             progress_callback=progress_callback,
+            first_response_timeout=first_response_timeout,
         )
     finally:
         reset_inference_scope(token)

@@ -147,6 +147,118 @@ async def test_runner_bounded_close_preserves_primary_failure(close_failure, pri
 
 
 @pytest.mark.asyncio
+async def test_runner_limits_empty_responses_and_preserves_usage():
+    class EmptyStream(Stream):
+        async def __anext__(self):
+            if self.turn:
+                self.callback([], TokenUsage(input_tokens=1))
+                raise StopAsyncIteration
+            self.turn += 1
+            return "   ", "", None
+
+    agent = Agent()
+
+    def process_messages(history, callback):
+        stream = EmptyStream(callback)
+        agent.streams.append(stream)
+        return stream
+
+    agent.process_messages = process_messages
+    usage_reports = []
+    history = []
+    with pytest.raises(RuntimeError, match="empty response after 5 retries"):
+        await run_agent_loop(
+            agent, history, request_usage_callback=usage_reports.append
+        )
+    assert len(agent.streams) == 6
+    assert [stream.closed for stream in agent.streams] == [1] * 6
+    assert len(usage_reports) == 6
+    assert len(history) == 6
+
+
+@pytest.mark.asyncio
+async def test_runner_accepts_answer_on_fifth_empty_retry():
+    class RetryStream(Stream):
+        def __init__(self, callback, *, empty):
+            super().__init__(callback)
+            self.empty = empty
+
+        async def __anext__(self):
+            if self.turn == 0 and self.empty:
+                self.turn = 1
+                return "", "", None
+            return await super().__anext__()
+
+    agent = Agent()
+
+    def process_messages(history, callback):
+        stream = RetryStream(callback, empty=len(agent.streams) < 5)
+        agent.streams.append(stream)
+        return stream
+
+    agent.process_messages = process_messages
+    response, _ = await run_agent_loop(agent, [])
+    assert response == "answer"
+    assert [stream.closed for stream in agent.streams] == [1] * 6
+
+
+@pytest.mark.asyncio
+async def test_runner_times_out_first_item_and_closes_stream():
+    agent = Agent(block_stream=True)
+    with pytest.raises(TimeoutError, match="no first item within 0.01s"):
+        await run_agent_loop(agent, [], first_response_timeout=0.01)
+    assert [stream.closed for stream in agent.streams] == [1]
+
+
+@pytest.mark.asyncio
+async def test_runner_does_not_time_out_later_items():
+    class DelayedSecondStream(Stream):
+        def __init__(self, callback):
+            super().__init__(callback)
+            self.second_started = asyncio.Event()
+            self.release_second = asyncio.Event()
+
+        async def __anext__(self):
+            if self.turn == 1:
+                self.second_started.set()
+                await self.release_second.wait()
+            return await super().__anext__()
+
+    agent = Agent()
+    stream = DelayedSecondStream(lambda *_: None)
+    agent.process_messages = lambda history, callback: stream
+    task = asyncio.create_task(run_agent_loop(agent, [], first_response_timeout=0.01))
+    await asyncio.wait_for(stream.second_started.wait(), 1)
+    await asyncio.sleep(0.03)
+    assert not task.done()
+    stream.release_second.set()
+    assert (await asyncio.wait_for(task, 1))[0] == "answer"
+    assert stream.closed == 1
+
+
+@pytest.mark.asyncio
+async def test_runner_times_out_first_item_after_tool():
+    class ToolAgent(Agent):
+        async def execute_tool_call(self, tool):
+            return "result"
+
+    agent = ToolAgent(nested_tool=True)
+    original_process = agent.process_messages
+
+    def process_messages(history, callback):
+        if agent.streams:
+            stream = Stream(callback, block_stream=True)
+            agent.streams.append(stream)
+            return stream
+        return original_process(history, callback)
+
+    agent.process_messages = process_messages
+    with pytest.raises(TimeoutError, match="no first item within 0.01s"):
+        await run_agent_loop(agent, [], first_response_timeout=0.01)
+    assert [stream.closed for stream in agent.streams] == [1, 1]
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize("nested_tool", [False, True])
 async def test_delegate_cancellation_closes_owned_resources_once(
     monkeypatch, nested_tool
