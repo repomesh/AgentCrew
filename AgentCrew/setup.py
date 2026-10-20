@@ -40,6 +40,7 @@ PROVIDER_LIST = [
     "claude",
     "openai",
     "openai_codex",
+    "xai_subscription",
     "google",
     "deepinfra",
     "together",
@@ -55,7 +56,7 @@ def common_options(func):
         "--provider",
         type=click.Choice(PROVIDER_LIST),
         default=None,
-        help="LLM provider to use (claude, openai, google, github_copilot, deepinfra, together, opencode_go, commandcode, or openai_codex)",
+        help="LLM provider to use (claude, openai, google, github_copilot, deepinfra, together, opencode_go, commandcode, or openai_codex, or xai_subscription)",
     )
     @click.option(
         "--agent-config",
@@ -72,6 +73,7 @@ def common_options(func):
                 "claude",
                 "openai",
                 "openai_codex",
+                "xai_subscription",
                 "google",
                 "deepinfra",
                 "together",
@@ -293,6 +295,11 @@ class ApplicationSetup:
 
                         if OpenAICodexOAuth().has_valid_tokens:
                             return last_provider
+                    elif last_provider == "xai_subscription":
+                        from AgentCrew.modules.xai.oauth import XAIOAuth
+
+                        if XAIOAuth.is_available():
+                            return last_provider
                     elif os.getenv(api_key_map.get(last_provider, "")):
                         return last_provider
                 else:
@@ -414,7 +421,12 @@ class ApplicationSetup:
             None,
             default_reasoning_for_service(llm_service),
         )
-        apply_reasoning_to_service(llm_service, base_reasoning.level, explicit=False)
+        apply_reasoning_to_service(
+            llm_service,
+            base_reasoning.level,
+            explicit=base_reasoning.is_explicit
+            and llm_service.provider_name == "xai_subscription",
+        )
 
         memory_service = None
         context_service = None
@@ -918,6 +930,27 @@ tools = ["memory", "browser", "web_search", "code_analysis"]
             return False
         except Exception as e:
             click.echo(f"\u274c Authentication failed: {e!s}", err=True)
+            return False
+
+    @staticmethod
+    def xai_login() -> bool:
+        """Authorize AgentCrew with an xAI device code."""
+        from AgentCrew.modules.xai.oauth import XAIAuthenticationError, XAIOAuth
+
+        try:
+            oauth = XAIOAuth()
+            oauth.login(display=click.echo)
+            click.echo(
+                "xAI Subscription authentication successful. Select --provider xai_subscription."
+            )
+            return True
+        except (XAIAuthenticationError, KeyboardInterrupt) as exc:
+            message = (
+                "Authentication cancelled"
+                if isinstance(exc, KeyboardInterrupt)
+                else str(exc)
+            )
+            click.echo(f"xAI Subscription authentication failed: {message}", err=True)
             return False
 
     @staticmethod

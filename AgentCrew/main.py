@@ -629,12 +629,21 @@ def chatgpt_auth():
     ApplicationSetup.chatgpt_login()
 
 
+@cli.command("xai-auth")
+def xai_auth():
+    """Authorize direct xAI Subscription Responses access via device login."""
+    from AgentCrew.setup import ApplicationSetup
+
+    if not ApplicationSetup.xai_login():
+        raise SystemExit(1)
+
+
 @cli.command("create-agent")
 @click.option(
     "--provider",
     type=click.Choice(PROVIDER_LIST),
     default=None,
-    help="LLM provider to use (claude, openai, google, github_copilot, deepinfra, together, opencode_go, commandcode, or openai_codex)",
+    help="LLM provider to use (claude, openai, google, github_copilot, deepinfra, together, opencode_go, commandcode, or openai_codex, or xai_subscription)",
 )
 @click.option(
     "--agent-config",

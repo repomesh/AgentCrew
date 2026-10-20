@@ -136,6 +136,41 @@ They can also be set directly as environment variables.
 For OpenAI Codex subscription authentication, use `agentcrew chatgpt-auth`.
 That flow stores OAuth state and does not introduce another `*_API_KEY` setting.
 
+### Experimental xAI Subscription OAuth
+
+Obtain an **AgentCrew-authorized OAuth client ID** from xAI and set it in the environment
+as `XAI_OAUTH_CLIENT_ID`. AgentCrew does not ship another application's client ID and
+does not read OpenCode/Grok CLI credentials or browser cookies. Without an authorized
+client ID, authentication and inference cannot run. With a limited, eligible account:
+
+```bash
+export XAI_OAUTH_CLIENT_ID='your-authorized-client-id'
+agentcrew xai-auth
+agentcrew chat --provider xai_subscription --model-id grok-4.7
+```
+
+The device authorization screen displays a URL and code for the user to enter.
+Tokens are kept only in `~/.AgentCrew/xai_oauth.json` (owner-only, atomically
+replaced); refresh-token rotation is handled automatically. The provider sends
+SSE Responses requests directly to `https://api.x.ai/v1/responses`, with local
+function tools, `store: false`, and encrypted reasoning continuation. Only
+`grok-4.7` is offered with an effective 128k context. Reasoning cannot be
+disabled; `none` is rejected. Structured output, vision, hosted tools, multi-agent,
+image/video/audio, and realtime/WebSocket modes are not supported in this slice.
+There is no API-key fallback and no OpenCode Console/Go gateway routing.
+
+**Authorization and commercial caveat:** Availability of direct Responses with
+subscription OAuth is experimental and must be confirmed with xAI for the
+AgentCrew OAuth client and your specific account. Eligibility, allowance, overage,
+and commercial treatment depend on xAI's current terms/account entitlement; do
+not assume every X plan qualifies or requests are free/unlimited. AgentCrew sets
+subscription token prices to zero rather than claiming to know subscription
+charges. For manual live validation, use an explicitly authorized, limited account:
+run `agentcrew xai-auth`, send a short text prompt, run one local tool call, then
+repeat a reasoning turn to check encrypted continuation. Verify quota and billing
+in your xAI account separately; automated tests use fixtures only.
+
+
 Every distinct `*_API_KEY` name referenced by runtime source is covered here:
 
 | Name | Scope and use |

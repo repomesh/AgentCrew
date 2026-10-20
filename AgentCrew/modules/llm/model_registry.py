@@ -34,6 +34,10 @@ PROVIDER_MODEL_MODULES: dict[str, tuple[str, str]] = {
         "AgentCrew.modules.llm.model_definitions.openai_codex",
         "OPENAI_CODEX_MODELS",
     ),
+    "xai_subscription": (
+        "AgentCrew.modules.llm.model_definitions.xai",
+        "XAI_SUBSCRIPTION_MODELS",
+    ),
     "google": ("AgentCrew.modules.llm.model_definitions.google", "GOOGLE_MODELS"),
     "deepinfra": (
         "AgentCrew.modules.llm.model_definitions.deepinfra",

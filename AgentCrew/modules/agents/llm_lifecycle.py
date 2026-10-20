@@ -190,10 +190,18 @@ class AgentLLMLifecycle:
             return
         selection = agent.reasoning_selection
         if selection is not None and selection.is_forced:
-            apply_reasoning_to_service(agent.llm, selection.level, explicit=False)
+            apply_reasoning_to_service(
+                agent.llm,
+                selection.level,
+                explicit=agent.llm.provider_name == "xai_subscription",
+            )
             return
         if selection is not None and selection.source is ReasoningSource.AGENT_CONFIG:
-            apply_reasoning_to_service(agent.llm, selection.level, explicit=False)
+            apply_reasoning_to_service(
+                agent.llm,
+                selection.level,
+                explicit=agent.llm.provider_name == "xai_subscription",
+            )
             return
         level = default_reasoning_for_service(agent.llm)
         agent.reasoning_selection = ReasoningSelection(

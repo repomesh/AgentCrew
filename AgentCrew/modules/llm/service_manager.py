@@ -51,6 +51,7 @@ class ServiceManager:
             "openai": self._create_openai_service,
             "openai_response": self._create_openai_response_service,
             "openai_codex": self._create_openai_codex_service,
+            "xai_subscription": self._create_xai_subscription_service,
             "google": self._create_google_service,
             "deepinfra": self._create_deepinfra_service,
             "together": self._create_together_service,
@@ -108,6 +109,12 @@ class ServiceManager:
         from AgentCrew.modules.openai_codex import OpenAICodexService
 
         return OpenAICodexService()
+
+    def _create_xai_subscription_service(self) -> BaseLLMService:
+        """Create a direct xAI Responses service with AgentCrew OAuth tokens."""
+        from AgentCrew.modules.xai import XAISubscriptionResponseService
+
+        return XAISubscriptionResponseService()
 
     def _create_google_service(self) -> BaseLLMService:
         """Lazy import and create Google AI service."""
