@@ -1,5 +1,6 @@
 """Offline contract tests for experimental xAI subscription integration."""
 
+import asyncio
 import json
 import multiprocessing
 import os
@@ -1181,6 +1182,8 @@ async def test_process_message_selects_curated_model_ids(curated_service):
         assert request.get("reasoning") == (
             {"effort": default_effort} if default_effort is not None else None
         )
+        assert service.model == "grok-4.7"
+        assert service.reasoning_effort == "high"
         assert raw.closes == 1
         created.append(request)
     assert "include" not in created[0] and "include" not in created[1]
@@ -1198,6 +1201,127 @@ async def test_process_message_selects_curated_model_ids(curated_service):
     ):
         await service.process_message("hello", model_id="grok-build")
     assert service.model == "grok-4.7"
+    assert service.reasoning_effort == "xhigh"
+    assert service.client.responses.create.await_count == 1
+    await service.close()
+
+
+@pytest.mark.asyncio
+async def test_process_message_override_keeps_state_and_uses_target_metadata(
+    curated_service,
+):
+    service = curated_service
+    service.model = "grok-4.3"
+    service.set_think("medium")
+    service.register_tool(
+        {"type": "function", "name": "calc", "parameters": {"type": "object"}},
+        lambda _: None,
+    )
+    from AgentCrew.modules.agents.message_metadata import (
+        attach_stream_metadata,
+        get_responses_provider_state,
+    )
+
+    reason = {"type": "reasoning", "id": "reason-1", "encrypted_content": "synthetic"}
+    assistant = {"role": "assistant", "content": "previous answer"}
+    attach_stream_metadata(
+        assistant,
+        {"provider": "xai", "model": "grok-4.7", "reasoning_items": [reason]},
+    )
+    messages = [{"role": "user", "content": "follow up"}, assistant]
+    requests = []
+
+    async def create(**params):
+        requests.append(params)
+        return EventStream([SimpleNamespace(type="response.completed")])
+
+    service.client.responses.create = AsyncMock(side_effect=create)
+    for model_id in ("grok-4.7", "grok-build-0.1", "grok-4.3"):
+        assert await service.process_message(messages, model_id=model_id) == ""
+        assert service.model == "grok-4.3"
+        assert service.reasoning_effort == "medium"
+    grok_47, build, grok_43 = requests
+    assert grok_47["model"] == "grok-4.7"
+    assert grok_47["reasoning"] == {"effort": "high"}
+    assert grok_47["include"] == ["reasoning.encrypted_content"]
+    assert grok_47["input"][1] == reason
+    assert grok_47["tools"] == [service.tools[0]]
+    assert build["model"] == "grok-build-0.1"
+    assert "reasoning" not in build and "include" not in build
+    assert not any(item.get("type") == "reasoning" for item in build["input"])
+    assert grok_43["model"] == "grok-4.3"
+    assert grok_43["reasoning"] == {"effort": "medium"}
+    assert "include" not in grok_43
+    assert not any(item.get("type") == "reasoning" for item in grok_43["input"])
+    assert get_responses_provider_state(assistant) is not None
+    await service.close()
+
+
+@pytest.mark.asyncio
+async def test_process_message_override_failures_leave_service_unchanged(
+    curated_service,
+):
+    service = curated_service
+    service.set_think("xhigh")
+    create = AsyncMock(side_effect=RuntimeError("request failed"))
+    service.client.responses.create = create
+    with pytest.raises(RuntimeError, match="request failed"):
+        await service.process_message("hello", model_id="grok-4.3")
+    assert service.model == "grok-4.7"
+    assert service.reasoning_effort == "xhigh"
+    assert create.await_count == 1
+
+    service.client.responses.create = AsyncMock(
+        return_value=EventStream(
+            [SimpleNamespace(type="response.output_text.delta", delta="partial")]
+        )
+    )
+    with pytest.raises(RuntimeError, match="ended without completion"):
+        await service.process_message("hello", model_id="grok-build-0.1")
+    assert service.model == "grok-4.7"
+    assert service.reasoning_effort == "xhigh"
+
+    with pytest.raises(
+        ValueError, match="Unsupported xAI subscription Responses model"
+    ):
+        await service.process_message("hello", model_id="grok-build")
+    assert service.model == "grok-4.7"
+    assert service.reasoning_effort == "xhigh"
+    assert service.client.responses.create.await_count == 1
+    await service.close()
+
+
+@pytest.mark.asyncio
+async def test_process_message_concurrent_model_overrides_are_isolated(curated_service):
+    service = curated_service
+    service.set_think("xhigh")
+    ready = asyncio.Event()
+    calls = []
+
+    async def create(**params):
+        calls.append(params)
+        if len(calls) == 2:
+            ready.set()
+        await ready.wait()
+        assert service.model == "grok-4.7"
+        assert service.reasoning_effort == "xhigh"
+        return EventStream([SimpleNamespace(type="response.completed")])
+
+    service.client.responses.create = AsyncMock(side_effect=create)
+    await asyncio.wait_for(
+        asyncio.gather(
+            service.process_message("first", model_id="grok-4.3"),
+            service.process_message("second", model_id="grok-build-0.1"),
+        ),
+        timeout=5,
+    )
+    by_model = {request["model"]: request for request in calls}
+    assert set(by_model) == {"grok-4.3", "grok-build-0.1"}
+    assert by_model["grok-4.3"]["reasoning"] == {"effort": "low"}
+    assert "reasoning" not in by_model["grok-build-0.1"]
+    assert all("include" not in request for request in calls)
+    assert service.model == "grok-4.7"
+    assert service.reasoning_effort == "xhigh"
     await service.close()
 
 
@@ -1242,6 +1366,35 @@ async def test_curated_model_reasoning_state_requires_exact_provider_and_model(
                 and stored_provider == "xai"
                 and stored_model == "grok-4.7"
             )
+    await service.close()
+
+
+@pytest.mark.asyncio
+async def test_wrong_provider_stream_state_never_captures_reasoning(curated_service):
+    from AgentCrew.modules.agents.message_metadata import (
+        attach_stream_metadata,
+        get_responses_provider_state,
+    )
+
+    service = curated_service
+    item = SimpleNamespace(
+        type="reasoning", id="reason-1", encrypted_content="synthetic"
+    )
+    for event in (
+        SimpleNamespace(type="response.output_item.done", item=item, output_index=0),
+        SimpleNamespace(
+            type="response.completed",
+            response=SimpleNamespace(output=[item], usage=None),
+        ),
+    ):
+        state = service.create_stream_state()
+        state["provider"] = "openai_codex"
+        service._capture_reasoning_item(item, state)
+        service.process_stream_chunk(event, "", [], state)
+        assert state["reasoning_items"] == []
+        assistant = {"role": "assistant", "content": "done"}
+        attach_stream_metadata(assistant, state)
+        assert get_responses_provider_state(assistant) is None
     await service.close()
 
 

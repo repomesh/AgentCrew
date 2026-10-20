@@ -174,7 +174,7 @@ class OpenAIResponseService(BaseLLMService):
         return 0.0
 
     def _convert_internal_format(
-        self, messages: list[dict[str, Any]]
+        self, messages: list[dict[str, Any]], *, model_id: str | None = None
     ) -> list[dict[str, Any]]:
         """
         Convert internal history format to Response API input format.
@@ -192,7 +192,9 @@ class OpenAIResponseService(BaseLLMService):
             provider_state = get_responses_provider_state(msg)
             msg.pop(METADATA_FIELD, None)
             if is_compatible_responses_state(
-                provider_state, self._provider_name, self.model
+                provider_state,
+                self._provider_name,
+                self.model if model_id is None else model_id,
             ):
                 replay_reasoning_items = get_reasoning_output_items(provider_state)
                 if replay_reasoning_items:

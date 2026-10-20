@@ -106,15 +106,22 @@ class XAISubscriptionResponseService(OpenAIResponseService):
         if not getattr(self, "_profiles_ready", False):
             self._model = value
             return
-        profile = _MODEL_PROFILES.get(value)
-        if profile is None:
-            raise ValueError(f"Unsupported xAI subscription Responses model: {value}")
+        profile = self._profile_for_model(value)
         self._model = value
         self.reasoning_effort = profile.default_effort
 
+    @staticmethod
+    def _profile_for_model(model_id: str) -> _ModelProfile:
+        profile = _MODEL_PROFILES.get(model_id)
+        if profile is None:
+            raise ValueError(
+                f"Unsupported xAI subscription Responses model: {model_id}"
+            )
+        return profile
+
     @property
     def _profile(self) -> _ModelProfile:
-        return _MODEL_PROFILES[self.model]
+        return self._profile_for_model(self.model)
 
     @property
     def allow_unconfigured_reasoning(self) -> bool:
@@ -138,21 +145,25 @@ class XAISubscriptionResponseService(OpenAIResponseService):
         return True
 
     def _convert_internal_format(
-        self, messages: list[dict[str, Any]]
+        self, messages: list[dict[str, Any]], *, model_id: str | None = None
     ) -> list[dict[str, Any]]:
-        if not self._profile.encrypted_reasoning:
-            return super()._convert_internal_format(strip_internal_metadata(messages))
+        target_model = self.model if model_id is None else model_id
+        profile = self._profile_for_model(target_model)
+        if not profile.encrypted_reasoning:
+            return super()._convert_internal_format(
+                strip_internal_metadata(messages), model_id=target_model
+            )
         filtered = []
         for message in messages:
             state = get_responses_provider_state(message)
             if state and (
                 state.get("provider") != self.provider_name
-                or state.get("model") != self.model
+                or state.get("model") != target_model
             ):
                 filtered.extend(strip_internal_metadata([message]))
             else:
                 filtered.append(message)
-        return super()._convert_internal_format(filtered)
+        return super()._convert_internal_format(filtered, model_id=target_model)
 
     def _capture_reasoning_item(
         self, item: Any, stream_state: dict[str, Any] | None
@@ -160,28 +171,41 @@ class XAISubscriptionResponseService(OpenAIResponseService):
         if (
             self._profile.encrypted_reasoning
             and stream_state is not None
+            and stream_state.get("provider") == self.provider_name
             and stream_state.get("model") == self.model
         ):
             super()._capture_reasoning_item(item, stream_state)
 
-    async def stream_assistant_response(self, messages: list[dict[str, Any]]) -> Any:
+    async def _create_responses_stream(
+        self,
+        messages: list[dict[str, Any]],
+        *,
+        model_id: str,
+        reasoning_effort: str | None,
+    ) -> _CompletedResponsesStream:
+        profile = self._profile_for_model(model_id)
         await self._ensure_valid_token()
         params = {
-            "model": self.model,
-            "input": self._convert_internal_format(messages),
+            "model": model_id,
+            "input": self._convert_internal_format(messages, model_id=model_id),
             "instructions": self.system_prompt or "You are a helpful assistant.",
             "stream": True,
             "store": False,
         }
-        if self._profile.encrypted_reasoning:
+        if profile.encrypted_reasoning:
             params["include"] = ["reasoning.encrypted_content"]
-        if self.reasoning_effort is not None:
-            params["reasoning"] = {"effort": self.reasoning_effort}
+        if reasoning_effort is not None:
+            params["reasoning"] = {"effort": reasoning_effort}
         if self.tools:
             params["tools"] = [
                 tool for tool in self.tools if tool.get("type") == "function"
             ]
         return _CompletedResponsesStream(await self.client.responses.create(**params))
+
+    async def stream_assistant_response(self, messages: list[dict[str, Any]]) -> Any:
+        return await self._create_responses_stream(
+            messages, model_id=self.model, reasoning_effort=self.reasoning_effort
+        )
 
     @staticmethod
     def _check_stream_event(event_type: str | None) -> None:
@@ -214,15 +238,22 @@ class XAISubscriptionResponseService(OpenAIResponseService):
     async def process_message(
         self, prompt: str | list, temperature: float = 0, model_id: str | None = None
     ) -> str:
-        if model_id is not None and model_id != self.model:
-            self.model = model_id
+        target_model = self.model if model_id is None else model_id
+        profile = self._profile_for_model(target_model)
+        reasoning_effort = (
+            self.reasoning_effort
+            if target_model == self.model
+            else profile.default_effort
+        )
         messages = (
             prompt
             if isinstance(prompt, list)
             else [{"role": "user", "content": prompt}]
         )
         text = ""
-        async with await self.stream_assistant_response(messages) as stream:
+        async with await self._create_responses_stream(
+            messages, model_id=target_model, reasoning_effort=reasoning_effort
+        ) as stream:
             async for event in stream:
                 event_type = getattr(event, "type", None)
                 self._check_stream_event(event_type)
