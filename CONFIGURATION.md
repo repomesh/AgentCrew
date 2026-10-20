@@ -167,15 +167,17 @@ The curated models all use an effective 256k context (not a vendor maximum):
 
 | Model | Reasoning request | Encrypted reasoning continuation |
 | --- | --- | --- |
-| `grok-4.7` (default) | `low`, `medium`, `high` (default), `xhigh`; cannot disable | Requested and replayed for the exact provider/model |
-| `grok-4.3` | `none`, `low` (default), `medium`, `high`; `xhigh` is conservatively rejected | Not requested or replayed without a verified direct subscription fixture |
-| `grok-build-0.1` | Model default only; user-selectable efforts not established | Not requested or replayed without a verified direct subscription fixture |
+| `grok-4.7` (default) | Model default `high`; AgentCrew accepts its shared reasoning levels | Requested and replayed for the exact provider/model |
+| `grok-4.3` | Model default `low`; AgentCrew accepts its shared reasoning levels | Requested and replayed for the exact provider/model |
+| `grok-build-0.1` | No `thinking` capability; model default only, explicit reasoning unsupported | Not requested or replayed |
 
-The Grok 4.3 model page's high-level capability list documents four efforts, but
-its lower Details section also lists `xhigh`. Until an authorized direct
-subscription test resolves that inconsistency, the adapter rejects `xhigh`.
-Grok Build 0.1 is offered for documented direct Responses use and local function
-calling, not unverified configurable reasoning or image/structured-output support.
+For models with `thinking`, AgentCrew validates only its shared vocabulary
+(`none`, `minimal`, `low`, `medium`, `high`, `xhigh`); it sends the chosen effort,
+including `none`, unchanged in the Responses request. The xAI API decides whether
+that effort is supported by the selected model and returns an error if not;
+AgentCrew does not retry or replay the failed request. Grok Build 0.1 is offered
+for documented direct Responses use and local function calling, not unverified
+configurable reasoning or image/structured-output support.
 See the official [Grok Build 0.1](https://docs.x.ai/developers/models/grok-build-0.1),
 [Grok 4.3](https://docs.x.ai/developers/models/grok-4.3), and
 [reasoning](https://docs.x.ai/developers/model-capabilities/text/reasoning)

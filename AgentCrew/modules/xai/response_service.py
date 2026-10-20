@@ -1,7 +1,6 @@
 """Experimental direct xAI subscription OAuth Responses adapter."""
 
 import asyncio
-from dataclasses import dataclass
 from typing import Any
 
 from AgentCrew.modules.agents.message_metadata import (
@@ -9,27 +8,14 @@ from AgentCrew.modules.agents.message_metadata import (
     strip_internal_metadata,
 )
 from AgentCrew.modules.llm.base import BaseLLMService
+from AgentCrew.modules.llm.model_registry import ModelRegistry
+from AgentCrew.modules.llm.reasoning_selection import REASONING_LEVELS
 from AgentCrew.modules.llm.token_usage import TokenUsage
+from AgentCrew.modules.llm.types import Model
 from AgentCrew.modules.openai.response_service import OpenAIResponseService
 from AgentCrew.modules.xai.oauth import XAIOAuth
 
 XAI_BASE_URL = "https://api.x.ai/v1"
-
-
-@dataclass(frozen=True)
-class _ModelProfile:
-    default_effort: str | None
-    efforts: frozenset[str]
-    encrypted_reasoning: bool = False
-
-
-_MODEL_PROFILES = {
-    "grok-4.7": _ModelProfile(
-        "high", frozenset({"low", "medium", "high", "xhigh"}), True
-    ),
-    "grok-4.3": _ModelProfile("low", frozenset({"none", "low", "medium", "high"})),
-    "grok-build-0.1": _ModelProfile(None, frozenset()),
-}
 
 
 class _CompletedResponsesStream:
@@ -94,7 +80,7 @@ class XAISubscriptionResponseService(OpenAIResponseService):
         super().__init__(api_key=token, base_url=XAI_BASE_URL)
         self.client = self.client.with_options(max_retries=0)
         self._provider_name = "xai"
-        self._profiles_ready = True
+        self._models_ready = True
         self.model = "grok-4.7"
 
     @property
@@ -103,29 +89,25 @@ class XAISubscriptionResponseService(OpenAIResponseService):
 
     @model.setter
     def model(self, value: str) -> None:
-        if not getattr(self, "_profiles_ready", False):
+        if not getattr(self, "_models_ready", False):
             self._model = value
             return
-        profile = self._profile_for_model(value)
+        model = self._model_definition(value)
         self._model = value
-        self.reasoning_effort = profile.default_effort
+        self.reasoning_effort = model.default_reasoning
 
     @staticmethod
-    def _profile_for_model(model_id: str) -> _ModelProfile:
-        profile = _MODEL_PROFILES.get(model_id)
-        if profile is None:
+    def _model_definition(model_id: str) -> Model:
+        model = ModelRegistry.get_instance().get_model(f"xai/{model_id}")
+        if model is None or model.provider != "xai" or model.id != model_id:
             raise ValueError(
                 f"Unsupported xAI subscription Responses model: {model_id}"
             )
-        return profile
-
-    @property
-    def _profile(self) -> _ModelProfile:
-        return self._profile_for_model(self.model)
+        return model
 
     @property
     def allow_unconfigured_reasoning(self) -> bool:
-        return not self._profile.efforts
+        return "thinking" not in self._model_definition(self.model).capabilities
 
     async def _ensure_valid_token(self) -> None:
         self.client.api_key = await asyncio.to_thread(
@@ -133,14 +115,13 @@ class XAISubscriptionResponseService(OpenAIResponseService):
         )
 
     def set_think(self, budget_tokens: str) -> bool:
-        profile = self._profile
-        if budget_tokens not in profile.efforts:
-            if self.model == "grok-4.7" and budget_tokens in ("none", "0"):
-                raise ValueError("Grok 4.7 reasoning cannot be disabled")
-            if not profile.efforts:
-                raise ValueError(f"{self.model} reasoning effort is not configurable")
-            allowed = ", ".join(sorted(profile.efforts))
-            raise ValueError(f"{self.model} reasoning effort must be {allowed}")
+        if budget_tokens not in REASONING_LEVELS:
+            raise ValueError(
+                f"Invalid reasoning effort '{budget_tokens}'. "
+                f"Must be one of: {', '.join(REASONING_LEVELS)}"
+            )
+        if self.allow_unconfigured_reasoning:
+            return False
         self.reasoning_effort = budget_tokens
         return True
 
@@ -148,8 +129,8 @@ class XAISubscriptionResponseService(OpenAIResponseService):
         self, messages: list[dict[str, Any]], *, model_id: str | None = None
     ) -> list[dict[str, Any]]:
         target_model = self.model if model_id is None else model_id
-        profile = self._profile_for_model(target_model)
-        if not profile.encrypted_reasoning:
+        model = self._model_definition(target_model)
+        if "thinking" not in model.capabilities:
             return super()._convert_internal_format(
                 strip_internal_metadata(messages), model_id=target_model
             )
@@ -169,7 +150,7 @@ class XAISubscriptionResponseService(OpenAIResponseService):
         self, item: Any, stream_state: dict[str, Any] | None
     ) -> None:
         if (
-            self._profile.encrypted_reasoning
+            "thinking" in self._model_definition(self.model).capabilities
             and stream_state is not None
             and stream_state.get("provider") == self.provider_name
             and stream_state.get("model") == self.model
@@ -183,7 +164,7 @@ class XAISubscriptionResponseService(OpenAIResponseService):
         model_id: str,
         reasoning_effort: str | None,
     ) -> _CompletedResponsesStream:
-        profile = self._profile_for_model(model_id)
+        model = self._model_definition(model_id)
         await self._ensure_valid_token()
         params = {
             "model": model_id,
@@ -192,10 +173,10 @@ class XAISubscriptionResponseService(OpenAIResponseService):
             "stream": True,
             "store": False,
         }
-        if profile.encrypted_reasoning:
+        if "thinking" in model.capabilities:
             params["include"] = ["reasoning.encrypted_content"]
-        if reasoning_effort is not None:
-            params["reasoning"] = {"effort": reasoning_effort}
+            if reasoning_effort is not None:
+                params["reasoning"] = {"effort": reasoning_effort}
         if self.tools:
             params["tools"] = [
                 tool for tool in self.tools if tool.get("type") == "function"
@@ -239,11 +220,11 @@ class XAISubscriptionResponseService(OpenAIResponseService):
         self, prompt: str | list, temperature: float = 0, model_id: str | None = None
     ) -> str:
         target_model = self.model if model_id is None else model_id
-        profile = self._profile_for_model(target_model)
+        model = self._model_definition(target_model)
         reasoning_effort = (
             self.reasoning_effort
             if target_model == self.model
-            else profile.default_effort
+            else model.default_reasoning
         )
         messages = (
             prompt

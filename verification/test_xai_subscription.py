@@ -339,8 +339,9 @@ async def test_routing_request_and_stream_events(oauth, monkeypatch):
         model.output_token_price_1m,
         model.cached_token_price_1m,
     ) == (0.0, 0.0, 0.0)
-    with pytest.raises(ValueError, match="cannot be disabled"):
-        service.set_think("none")
+    assert service.set_think("none")
+    assert service.reasoning_effort == "none"
+    assert service.set_think(model.default_reasoning)
     service.register_tool(
         {"type": "function", "name": "calc", "parameters": {"type": "object"}},
         lambda _: None,
@@ -611,7 +612,7 @@ def test_no_key_detection_and_cli_choices(oauth, monkeypatch):
     assert ApplicationSetup.detect_provider(object()) == "openai"
 
 
-@pytest.mark.parametrize("level", ["low", "medium", "high", "xhigh"])
+@pytest.mark.parametrize("level", ["none", "minimal", "low", "medium", "high", "xhigh"])
 def test_xai_reasoning_levels_accept(oauth, level):
     from AgentCrew.modules.llm.reasoning_selection import apply_reasoning_to_service
 
@@ -627,7 +628,7 @@ def test_xai_reasoning_levels_accept(oauth, level):
     assert service.reasoning_effort == level
 
 
-@pytest.mark.parametrize("level", ["none", "0", "minimal"])
+@pytest.mark.parametrize("level", ["0", "ultra"])
 def test_xai_reasoning_levels_reject(oauth, level):
     from AgentCrew.modules.llm.reasoning_selection import apply_reasoning_to_service
 
@@ -639,7 +640,7 @@ def test_xai_reasoning_levels_reject(oauth, level):
         }
     )
     service = XAISubscriptionResponseService(token_path=str(oauth.token_path))
-    with pytest.raises(ValueError, match="reasoning"):
+    with pytest.raises(ValueError, match="Invalid reasoning effort"):
         apply_reasoning_to_service(service, level, explicit=False)
     assert service.reasoning_effort == "high"
 
@@ -1072,35 +1073,131 @@ async def test_curated_models_resolve_and_reapply_defaults(curated_service):
 
 
 @pytest.mark.parametrize(
-    ("model_id", "accepted", "rejected"),
-    [
-        ("grok-4.7", ("low", "medium", "high", "xhigh"), ("none", "0", "minimal")),
-        ("grok-4.3", ("none", "low", "medium", "high"), ("xhigh", "0", "minimal")),
-        ("grok-build-0.1", (), ("none", "0", "low", "medium", "high", "xhigh")),
-    ],
+    ("model_id", "thinking"),
+    [("grok-4.7", True), ("grok-4.3", True), ("grok-build-0.1", False)],
 )
 @pytest.mark.asyncio
-async def test_curated_model_reasoning_contract(
-    curated_service, model_id, accepted, rejected
-):
-    from AgentCrew.modules.llm.reasoning_selection import apply_reasoning_to_service
+async def test_curated_model_reasoning_contract(curated_service, model_id, thinking):
+    from AgentCrew.modules.llm.reasoning_selection import (
+        REASONING_LEVELS,
+        apply_reasoning_to_service,
+    )
 
     service = curated_service
     service.model = model_id
-    default = service.reasoning_effort
-    if default is None:
+    assert service.allow_unconfigured_reasoning is not thinking
+    if thinking:
+        for level in REASONING_LEVELS:
+            assert apply_reasoning_to_service(service, level, explicit=True)
+            assert service.reasoning_effort == level
+    else:
         assert apply_reasoning_to_service(service, None)
-    for level in accepted:
-        assert apply_reasoning_to_service(service, level)
-        assert service.reasoning_effort == level
-    for level in rejected:
-        with pytest.raises(ValueError) as error:
-            apply_reasoning_to_service(service, level, explicit=True)
-        assert model_id in str(error.value) or (
-            model_id == "grok-4.7" and "Grok 4.7" in str(error.value)
-        )
-    if not accepted:
+        for level in REASONING_LEVELS:
+            assert service.set_think(level) is False
+            with pytest.raises(ValueError, match="not supported"):
+                apply_reasoning_to_service(service, level, explicit=True)
         assert service.reasoning_effort is None
+    for level in ("0", "ultra"):
+        with pytest.raises(ValueError, match="Invalid reasoning effort"):
+            service.set_think(level)
+    await service.close()
+
+
+@pytest.mark.asyncio
+async def test_xai_registry_definitions_control_defaults_and_capabilities(
+    curated_service, monkeypatch
+):
+    import importlib
+
+    from AgentCrew.modules.llm.types import Model
+
+    xai_module = importlib.import_module("AgentCrew.modules.xai.response_service")
+    assert not hasattr(xai_module, "_MODEL_PROFILES")
+    assert not hasattr(xai_module, "_ModelProfile")
+    assert "reasoning_efforts" not in Model.model_fields
+    assert "encrypted_reasoning" not in Model.model_fields
+
+    service = curated_service
+    model = ModelRegistry.get_instance().get_model("xai/grok-4.3")
+    monkeypatch.setattr(model, "default_reasoning", "xhigh")
+    service.model = "grok-4.3"
+    assert service.reasoning_effort == "xhigh"
+    monkeypatch.setattr(model, "capabilities", ["tool_use", "stream"])
+    assert service.allow_unconfigured_reasoning
+    assert service.set_think("low") is False
+    state = service.create_stream_state()
+    service.process_stream_chunk(
+        SimpleNamespace(
+            type="response.output_item.done",
+            output_index=0,
+            item=SimpleNamespace(
+                type="reasoning", id="reason-1", encrypted_content="synthetic"
+            ),
+        ),
+        "",
+        [],
+        state,
+    )
+    assert state["reasoning_items"] == []
+    service.client.responses.create = AsyncMock(
+        return_value=EventStream([SimpleNamespace(type="response.completed")])
+    )
+    async with await service.stream_assistant_response(
+        [{"role": "user", "content": "hello"}]
+    ) as stream:
+        assert [event.type async for event in stream] == ["response.completed"]
+    request = service.client.responses.create.call_args.kwargs
+    assert "include" not in request and "reasoning" not in request
+    with pytest.raises(
+        ValueError, match="Unsupported xAI subscription Responses model"
+    ):
+        service.model = "grok-build"
+    assert service.model == "grok-4.3"
+    monkeypatch.setattr(model, "provider", "openai")
+    with pytest.raises(
+        ValueError, match="Unsupported xAI subscription Responses model"
+    ):
+        service.model = "grok-4.3"
+    await service.close()
+
+
+@pytest.mark.parametrize("model_id", ["grok-4.7", "grok-4.3"])
+@pytest.mark.asyncio
+async def test_thinking_models_forward_none_effort(curated_service, model_id):
+    service = curated_service
+    service.model = model_id
+    assert service.set_think("none")
+    service.client.responses.create = AsyncMock(
+        return_value=EventStream([SimpleNamespace(type="response.completed")])
+    )
+    async with await service.stream_assistant_response(
+        [{"role": "user", "content": "hello"}]
+    ) as stream:
+        assert [event.type async for event in stream] == ["response.completed"]
+    request = service.client.responses.create.call_args.kwargs
+    assert request["reasoning"] == {"effort": "none"}
+    assert request["include"] == ["reasoning.encrypted_content"]
+    await service.close()
+
+
+@pytest.mark.parametrize(
+    ("model_id", "level"), [("grok-4.7", "none"), ("grok-4.3", "xhigh")]
+)
+@pytest.mark.asyncio
+async def test_model_specific_effort_error_propagates_without_replay(
+    curated_service, model_id, level
+):
+    service = curated_service
+    service.model = model_id
+    assert service.set_think(level)
+    create = AsyncMock(side_effect=RuntimeError("xAI rejected effort"))
+    service.client.responses.create = create
+    with pytest.raises(RuntimeError, match="xAI rejected effort"):
+        await service.process_message("hello", model_id=model_id)
+    assert create.await_count == 1
+    assert create.call_args.kwargs["reasoning"] == {"effort": level}
+    assert service.model == model_id and service.reasoning_effort == level
+    assert service.client.max_retries == 0
     await service.close()
 
 
@@ -1108,7 +1205,7 @@ async def test_curated_model_reasoning_contract(
     ("model_id", "default_effort", "include"),
     [
         ("grok-4.7", "high", True),
-        ("grok-4.3", "low", False),
+        ("grok-4.3", "low", True),
         ("grok-build-0.1", None, False),
     ],
 )
@@ -1186,7 +1283,8 @@ async def test_process_message_selects_curated_model_ids(curated_service):
         assert service.reasoning_effort == "high"
         assert raw.closes == 1
         created.append(request)
-    assert "include" not in created[0] and "include" not in created[1]
+    assert created[0]["include"] == ["reasoning.encrypted_content"]
+    assert "include" not in created[1]
     assert created[2]["include"] == ["reasoning.encrypted_content"]
     service.set_think("xhigh")
     service.client.responses.create = AsyncMock(
@@ -1251,7 +1349,7 @@ async def test_process_message_override_keeps_state_and_uses_target_metadata(
     assert not any(item.get("type") == "reasoning" for item in build["input"])
     assert grok_43["model"] == "grok-4.3"
     assert grok_43["reasoning"] == {"effort": "medium"}
-    assert "include" not in grok_43
+    assert grok_43["include"] == ["reasoning.encrypted_content"]
     assert not any(item.get("type") == "reasoning" for item in grok_43["input"])
     assert get_responses_provider_state(assistant) is not None
     await service.close()
@@ -1319,7 +1417,8 @@ async def test_process_message_concurrent_model_overrides_are_isolated(curated_s
     assert set(by_model) == {"grok-4.3", "grok-build-0.1"}
     assert by_model["grok-4.3"]["reasoning"] == {"effort": "low"}
     assert "reasoning" not in by_model["grok-build-0.1"]
-    assert all("include" not in request for request in calls)
+    assert by_model["grok-4.3"]["include"] == ["reasoning.encrypted_content"]
+    assert "include" not in by_model["grok-build-0.1"]
     assert service.model == "grok-4.7"
     assert service.reasoning_effort == "xhigh"
     await service.close()
@@ -1347,7 +1446,7 @@ async def test_curated_model_reasoning_state_requires_exact_provider_and_model(
             [],
             state,
         )
-        assert bool(state["reasoning_items"]) is (model_id == "grok-4.7")
+        assert bool(state["reasoning_items"]) is (model_id != "grok-build-0.1")
         state["reasoning_items"] = [item]
         for stored_provider, stored_model in (
             ("xai", "grok-4.7"),
@@ -1362,21 +1461,25 @@ async def test_curated_model_reasoning_state_requires_exact_provider_and_model(
             converted = service._convert_internal_format([user, assistant])
             replayed = any(entry.get("type") == "reasoning" for entry in converted)
             assert replayed is (
-                model_id == "grok-4.7"
+                model_id != "grok-build-0.1"
                 and stored_provider == "xai"
-                and stored_model == "grok-4.7"
+                and stored_model == model_id
             )
     await service.close()
 
 
+@pytest.mark.parametrize("model_id", ["grok-4.7", "grok-4.3"])
 @pytest.mark.asyncio
-async def test_wrong_provider_stream_state_never_captures_reasoning(curated_service):
+async def test_wrong_provider_stream_state_never_captures_reasoning(
+    curated_service, model_id
+):
     from AgentCrew.modules.agents.message_metadata import (
         attach_stream_metadata,
         get_responses_provider_state,
     )
 
     service = curated_service
+    service.model = model_id
     item = SimpleNamespace(
         type="reasoning", id="reason-1", encrypted_content="synthetic"
     )
