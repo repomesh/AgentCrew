@@ -320,13 +320,16 @@ async def test_routing_request_and_stream_events(oauth, monkeypatch):
         "AgentCrew.modules.xai.oauth.DEFAULT_TOKEN_PATH", oauth.token_path
     )
     manager = ServiceManager.get_instance()
-    service = manager.get_service("xai_subscription")
-    assert manager.get_service("xai_subscription") is service
-    standalone = manager.initialize_standalone_service("xai_subscription")
+    service = manager.get_service("xai")
+    assert manager.get_service("xai") is service
+    assert [name for name in manager.service_factories if name.startswith("xai")] == [
+        "xai"
+    ]
+    standalone = manager.initialize_standalone_service("xai")
     assert standalone is not service
-    assert standalone.provider_name == "xai_subscription"
-    model = ModelRegistry.get_instance().get_model("xai_subscription/grok-4.7")
-    assert model and model.resolved_service_name() == "xai_subscription"
+    assert standalone.provider_name == "xai"
+    model = ModelRegistry.get_instance().get_model("xai/grok-4.7")
+    assert model and model.resolved_service_name() == "xai"
     assert manager.get_service_for_model(model) is service
     assert model.capabilities == ["tool_use", "thinking", "stream"]
     assert model.max_context_token == 256_000
@@ -361,6 +364,7 @@ async def test_routing_request_and_stream_events(oauth, monkeypatch):
     assert service.client.max_retries == 0
     assert str(service.client.base_url).rstrip("/") == "https://api.x.ai/v1"
     state = service.create_stream_state()
+    assert state["provider"] == "xai"
     tools = []
     text = ""
     events = [
@@ -422,7 +426,7 @@ async def test_routing_request_and_stream_events(oauth, monkeypatch):
         "role": "assistant",
         "content": [{"type": "text", "text": "hi"}],
         "_metadata": build_responses_metadata(
-            "xai_subscription", "grok-4.7", state["reasoning_items"]
+            "xai", "grok-4.7", state["reasoning_items"]
         ),
     }
     assert (
@@ -434,7 +438,7 @@ async def test_routing_request_and_stream_events(oauth, monkeypatch):
     assert service._convert_internal_format([message])[0]["role"] == "assistant"
     await service.close()
     await standalone.close()
-    manager.services.pop("xai_subscription", None)
+    manager.services.pop("xai", None)
 
 
 @pytest.mark.asyncio
@@ -482,7 +486,7 @@ async def test_tool_only_multiple_calls_null_usage_and_mismatched_model(oauth):
         "role": "assistant",
         "content": "hello",
         "_metadata": build_responses_metadata(
-            "xai_subscription",
+            "xai",
             "other-model",
             [{"type": "reasoning", "encrypted_content": "opaque"}],
         ),
@@ -572,6 +576,7 @@ async def test_one_shot_stream_closes_on_error(oauth):
 
 
 def test_no_key_detection_and_cli_choices(oauth, monkeypatch):
+    from AgentCrew.main import cli
     from AgentCrew.modules.config.global_config import GlobalConfig
     from AgentCrew.setup import PROVIDER_LIST, ApplicationSetup, common_options
 
@@ -585,16 +590,20 @@ def test_no_key_detection_and_cli_choices(oauth, monkeypatch):
     monkeypatch.setattr(
         "AgentCrew.modules.xai.oauth.DEFAULT_TOKEN_PATH", oauth.token_path
     )
-    monkeypatch.setattr(
-        GlobalConfig, "get_last_used_provider", lambda _: "xai_subscription"
-    )
-    assert "xai_subscription" in PROVIDER_LIST
+    monkeypatch.setattr(GlobalConfig, "get_last_used_provider", lambda _: "xai")
+    assert "xai" in PROVIDER_LIST
     assert XAIOAuth.is_available()
-    assert ApplicationSetup.detect_provider(object()) == "xai_subscription"
-    assert any(
-        "xai_subscription" in str(getattr(option.type, "choices", ()))
-        for option in common_options(lambda: None).__click_params__
+    assert ApplicationSetup.detect_provider(object()) == "xai"
+    cli_options = common_options(lambda: None).__click_params__
+    for name in ("provider", "memory_llm"):
+        option = next(option for option in cli_options if option.name == name)
+        assert "xai" in option.type.choices
+    create_agent_provider = next(
+        option
+        for option in cli.commands["create-agent"].params
+        if option.name == "provider"
     )
+    assert "xai" in create_agent_provider.type.choices
     monkeypatch.setenv("AGENTCREW_PROVIDER", "openai")
     assert ApplicationSetup.detect_provider(object()) == "openai"
 

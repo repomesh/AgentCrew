@@ -146,7 +146,7 @@ client ID, authentication and inference cannot run. With a limited, eligible acc
 ```bash
 export XAI_OAUTH_CLIENT_ID='your-authorized-client-id'
 agentcrew xai-auth
-agentcrew chat --provider xai_subscription --model-id grok-4.7
+agentcrew chat --provider xai --model-id grok-4.7
 ```
 
 The device authorization screen displays a URL and code for the user to enter.

@@ -40,7 +40,7 @@ PROVIDER_LIST = [
     "claude",
     "openai",
     "openai_codex",
-    "xai_subscription",
+    "xai",
     "google",
     "deepinfra",
     "together",
@@ -56,7 +56,7 @@ def common_options(func):
         "--provider",
         type=click.Choice(PROVIDER_LIST),
         default=None,
-        help="LLM provider to use (claude, openai, google, github_copilot, deepinfra, together, opencode_go, commandcode, or openai_codex, or xai_subscription)",
+        help="LLM provider to use (claude, openai, google, github_copilot, deepinfra, together, opencode_go, commandcode, or openai_codex, or xai)",
     )
     @click.option(
         "--agent-config",
@@ -73,7 +73,7 @@ def common_options(func):
                 "claude",
                 "openai",
                 "openai_codex",
-                "xai_subscription",
+                "xai",
                 "google",
                 "deepinfra",
                 "together",
@@ -295,7 +295,7 @@ class ApplicationSetup:
 
                         if OpenAICodexOAuth().has_valid_tokens:
                             return last_provider
-                    elif last_provider == "xai_subscription":
+                    elif last_provider == "xai":
                         from AgentCrew.modules.xai.oauth import XAIOAuth
 
                         if XAIOAuth.is_available():
@@ -949,7 +949,7 @@ tools = ["memory", "browser", "web_search", "code_analysis"]
             oauth = XAIOAuth()
             oauth.login(display=click.echo)
             click.echo(
-                "xAI Subscription authentication successful. Select --provider xai_subscription."
+                "xAI Subscription authentication successful. Select --provider xai."
             )
             return True
         except (XAIAuthenticationError, KeyboardInterrupt) as exc:

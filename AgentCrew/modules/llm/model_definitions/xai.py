@@ -5,7 +5,7 @@ from AgentCrew.modules.llm.types import Model
 XAI_SUBSCRIPTION_MODELS = [
     Model(
         id="grok-4.7",
-        provider="xai_subscription",
+        provider="xai",
         name="Grok 4.7 (xAI Subscription)",
         description="Experimental xAI subscription OAuth via direct Responses API",
         capabilities=["tool_use", "thinking", "stream"],

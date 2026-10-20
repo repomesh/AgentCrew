@@ -71,7 +71,7 @@ class XAISubscriptionResponseService(OpenAIResponseService):
         token = self._oauth.get_valid_access_token()
         super().__init__(api_key=token, base_url=XAI_BASE_URL)
         self.client = self.client.with_options(max_retries=0)
-        self._provider_name = "xai_subscription"
+        self._provider_name = "xai"
         self.model = "grok-4.7"
         self.reasoning_effort = "high"
 

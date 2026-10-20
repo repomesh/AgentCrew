@@ -34,7 +34,7 @@ PROVIDER_MODEL_MODULES: dict[str, tuple[str, str]] = {
         "AgentCrew.modules.llm.model_definitions.openai_codex",
         "OPENAI_CODEX_MODELS",
     ),
-    "xai_subscription": (
+    "xai": (
         "AgentCrew.modules.llm.model_definitions.xai",
         "XAI_SUBSCRIPTION_MODELS",
     ),

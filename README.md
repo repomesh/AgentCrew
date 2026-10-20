@@ -87,7 +87,7 @@ agentcrew chat --provider openai_codex
 # Experimental xAI Subscription (requires an AgentCrew-authorized OAuth client ID)
 export XAI_OAUTH_CLIENT_ID='your-authorized-client-id'
 agentcrew xai-auth
-agentcrew chat --provider xai_subscription --model-id grok-4.7
+agentcrew chat --provider xai --model-id grok-4.7
 # Local sign-out/reset (does not revoke the remote xAI session)
 agentcrew xai-auth --logout
 
