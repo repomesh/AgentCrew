@@ -29,9 +29,44 @@ class XAIOAuth:
     _locks_guard = threading.Lock()
     _locks: ClassVar[dict[str, threading.Lock]] = {}
 
-    def __init__(self, token_path: str | Path | None = None):
+    def __init__(
+        self, token_path: str | Path | None = None, *, load_tokens: bool = True
+    ):
         self.token_path = Path(token_path or DEFAULT_TOKEN_PATH).expanduser()
-        self._tokens = self._load_tokens()
+        self._tokens = self._load_tokens() if load_tokens else None
+
+    def _validate_paths(self) -> None:
+        """Reject unsafe lexical token, parent and lock paths before any I/O."""
+        paths = (
+            (self.token_path.parent, stat.S_ISDIR),
+            (self.token_path, stat.S_ISREG),
+            (self.token_path.with_name(self.token_path.name + ".lock"), stat.S_ISREG),
+        )
+        for path, is_expected_type in paths:
+            try:
+                mode = path.lstat().st_mode
+            except FileNotFoundError:
+                continue
+            except OSError as exc:
+                raise XAIAuthenticationError(
+                    "Cannot access xAI OAuth credential path"
+                ) from exc
+            if not is_expected_type(mode):
+                raise XAIAuthenticationError(
+                    "Unsafe xAI OAuth credential path: symlink or non-regular entry"
+                )
+
+    def _prepare_parent(self) -> None:
+        self._validate_paths()
+        try:
+            self.token_path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+        except OSError as exc:
+            raise XAIAuthenticationError(
+                "Cannot create xAI OAuth credential directory"
+            ) from exc
+        self._validate_paths()
+        if os.name == "posix":
+            self.token_path.parent.chmod(0o700)
 
     @staticmethod
     def _client_id() -> str:
@@ -52,10 +87,14 @@ class XAIOAuth:
             return False
 
     def _load_tokens(self) -> dict[str, Any] | None:
-        if self.token_path.is_symlink():
-            raise XAIAuthenticationError("Refusing symlinked xAI OAuth token file")
+        self._validate_paths()
         try:
-            fd = os.open(self.token_path, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0))
+            fd = os.open(
+                self.token_path,
+                os.O_RDONLY
+                | getattr(os, "O_NONBLOCK", 0)
+                | getattr(os, "O_NOFOLLOW", 0),
+            )
             with os.fdopen(fd, encoding="utf-8") as handle:
                 if not stat.S_ISREG(os.fstat(handle.fileno()).st_mode):
                     raise XAIAuthenticationError(
@@ -68,7 +107,7 @@ class XAIOAuth:
             return None
         except (OSError, ValueError) as exc:
             raise XAIAuthenticationError(
-                "Cannot read AgentCrew xAI OAuth tokens; run 'agentcrew xai-auth' again"
+                "Cannot read AgentCrew xAI OAuth tokens; run 'agentcrew xai-auth --logout' to reset them"
             ) from exc
         if not isinstance(data, dict):
             return None
@@ -91,12 +130,8 @@ class XAIOAuth:
         return bool(self._tokens and self._tokens["refresh_token"])
 
     def _save_tokens(self, data: dict[str, Any]) -> None:
+        self._prepare_parent()
         parent = self.token_path.parent
-        parent.mkdir(mode=0o700, parents=True, exist_ok=True)
-        if parent.is_symlink() or self.token_path.is_symlink():
-            raise XAIAuthenticationError("Refusing symlinked xAI OAuth token path")
-        if os.name == "posix":
-            parent.chmod(0o700)
         fd, name = tempfile.mkstemp(dir=parent, prefix=".xai-oauth-")
         try:
             with os.fdopen(fd, "w", encoding="utf-8") as handle:
@@ -104,6 +139,7 @@ class XAIOAuth:
                 handle.flush()
                 os.fsync(handle.fileno())
             os.chmod(name, 0o600)
+            self._validate_paths()
             os.replace(name, self.token_path)
             if os.name == "posix":
                 dir_fd = os.open(parent, os.O_RDONLY)
@@ -118,20 +154,29 @@ class XAIOAuth:
 
     @contextmanager
     def _refresh_lock(self):
-        path = str(self.token_path.resolve())
+        self._validate_paths()
+        path = os.path.abspath(self.token_path)
         with self._locks_guard:
             lock = self._locks.setdefault(path, threading.Lock())
         with lock:
-            self.token_path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+            self._prepare_parent()
             lock_path = self.token_path.with_name(self.token_path.name + ".lock")
-            if lock_path.is_symlink():
-                raise XAIAuthenticationError("Refusing symlinked xAI OAuth lock file")
-            fd = os.open(
-                lock_path,
-                os.O_CREAT | os.O_RDWR | getattr(os, "O_NOFOLLOW", 0),
-                0o600,
-            )
             try:
+                fd = os.open(
+                    lock_path,
+                    os.O_CREAT
+                    | os.O_RDWR
+                    | getattr(os, "O_NONBLOCK", 0)
+                    | getattr(os, "O_NOFOLLOW", 0),
+                    0o600,
+                )
+            except OSError as exc:
+                raise XAIAuthenticationError(
+                    "Cannot open xAI OAuth credential lock"
+                ) from exc
+            try:
+                if not stat.S_ISREG(os.fstat(fd).st_mode):
+                    raise XAIAuthenticationError("Unsafe xAI OAuth credential lock")
                 if os.name == "posix":
                     os.fchmod(fd, 0o600)
                 if os.name == "posix":
@@ -143,6 +188,7 @@ class XAIOAuth:
 
                     msvcrt.locking(fd, msvcrt.LK_LOCK, 1)
                 try:
+                    self._validate_paths()
                     yield
                 finally:
                     if os.name == "posix":
@@ -293,7 +339,8 @@ class XAIOAuth:
         )
 
     def logout(self) -> None:
-        """Remove AgentCrew's local tokens; remote revocation is not yet supported."""
+        """Remove AgentCrew's local tokens; remote revocation is not supported."""
         with self._refresh_lock():
+            self._validate_paths()
             self.token_path.unlink(missing_ok=True)
             self._tokens = None

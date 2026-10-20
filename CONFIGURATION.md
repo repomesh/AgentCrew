@@ -150,12 +150,19 @@ agentcrew chat --provider xai_subscription --model-id grok-4.7
 ```
 
 The device authorization screen displays a URL and code for the user to enter.
-Tokens are kept only in `~/.AgentCrew/xai_oauth.json` (owner-only, atomically
-replaced); refresh-token rotation is handled automatically. The provider sends
-SSE Responses requests directly to `https://api.x.ai/v1/responses`, with local
-function tools, `store: false`, and encrypted reasoning continuation. Only
-`grok-4.7` is offered with an effective 128k context. Reasoning cannot be
-disabled; `none` is rejected. Structured output, vision, hosted tools, multi-agent,
+Tokens are kept only in `~/.AgentCrew/xai_oauth.json` (owner-only POSIX file and
+directory modes, atomically replaced); refresh-token rotation is handled
+automatically. On Windows, inherited directory/file ACLs may still grant access;
+use a user-private profile and verify its ACLs. To discard a corrupt token file or
+sign out locally, run `agentcrew xai-auth --logout`, then `agentcrew xai-auth` to
+sign in again. Logout deletes only AgentCrew's local tokens: it does **not**
+revoke the xAI session remotely.
+
+The provider sends SSE Responses requests directly to
+`https://api.x.ai/v1/responses`, with local function tools, `store: false`, and
+encrypted reasoning continuation. Only `grok-4.7` is offered with an effective
+256k context. Reasoning accepts low, medium, high, or xhigh; `none`, `0`, and
+`minimal` are rejected. Structured output, vision, hosted tools, multi-agent,
 image/video/audio, and realtime/WebSocket modes are not supported in this slice.
 There is no API-key fallback and no OpenCode Console/Go gateway routing.
 
@@ -165,7 +172,8 @@ AgentCrew OAuth client and your specific account. Eligibility, allowance, overag
 and commercial treatment depend on xAI's current terms/account entitlement; do
 not assume every X plan qualifies or requests are free/unlimited. AgentCrew sets
 subscription token prices to zero rather than claiming to know subscription
-charges. For manual live validation, use an explicitly authorized, limited account:
+charges: a displayed token cost of 0.0 does not mean requests are free.
+For manual live validation, use an explicitly authorized, limited account:
 run `agentcrew xai-auth`, send a short text prompt, run one local tool call, then
 repeat a reasoning turn to check encrypted continuation. Verify quota and billing
 in your xAI account separately; automated tests use fixtures only.

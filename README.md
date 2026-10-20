@@ -88,11 +88,18 @@ agentcrew chat --provider openai_codex
 export XAI_OAUTH_CLIENT_ID='your-authorized-client-id'
 agentcrew xai-auth
 agentcrew chat --provider xai_subscription --model-id grok-4.7
+# Local sign-out/reset (does not revoke the remote xAI session)
+agentcrew xai-auth --logout
 
 # GitHub Copilot subscribers
 agentcrew copilot-auth
 agentcrew chat --provider github_copilot
 ```
+
+> xAI Subscription support is experimental. Eligibility, allowance, overage and
+> billing depend on xAI's current terms and account entitlement. AgentCrew's
+> displayed token cost of 0.0 does **not** establish that requests are free.
+> `xai-auth --logout` deletes local tokens only; it cannot revoke them remotely.
 
 **Pay-as-you-go API keys:**
 

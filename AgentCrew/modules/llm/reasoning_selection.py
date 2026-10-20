@@ -133,20 +133,21 @@ def apply_reasoning_to_service(
 ) -> bool:
     """Apply a canonical reasoning level to a service via ``set_think``.
 
-    Returns True when applied (or already disabled). When ``explicit`` and
-    the service rejects the level (e.g. a non-thinking model), raises
-    ``ValueError`` so callers can surface a clear failure.
+    Returns True when applied (or already disabled). Explicit selections and
+    services declaring ``strict_reasoning_selection`` propagate unsupported
+    levels as ``ValueError``; other services preserve lenient fallback.
     """
     if service is None:
         return False
     value = adapt_reason_effort(service, level or "none")
+    strict = explicit or getattr(service, "strict_reasoning_selection", False)
     try:
         applied = bool(service.set_think(value))
     except ValueError:
-        if explicit:
+        if strict:
             raise
         return False
-    if not applied and explicit:
+    if not applied and strict:
         raise ValueError(
             f"Reasoning effort '{level}' is not supported by the selected model."
         )

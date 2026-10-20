@@ -10,8 +10,61 @@ from AgentCrew.modules.xai.oauth import XAIOAuth
 XAI_BASE_URL = "https://api.x.ai/v1"
 
 
+class _CompletedResponsesStream:
+    """Require terminal completion only when a Responses stream ends naturally."""
+
+    def __init__(self, stream: Any):
+        self._stream = stream
+        self._iterator = stream.__aiter__()
+        self._completed = False
+        self._closed = False
+
+    def __aiter__(self):
+        return self
+
+    async def __anext__(self):
+        if self._closed:
+            raise StopAsyncIteration
+        try:
+            event = await self._iterator.__anext__()
+        except StopAsyncIteration:
+            self._closed = True
+            if not self._completed:
+                raise RuntimeError(
+                    "xAI Responses stream ended without completion; request was not replayed"
+                ) from None
+            raise
+        if getattr(event, "type", None) == "response.completed":
+            self._completed = True
+        return event
+
+    async def __aenter__(self):
+        enter = getattr(self._stream, "__aenter__", None)
+        if enter is not None:
+            await enter()
+        return self
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        self._closed = True
+        exit_stream = getattr(self._stream, "__aexit__", None)
+        if exit_stream is not None:
+            return await exit_stream(exc_type, exc_val, exc_tb)
+        await self.aclose()
+        return False
+
+    async def aclose(self):
+        self._closed = True
+        close = getattr(self._stream, "aclose", None) or getattr(
+            self._stream, "close", None
+        )
+        if close is not None:
+            await close()
+
+
 class XAISubscriptionResponseService(OpenAIResponseService):
     """Reuse Responses history/event orchestration, without OpenAI-only options."""
+
+    strict_reasoning_selection = True
 
     def __init__(self, token_path: str | None = None):
         self._oauth = XAIOAuth(token_path)
@@ -30,8 +83,10 @@ class XAISubscriptionResponseService(OpenAIResponseService):
     def set_think(self, budget_tokens: str) -> bool:
         if budget_tokens in ("none", "0"):
             raise ValueError("Grok 4.7 reasoning cannot be disabled")
-        if budget_tokens not in ("low", "medium", "high"):
-            raise ValueError("Grok 4.7 reasoning effort must be low, medium or high")
+        if budget_tokens not in ("low", "medium", "high", "xhigh"):
+            raise ValueError(
+                "Grok 4.7 reasoning effort must be low, medium, high or xhigh"
+            )
         self.reasoning_effort = budget_tokens
         return True
 
@@ -50,7 +105,7 @@ class XAISubscriptionResponseService(OpenAIResponseService):
             params["tools"] = [
                 tool for tool in self.tools if tool.get("type") == "function"
             ]
-        return await self.client.responses.create(**params)
+        return _CompletedResponsesStream(await self.client.responses.create(**params))
 
     @staticmethod
     def _check_stream_event(event_type: str | None) -> None:
@@ -90,18 +145,13 @@ class XAISubscriptionResponseService(OpenAIResponseService):
             if isinstance(prompt, list)
             else [{"role": "user", "content": prompt}]
         )
-        stream = await self.stream_assistant_response(messages)
         text = ""
-        try:
+        async with await self.stream_assistant_response(messages) as stream:
             async for event in stream:
                 event_type = getattr(event, "type", None)
                 self._check_stream_event(event_type)
                 if event_type == "response.output_text.delta":
                     text += getattr(event, "delta", "") or ""
-        finally:
-            close = getattr(stream, "aclose", None)
-            if close is not None:
-                await close()
         return text
 
     async def validate_spec(self, prompt: str) -> str:

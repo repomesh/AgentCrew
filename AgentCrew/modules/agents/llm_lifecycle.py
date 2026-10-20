@@ -175,8 +175,8 @@ class AgentLLMLifecycle:
 
         Preserves forced selections (``/think``, CLI ``--reason-effort``) and
         agent-config reasoning; otherwise falls back to the new model's
-        ``default_reasoning``. Lenient: if the new model cannot apply the
-        level, reasoning is left disabled rather than aborting the switch.
+        ``default_reasoning``. Services may opt into strict validation when
+        a selected reasoning level is unsupported.
         """
         from AgentCrew.modules.llm.reasoning_selection import (
             ReasoningSelection,
@@ -190,18 +190,10 @@ class AgentLLMLifecycle:
             return
         selection = agent.reasoning_selection
         if selection is not None and selection.is_forced:
-            apply_reasoning_to_service(
-                agent.llm,
-                selection.level,
-                explicit=agent.llm.provider_name == "xai_subscription",
-            )
+            apply_reasoning_to_service(agent.llm, selection.level, explicit=False)
             return
         if selection is not None and selection.source is ReasoningSource.AGENT_CONFIG:
-            apply_reasoning_to_service(
-                agent.llm,
-                selection.level,
-                explicit=agent.llm.provider_name == "xai_subscription",
-            )
+            apply_reasoning_to_service(agent.llm, selection.level, explicit=False)
             return
         level = default_reasoning_for_service(agent.llm)
         agent.reasoning_selection = ReasoningSelection(

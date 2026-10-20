@@ -630,11 +630,16 @@ def chatgpt_auth():
 
 
 @cli.command("xai-auth")
-def xai_auth():
-    """Authorize direct xAI Subscription Responses access via device login."""
+@click.option(
+    "--logout",
+    is_flag=True,
+    help="Delete local xAI OAuth tokens (does not revoke remotely).",
+)
+def xai_auth(logout: bool):
+    """Authorize xAI Subscription via device login, or clear local credentials."""
     from AgentCrew.setup import ApplicationSetup
 
-    if not ApplicationSetup.xai_login():
+    if not (ApplicationSetup.xai_logout() if logout else ApplicationSetup.xai_login()):
         raise SystemExit(1)
 
 

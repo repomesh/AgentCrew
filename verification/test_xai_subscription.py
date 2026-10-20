@@ -10,8 +10,11 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
 import pytest
+from click.testing import CliRunner
 from loguru import logger
 
+from AgentCrew.modules.agents.agent_response_stream import AgentResponseStream
+from AgentCrew.modules.agents.message_formatter import AgentMessageFormatter
 from AgentCrew.modules.agents.message_metadata import build_responses_metadata
 from AgentCrew.modules.llm.model_registry import ModelRegistry
 from AgentCrew.modules.llm.service_manager import ServiceManager
@@ -26,6 +29,31 @@ class Response:
 
     def json(self):
         return self._data
+
+
+class EventStream:
+    """Fake SSE stream with a context manager and explicit close accounting."""
+
+    def __init__(self, events):
+        self.events = list(events)
+        self.closes = 0
+
+    def __aiter__(self):
+        return self
+
+    async def __anext__(self):
+        if not self.events:
+            raise StopAsyncIteration
+        return self.events.pop(0)
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *_):
+        await self.close()
+
+    async def close(self):
+        self.closes += 1
 
 
 class Client:
@@ -301,18 +329,28 @@ async def test_routing_request_and_stream_events(oauth, monkeypatch):
     assert model and model.resolved_service_name() == "xai_subscription"
     assert manager.get_service_for_model(model) is service
     assert model.capabilities == ["tool_use", "thinking", "stream"]
+    assert model.max_context_token == 256_000
+    assert (
+        model.input_token_price_1m,
+        model.output_token_price_1m,
+        model.cached_token_price_1m,
+    ) == (0.0, 0.0, 0.0)
     with pytest.raises(ValueError, match="cannot be disabled"):
         service.set_think("none")
     service.register_tool(
         {"type": "function", "name": "calc", "parameters": {"type": "object"}},
         lambda _: None,
     )
-    create = AsyncMock(return_value="stream")
-    service.client.responses.create = create
-    assert (
-        await service.stream_assistant_response([{"role": "user", "content": "sum"}])
-        == "stream"
+    raw_stream = EventStream(
+        [SimpleNamespace(type="response.completed", response=None)]
     )
+    create = AsyncMock(return_value=raw_stream)
+    service.client.responses.create = create
+    async with await service.stream_assistant_response(
+        [{"role": "user", "content": "sum"}]
+    ) as stream:
+        assert [event.type async for event in stream] == ["response.completed"]
+    assert raw_stream.closes == 1
     params = create.call_args.kwargs
     assert params["reasoning"] == {"effort": "high"}
     assert params["store"] is False and params["include"] == [
@@ -559,3 +597,399 @@ def test_no_key_detection_and_cli_choices(oauth, monkeypatch):
     )
     monkeypatch.setenv("AGENTCREW_PROVIDER", "openai")
     assert ApplicationSetup.detect_provider(object()) == "openai"
+
+
+@pytest.mark.parametrize("level", ["low", "medium", "high", "xhigh"])
+def test_xai_reasoning_levels_accept(oauth, level):
+    from AgentCrew.modules.llm.reasoning_selection import apply_reasoning_to_service
+
+    oauth._save_tokens(
+        {
+            "access_token": "token",
+            "refresh_token": "refresh",
+            "expires_at": time.time() + 3600,
+        }
+    )
+    service = XAISubscriptionResponseService(token_path=str(oauth.token_path))
+    assert apply_reasoning_to_service(service, level, explicit=False)
+    assert service.reasoning_effort == level
+
+
+@pytest.mark.parametrize("level", ["none", "0", "minimal"])
+def test_xai_reasoning_levels_reject(oauth, level):
+    from AgentCrew.modules.llm.reasoning_selection import apply_reasoning_to_service
+
+    oauth._save_tokens(
+        {
+            "access_token": "token",
+            "refresh_token": "refresh",
+            "expires_at": time.time() + 3600,
+        }
+    )
+    service = XAISubscriptionResponseService(token_path=str(oauth.token_path))
+    with pytest.raises(ValueError, match="reasoning"):
+        apply_reasoning_to_service(service, level, explicit=False)
+    assert service.reasoning_effort == "high"
+
+
+def test_logout_corrupt_cache_and_cli_recovery(oauth, monkeypatch):
+    from AgentCrew.main import cli
+
+    oauth.token_path.write_text("{broken-json-secret")
+    with pytest.raises(XAIAuthenticationError, match="--logout"):
+        XAIOAuth(oauth.token_path)
+    monkeypatch.setattr(
+        "AgentCrew.modules.xai.oauth.DEFAULT_TOKEN_PATH", oauth.token_path
+    )
+    monkeypatch.delenv("XAI_OAUTH_CLIENT_ID")
+    runner = CliRunner()
+    assert "xai-auth" in cli.commands
+    result = runner.invoke(cli.commands["xai-auth"], ["--logout"])
+    assert result.exit_code == 0
+    assert "Remote revocation is not supported" in result.output
+    assert "broken-json-secret" not in result.output
+    assert not oauth.token_path.exists()
+    assert runner.invoke(cli.commands["xai-auth"], ["--logout"]).exit_code == 0
+    monkeypatch.setenv("XAI_OAUTH_CLIENT_ID", "agentcrew-authorized-test-client")
+    set_client(
+        monkeypatch,
+        [
+            Response(
+                200,
+                {
+                    "device_code": "device",
+                    "user_code": "code",
+                    "verification_uri": "https://auth.x.ai/verify",
+                    "expires_in": 60,
+                },
+            ),
+            Response(
+                200,
+                {
+                    "access_token": "access-secret",
+                    "refresh_token": "refresh-secret",
+                    "expires_in": 3600,
+                },
+            ),
+        ],
+    )
+    monkeypatch.setattr("AgentCrew.modules.xai.oauth.time.sleep", lambda _: None)
+    assert runner.invoke(cli.commands["xai-auth"], []).exit_code == 0
+    assert XAIOAuth(oauth.token_path).has_valid_tokens
+    assert "access-secret" not in result.output
+    if os.name == "posix":
+        assert stat.S_IMODE(oauth.token_path.stat().st_mode) == 0o600
+        assert (
+            stat.S_IMODE(
+                oauth.token_path.with_name(oauth.token_path.name + ".lock")
+                .stat()
+                .st_mode
+            )
+            == 0o600
+        )
+
+
+@pytest.mark.skipif(
+    os.name == "nt", reason="symlinks may require Windows developer mode"
+)
+@pytest.mark.parametrize("kind", ["parent", "token", "lock"])
+def test_oauth_rejects_symlinked_paths(tmp_path, kind):
+    real = tmp_path / "real"
+    real.mkdir()
+    destination = real / "auth.json"
+    destination.write_text("unchanged")
+    parent = tmp_path / "credentials"
+    if kind == "parent":
+        parent.symlink_to(real, target_is_directory=True)
+        path = parent / "auth.json"
+    else:
+        parent.mkdir()
+        path = parent / "auth.json"
+        if kind == "token":
+            path.symlink_to(destination)
+        else:
+            path.with_name(path.name + ".lock").symlink_to(destination)
+    with pytest.raises(XAIAuthenticationError, match="Unsafe"):
+        XAIOAuth(path, load_tokens=False).logout()
+    with pytest.raises(XAIAuthenticationError, match="Unsafe"):
+        XAIOAuth(path)
+    assert destination.read_text() == "unchanged"
+
+
+@pytest.mark.parametrize("kind", ["parent", "token", "lock"])
+def test_oauth_rejects_non_regular_paths(tmp_path, kind):
+    parent = tmp_path / "credentials"
+    if kind == "parent":
+        parent.write_text("unchanged")
+    else:
+        parent.mkdir()
+    path = parent / "auth.json"
+    if kind == "token":
+        path.mkdir()
+    elif kind == "lock":
+        path.with_name(path.name + ".lock").mkdir()
+    with pytest.raises(XAIAuthenticationError, match="Unsafe"):
+        XAIOAuth(path, load_tokens=False).logout()
+    with pytest.raises(XAIAuthenticationError, match="Unsafe"):
+        XAIOAuth(path)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "events,should_fail",
+    [
+        ([], True),
+        (["response.output_text.delta"], True),
+        (["response.completed"], False),
+    ],
+)
+async def test_stream_requires_natural_terminal(oauth, events, should_fail):
+    oauth._save_tokens(
+        {
+            "access_token": "token",
+            "refresh_token": "refresh",
+            "expires_at": time.time() + 3600,
+        }
+    )
+    service = XAISubscriptionResponseService(token_path=str(oauth.token_path))
+    raw = EventStream(
+        [SimpleNamespace(type=kind, delta="partial", response=None) for kind in events]
+    )
+    service.client.responses.create = AsyncMock(return_value=raw)
+
+    async def consume():
+        async with await service.stream_assistant_response(
+            [{"role": "user", "content": "hi"}]
+        ) as stream:
+            return [event.type async for event in stream]
+
+    if should_fail:
+        with pytest.raises(
+            RuntimeError, match="without completion; request was not replayed"
+        ):
+            await consume()
+    else:
+        assert await consume() == events
+    assert raw.closes == 1
+    await service.close()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("kind", ["response.failed", "response.incomplete", "error"])
+async def test_explicit_terminal_error_closes_without_replay(oauth, kind):
+    oauth._save_tokens(
+        {
+            "access_token": "token",
+            "refresh_token": "refresh",
+            "expires_at": time.time() + 3600,
+        }
+    )
+    service = XAISubscriptionResponseService(token_path=str(oauth.token_path))
+    raw = EventStream(
+        [
+            SimpleNamespace(type="response.output_text.delta", delta="partial"),
+            SimpleNamespace(type=kind),
+        ]
+    )
+    service.client.responses.create = AsyncMock(return_value=raw)
+    with pytest.raises(
+        RuntimeError, match="failed or incomplete; request was not replayed"
+    ):
+        async with await service.stream_assistant_response([]) as stream:
+            async for event in stream:
+                service.process_stream_chunk(
+                    event, "", [], service.create_stream_state()
+                )
+    assert raw.closes == 1
+    raw = EventStream([SimpleNamespace(type=kind)])
+    service.client.responses.create = AsyncMock(return_value=raw)
+    with pytest.raises(
+        RuntimeError, match="failed or incomplete; request was not replayed"
+    ):
+        await service.process_message("hi")
+    assert raw.closes == 1
+    await service.close()
+
+
+@pytest.mark.asyncio
+async def test_intentional_early_close_and_process_message_eof(oauth):
+    oauth._save_tokens(
+        {
+            "access_token": "token",
+            "refresh_token": "refresh",
+            "expires_at": time.time() + 3600,
+        }
+    )
+    service = XAISubscriptionResponseService(token_path=str(oauth.token_path))
+    raw = EventStream(
+        [SimpleNamespace(type="response.output_text.delta", delta="partial")]
+    )
+    service.client.responses.create = AsyncMock(return_value=raw)
+    async with await service.stream_assistant_response([]) as stream:
+        assert (await anext(stream)).delta == "partial"
+    assert raw.closes == 1
+    raw = EventStream(
+        [SimpleNamespace(type="response.output_text.delta", delta="partial")]
+    )
+    service.client.responses.create = AsyncMock(return_value=raw)
+    stream = await service.stream_assistant_response([])
+    await stream.aclose()
+    assert raw.closes == 1
+    raw = EventStream(
+        [SimpleNamespace(type="response.output_text.delta", delta="partial")]
+    )
+    service.client.responses.create = AsyncMock(return_value=raw)
+    with pytest.raises(RuntimeError, match="without completion"):
+        await service.process_message("hi")
+    assert raw.closes == 1
+    raw = EventStream(
+        [
+            SimpleNamespace(type="response.output_text.delta", delta="done"),
+            SimpleNamespace(type="response.completed", response=None),
+        ]
+    )
+    service.client.responses.create = AsyncMock(return_value=raw)
+    assert await service.process_message("hi") == "done"
+    assert raw.closes == 1
+    await service.close()
+
+
+@pytest.mark.asyncio
+async def test_two_turn_local_tools_replay_encrypted_reasoning(oauth):
+    oauth._save_tokens(
+        {
+            "access_token": "token",
+            "refresh_token": "refresh",
+            "expires_at": time.time() + 3600,
+        }
+    )
+    service = XAISubscriptionResponseService(token_path=str(oauth.token_path))
+    service.register_tool(
+        {"type": "function", "name": "calc", "parameters": {"type": "object"}},
+        lambda _: None,
+    )
+    encrypted = "opaque-continuation-payload"
+    reason = SimpleNamespace(
+        type="reasoning",
+        id="rs_first",
+        encrypted_content=encrypted,
+        status="completed",
+        summary=[],
+        content=None,
+    )
+    first_events = [
+        SimpleNamespace(type="response.output_item.done", output_index=0, item=reason),
+        SimpleNamespace(
+            type="response.output_item.done",
+            output_index=1,
+            item=SimpleNamespace(
+                type="function_call", call_id="call_a", name="calc", arguments='{"a":1}'
+            ),
+        ),
+        SimpleNamespace(
+            type="response.output_item.added",
+            output_index=2,
+            item=SimpleNamespace(type="function_call", call_id="call_b", name="calc"),
+        ),
+        SimpleNamespace(
+            type="response.function_call_arguments.delta", output_index=2, delta='{"b":'
+        ),
+        SimpleNamespace(
+            type="response.function_call_arguments.delta", output_index=2, delta="2}"
+        ),
+        SimpleNamespace(
+            type="response.output_item.done",
+            output_index=2,
+            item=SimpleNamespace(
+                type="function_call", call_id="call_b", name="calc", arguments='{"b":2}'
+            ),
+        ),
+        SimpleNamespace(
+            type="response.completed", response=SimpleNamespace(usage=None)
+        ),
+    ]
+    create = AsyncMock(
+        side_effect=[
+            EventStream(first_events),
+            EventStream(
+                [
+                    SimpleNamespace(
+                        type="response.completed", response=SimpleNamespace(usage=None)
+                    )
+                ]
+            ),
+        ]
+    )
+    service.client.responses.create = create
+    user = {"role": "user", "content": "calculate two values"}
+    fake_agent = SimpleNamespace(name="fixture", llm=service)
+    formatter = AgentMessageFormatter(fake_agent)
+    fake_agent.format_message = formatter.format_message
+    tool_uses = []
+
+    async def iterator(state):
+        text = ""
+        async with await service.stream_assistant_response([user]) as raw:
+            async for event in raw:
+                text, tools, _, _, _ = service.process_stream_chunk(
+                    event, text, tool_uses, state
+                )
+                tool_uses[:] = tools
+                yield text, None, None
+
+    stream = AgentResponseStream(fake_agent, service.create_stream_state, iterator)
+    async for _ in stream:
+        pass
+    assert [tool["id"] for tool in tool_uses] == ["call_a", "call_b"]
+    assistant = stream.format_assistant_message("", tool_uses=tool_uses)
+    assert assistant is not None
+    saved_reason = assistant["_metadata"]["provider_state"]["openai_responses"][
+        "output_items"
+    ][0]
+    assert saved_reason["encrypted_content"] == encrypted
+    results = [
+        formatter.format_tool_result(tool, {"answer": value})
+        for tool, value in zip(tool_uses, (1, 2), strict=True)
+    ]
+    async with await service.stream_assistant_response(
+        [user, assistant, *results]
+    ) as second:
+        assert [event.type async for event in second] == ["response.completed"]
+    request = create.call_args_list[1].kwargs
+    converted = request["input"]
+    assert [item.get("type") for item in converted] == [
+        None,
+        "reasoning",
+        None,
+        "function_call",
+        "function_call",
+        "function_call_output",
+        "function_call_output",
+    ]
+    assert converted[1] == saved_reason
+    assert [item["call_id"] for item in converted if item.get("call_id")] == [
+        "call_a",
+        "call_b",
+        "call_a",
+        "call_b",
+    ]
+    assert [
+        json.loads(item["arguments"])
+        for item in converted
+        if item.get("type") == "function_call"
+    ] == [{"a": 1}, {"b": 2}]
+    assert [
+        json.loads(item["output"])
+        for item in converted
+        if item.get("type") == "function_call_output"
+    ] == [{"answer": 1}, {"answer": 2}]
+    assert request["store"] is False and request["include"] == [
+        "reasoning.encrypted_content"
+    ]
+    assert (
+        assistant["_metadata"]["provider_state"]["openai_responses"]["output_items"][0][
+            "encrypted_content"
+        ]
+        == encrypted
+    )
+    await service.close()

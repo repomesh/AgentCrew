@@ -414,19 +414,12 @@ class ApplicationSetup:
             )
 
         # Apply base reasoning: explicit CLI effort > selected model default.
-        # Lenient here (never blocks startup); per-agent reasoning is applied
-        # with explicit validation in setup_agents.
         base_reasoning = resolve_reasoning_selection(
             validate_reason_effort(reason_effort),
             None,
             default_reasoning_for_service(llm_service),
         )
-        apply_reasoning_to_service(
-            llm_service,
-            base_reasoning.level,
-            explicit=base_reasoning.is_explicit
-            and llm_service.provider_name == "xai_subscription",
-        )
+        apply_reasoning_to_service(llm_service, base_reasoning.level, explicit=False)
 
         memory_service = None
         context_service = None
@@ -930,6 +923,21 @@ tools = ["memory", "browser", "web_search", "code_analysis"]
             return False
         except Exception as e:
             click.echo(f"\u274c Authentication failed: {e!s}", err=True)
+            return False
+
+    @staticmethod
+    def xai_logout() -> bool:
+        """Delete only local AgentCrew-owned xAI OAuth credentials."""
+        from AgentCrew.modules.xai.oauth import XAIAuthenticationError, XAIOAuth
+
+        try:
+            XAIOAuth(load_tokens=False).logout()
+            click.echo(
+                "Local xAI OAuth tokens deleted. Remote revocation is not supported."
+            )
+            return True
+        except (XAIAuthenticationError, OSError):
+            click.echo("Could not safely delete local xAI OAuth tokens.", err=True)
             return False
 
     @staticmethod
