@@ -88,6 +88,9 @@ agentcrew chat --provider openai_codex
 export XAI_OAUTH_CLIENT_ID='your-authorized-client-id'
 agentcrew xai-auth
 agentcrew chat --provider xai --model-id grok-4.7
+# Other curated models (account entitlement has not been live-validated)
+agentcrew chat --provider xai --model-id grok-build-0.1
+agentcrew chat --provider xai --model-id grok-4.3
 # Local sign-out/reset (does not revoke the remote xAI session)
 agentcrew xai-auth --logout
 
@@ -96,9 +99,12 @@ agentcrew copilot-auth
 agentcrew chat --provider github_copilot
 ```
 
-> xAI Subscription support is experimental. Eligibility, allowance, overage and
-> billing depend on xAI's current terms and account entitlement. AgentCrew's
-> displayed token cost of 0.0 does **not** establish that requests are free.
+> xAI Subscription support for these models is experimental and has not been
+> live-validated against an authorized AgentCrew client/account. Eligibility,
+> allowance, overage and billing depend on xAI's current terms and account
+> entitlement. Displayed token cost of 0.0 is an accounting convention, **not**
+> proof that requests are free. Grok Build 0.1 uses the model's default reasoning
+> because supported selectable efforts are not established for this integration.
 > `xai-auth --logout` deletes local tokens only; it cannot revoke them remotely.
 
 **Pay-as-you-go API keys:**

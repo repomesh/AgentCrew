@@ -147,6 +147,9 @@ client ID, authentication and inference cannot run. With a limited, eligible acc
 export XAI_OAUTH_CLIENT_ID='your-authorized-client-id'
 agentcrew xai-auth
 agentcrew chat --provider xai --model-id grok-4.7
+# Optional curated models (account entitlement has not been live-validated):
+agentcrew chat --provider xai --model-id grok-build-0.1
+agentcrew chat --provider xai --model-id grok-4.3
 ```
 
 The device authorization screen displays a URL and code for the user to enter.
@@ -159,12 +162,28 @@ sign in again. Logout deletes only AgentCrew's local tokens: it does **not**
 revoke the xAI session remotely.
 
 The provider sends SSE Responses requests directly to
-`https://api.x.ai/v1/responses`, with local function tools, `store: false`, and
-encrypted reasoning continuation. Only `grok-4.7` is offered with an effective
-256k context. Reasoning accepts low, medium, high, or xhigh; `none`, `0`, and
-`minimal` are rejected. Structured output, vision, hosted tools, multi-agent,
-image/video/audio, and realtime/WebSocket modes are not supported in this slice.
-There is no API-key fallback and no OpenCode Console/Go gateway routing.
+`https://api.x.ai/v1/responses`, with local function tools and `store: false`.
+The curated models all use an effective 256k context (not a vendor maximum):
+
+| Model | Reasoning request | Encrypted reasoning continuation |
+| --- | --- | --- |
+| `grok-4.7` (default) | `low`, `medium`, `high` (default), `xhigh`; cannot disable | Requested and replayed for the exact provider/model |
+| `grok-4.3` | `none`, `low` (default), `medium`, `high`; `xhigh` is conservatively rejected | Not requested or replayed without a verified direct subscription fixture |
+| `grok-build-0.1` | Model default only; user-selectable efforts not established | Not requested or replayed without a verified direct subscription fixture |
+
+The Grok 4.3 model page's high-level capability list documents four efforts, but
+its lower Details section also lists `xhigh`. Until an authorized direct
+subscription test resolves that inconsistency, the adapter rejects `xhigh`.
+Grok Build 0.1 is offered for documented direct Responses use and local function
+calling, not unverified configurable reasoning or image/structured-output support.
+See the official [Grok Build 0.1](https://docs.x.ai/developers/models/grok-build-0.1),
+[Grok 4.3](https://docs.x.ai/developers/models/grok-4.3), and
+[reasoning](https://docs.x.ai/developers/model-capabilities/text/reasoning)
+documentation for the public API contract; these pages do **not** establish
+AgentCrew subscription OAuth entitlement for your account. Structured output,
+vision, hosted tools, multi-agent, image/video/audio, and realtime/WebSocket
+modes are not supported in this slice. There is no API-key fallback and no
+OpenCode Console/Go gateway routing.
 
 **Authorization and commercial caveat:** Availability of direct Responses with
 subscription OAuth is experimental and must be confirmed with xAI for the
@@ -174,8 +193,9 @@ not assume every X plan qualifies or requests are free/unlimited. AgentCrew sets
 subscription token prices to zero rather than claiming to know subscription
 charges: a displayed token cost of 0.0 does not mean requests are free.
 For manual live validation, use an explicitly authorized, limited account:
-run `agentcrew xai-auth`, send a short text prompt, run one local tool call, then
-repeat a reasoning turn to check encrypted continuation. Verify quota and billing
+run `agentcrew xai-auth`, send a short text prompt with each curated model,
+run one local tool call, then repeat a Grok 4.7 reasoning turn to check encrypted
+continuation. Verify quota and billing
 in your xAI account separately; automated tests use fixtures only.
 
 
