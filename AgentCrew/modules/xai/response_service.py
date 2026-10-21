@@ -5,6 +5,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 import httpx2
+from openai import AsyncOpenAI
 
 from AgentCrew.modules.agents.message_metadata import (
     get_responses_provider_state,
@@ -306,6 +307,7 @@ class XAISubscriptionResponseService(OpenAIResponseService):
         token = self._oauth.get_valid_access_token()
         super().__init__(api_key=token, base_url=XAI_BASE_URL)
         self.client = self.client.with_options(max_retries=0)
+        self._client_loop = None
         self._provider_name = "xai"
         self._models_ready = True
         self.model = "grok-4.7"
@@ -393,6 +395,14 @@ class XAISubscriptionResponseService(OpenAIResponseService):
     ) -> _CompletedResponsesStream:
         model = self._model_definition(model_id)
         await self._ensure_valid_token()
+        loop = asyncio.get_running_loop()
+        if self._client_loop is not None and self._client_loop is not loop:
+            self.client = AsyncOpenAI(
+                api_key=self.client.api_key,
+                base_url=self.client.base_url,
+                max_retries=0,
+            )
+        self._client_loop = loop
         params = {
             "model": model_id,
             "input": self._convert_internal_format(messages, model_id=model_id),
