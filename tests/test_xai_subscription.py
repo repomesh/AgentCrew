@@ -7,6 +7,7 @@ import os
 import stat
 import time
 from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
@@ -1531,3 +1532,315 @@ async def test_curated_model_terminal_cancellation_and_no_replay(
         await stream.aclose()
     assert cancelled.closes >= 1
     await service.close()
+
+
+USER_URL = "https://cli-chat-proxy.grok.com/v1/user?include=subscription"
+BILLING_URL = "https://cli-chat-proxy.grok.com/v1/billing?format=credits"
+PERIOD_END = "2026-10-28T12:34:56Z"
+
+
+def install_usage_client(monkeypatch, handler):
+    calls = []
+
+    class UsageClient:
+        def __init__(self, *args, **kwargs):
+            calls.append({"event": "init", "args": args, "kwargs": kwargs})
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *_exc):
+            return False
+
+        async def get(self, url, headers=None, timeout=None):
+            call = {
+                "url": url,
+                "headers": dict(headers or {}),
+                "timeout": timeout,
+            }
+            calls.append(call)
+            result = handler(url)
+            if isinstance(result, Exception):
+                raise result
+            return result
+
+    monkeypatch.setattr(
+        "AgentCrew.modules.xai.response_service.httpx2.AsyncClient",
+        UsageClient,
+    )
+    return calls
+
+
+def _usage_call(calls, url):
+    matches = [call for call in calls if call.get("url") == url]
+    assert matches, url
+    return matches[-1]
+
+
+def _expire_token(oauth):
+    oauth._save_tokens(
+        {
+            "access_token": "stale-token",
+            "refresh_token": "refresh",
+            "expires_at": time.time() + 10,
+        }
+    )
+
+
+@pytest.mark.asyncio
+async def test_xai_usage_weekly_credits(curated_service, oauth, monkeypatch):
+    _expire_token(oauth)
+    set_client(
+        monkeypatch,
+        [Response(200, {"access_token": "refreshed-token", "expires_in": 3600})],
+    )
+
+    def handler(url):
+        if url == USER_URL:
+            return Response(200, {"userId": "user-1", "subscriptionTier": "SuperGrok"})
+        if url == BILLING_URL:
+            return Response(
+                200,
+                {
+                    "config": {
+                        "creditUsagePercent": 42.5,
+                        "currentPeriod": {
+                            "type": "USAGE_PERIOD_TYPE_WEEKLY",
+                            "end": PERIOD_END,
+                        },
+                        "prepaidBalance": {"val": 1250},
+                        "productUsage": [{"product": "GrokBuild", "usagePercent": 9}],
+                    }
+                },
+            )
+        raise AssertionError(url)
+
+    calls = install_usage_client(monkeypatch, handler)
+    try:
+        usage = await curated_service.get_usage()
+    finally:
+        await curated_service.close()
+
+    assert usage["supported"] is True
+    assert usage["provider"] == "xai"
+    assert usage["plan_type"] == "SuperGrok"
+    assert usage["message"] is None
+    assert usage["credits"] == {"balance": "$12.50"}
+    assert len(usage["limits"]) == 1
+    limit = usage["limits"][0]
+    assert limit["name"] == "weekly"
+    assert limit["used_percent"] == 42.5
+    assert limit["remaining_percent"] == 57.5
+    assert limit["window_seconds"] == 604800
+    assert (
+        limit["reset_at"]
+        == datetime.fromisoformat("2026-10-28T12:34:56+00:00").timestamp()
+    )
+    billing = _usage_call(calls, BILLING_URL)
+    assert billing["headers"]["Authorization"] == "Bearer refreshed-token"
+    assert billing["headers"]["X-XAI-Token-Auth"] == "xai-grok-cli"
+    assert billing["headers"]["x-userid"] == "user-1"
+    assert billing["timeout"] == 15
+    assert "x-grok-client-version" not in {key.lower() for key in billing["headers"]}
+    user = _usage_call(calls, USER_URL)
+    assert "x-userid" not in {key.lower() for key in user["headers"]}
+    assert user["headers"]["Authorization"] == "Bearer refreshed-token"
+    assert user["timeout"] == 10
+
+
+@pytest.mark.asyncio
+async def test_xai_usage_omitted_percent_is_zero(curated_service, monkeypatch):
+    def handler(url):
+        if url == USER_URL:
+            return Response(200, {})
+        return Response(
+            200,
+            {
+                "config": {
+                    "currentPeriod": {
+                        "type": "USAGE_PERIOD_TYPE_WEEKLY",
+                        "end": PERIOD_END,
+                    }
+                }
+            },
+        )
+
+    install_usage_client(monkeypatch, handler)
+    try:
+        usage = await curated_service.get_usage()
+    finally:
+        await curated_service.close()
+
+    assert usage["supported"] is True
+    assert usage["limits"] == [
+        {
+            "name": "weekly",
+            "used_percent": 0.0,
+            "remaining_percent": 100.0,
+            "window_seconds": 604800,
+            "reset_at": datetime.fromisoformat("2026-10-28T12:34:56+00:00").timestamp(),
+            "reset_after_seconds": None,
+        }
+    ]
+    assert usage["credits"] is None
+    assert usage["message"] is None
+
+
+@pytest.mark.asyncio
+async def test_xai_usage_legacy_monthly_fallback(curated_service, monkeypatch):
+    def handler(url):
+        if url == USER_URL:
+            return Response(200, {})
+        return Response(
+            200,
+            {
+                "config": {
+                    "monthlyLimit": {"val": 2000},
+                    "used": {"val": 500},
+                }
+            },
+        )
+
+    install_usage_client(monkeypatch, handler)
+    try:
+        usage = await curated_service.get_usage()
+    finally:
+        await curated_service.close()
+
+    assert usage["limits"] == [
+        {
+            "name": "monthly",
+            "used_percent": 25.0,
+            "remaining_percent": 75.0,
+            "window_seconds": None,
+            "reset_at": None,
+            "reset_after_seconds": None,
+        }
+    ]
+    assert usage["message"] is None
+
+
+@pytest.mark.asyncio
+async def test_xai_usage_on_demand_only_when_cap_positive(curated_service, monkeypatch):
+    payloads = [
+        {
+            "config": {
+                "creditUsagePercent": 10,
+                "currentPeriod": {"type": "USAGE_PERIOD_TYPE_MONTHLY"},
+                "onDemandCap": {"val": 0},
+                "onDemandUsed": {"val": 50},
+            }
+        },
+        {
+            "config": {
+                "creditUsagePercent": 10,
+                "onDemandCap": {"val": 400},
+                "onDemandUsed": {"val": 500},
+            }
+        },
+        {"config": {"creditUsagePercent": 10, "onDemandCap": {}}},
+    ]
+    index = {"n": 0}
+
+    def handler(url):
+        if url == USER_URL:
+            return Response(200, {})
+        payload = payloads[index["n"]]
+        index["n"] += 1
+        return Response(200, payload)
+
+    install_usage_client(monkeypatch, handler)
+    try:
+        capped = await curated_service.get_usage()
+        active = await curated_service.get_usage()
+        empty_cap = await curated_service.get_usage()
+    finally:
+        await curated_service.close()
+
+    assert [limit["name"] for limit in capped["limits"]] == ["monthly"]
+    assert [limit["name"] for limit in active["limits"]] == ["allowance", "on-demand"]
+    on_demand = active["limits"][1]
+    assert on_demand["used_percent"] == 125.0
+    assert on_demand["remaining_percent"] == 0.0
+    assert on_demand["reset_at"] is None
+    assert [limit["name"] for limit in empty_cap["limits"]] == ["allowance"]
+
+
+@pytest.mark.asyncio
+async def test_xai_usage_missing_token_does_not_call_network(
+    curated_service, oauth, monkeypatch
+):
+    constructed = []
+
+    def boom(*_args, **_kwargs):
+        constructed.append(True)
+        raise AssertionError("network client should not be constructed")
+
+    monkeypatch.setattr("AgentCrew.modules.xai.oauth.httpx2.Client", boom)
+    monkeypatch.setattr(
+        "AgentCrew.modules.xai.response_service.httpx2.AsyncClient", boom
+    )
+    oauth.token_path.unlink()
+    try:
+        with pytest.raises(XAIAuthenticationError, match="agentcrew xai-auth"):
+            await curated_service.get_usage()
+    finally:
+        await curated_service.close()
+    assert constructed == []
+
+
+@pytest.mark.asyncio
+async def test_xai_usage_billing_http_error(curated_service, monkeypatch):
+    secret = "secret-account-data"
+
+    def handler(url):
+        if url == USER_URL:
+            return Response(200, {"subscriptionTier": "SuperGrok"})
+        return Response(
+            401,
+            {"config": {"creditUsagePercent": 0}, "leak": secret},
+        )
+
+    install_usage_client(monkeypatch, handler)
+    try:
+        with pytest.raises(RuntimeError, match="status 401") as exc_info:
+            await curated_service.get_usage()
+    finally:
+        await curated_service.close()
+    assert secret not in str(exc_info.value)
+    assert "creditUsagePercent" not in str(exc_info.value)
+
+
+@pytest.mark.asyncio
+async def test_xai_usage_user_lookup_failure_still_returns_billing(
+    curated_service, monkeypatch
+):
+    def handler(url):
+        if url == USER_URL:
+            raise RuntimeError("plan lookup failed")
+        return Response(
+            200,
+            {
+                "config": {
+                    "creditUsagePercent": 42.5,
+                    "currentPeriod": {
+                        "type": "USAGE_PERIOD_TYPE_WEEKLY",
+                        "end": PERIOD_END,
+                    },
+                }
+            },
+        )
+
+    calls = install_usage_client(monkeypatch, handler)
+    try:
+        usage = await curated_service.get_usage()
+    finally:
+        await curated_service.close()
+
+    assert usage["plan_type"] is None
+    assert usage["limits"][0]["name"] == "weekly"
+    assert usage["limits"][0]["used_percent"] == 42.5
+    assert usage["limits"][0]["remaining_percent"] == 57.5
+    billing = _usage_call(calls, BILLING_URL)
+    assert "x-userid" not in billing["headers"]
+    assert all(key.lower() != "x-userid" for key in billing["headers"])

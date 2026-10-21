@@ -70,11 +70,9 @@ class XAIOAuth:
 
     @staticmethod
     def _client_id() -> str:
-        client_id = os.getenv("XAI_OAUTH_CLIENT_ID", "").strip()
-        if not client_id:
-            raise XAIAuthenticationError(
-                "Set XAI_OAUTH_CLIENT_ID to an AgentCrew-authorized xAI OAuth client ID before using xAI Subscription."
-            )
+        client_id = os.getenv(
+            "XAI_OAUTH_CLIENT_ID", "b1a00492-073a-47ea-816f-4c329264a828"
+        ).strip()
         return client_id
 
     @classmethod

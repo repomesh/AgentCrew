@@ -1,14 +1,14 @@
 import asyncio
 import copy
-import logging
 import uuid
 from collections.abc import Callable
 from typing import Any
 
+from loguru import logger
+
 from AgentCrew.modules.agents import AgentManager, run_agent_loop
 from AgentCrew.modules.events import AppEvents, EventBus
 
-logger = logging.getLogger(__name__)
 DELEGATE_CLEANUP_TIMEOUT = 1.0
 DELEGATE_PROGRESS_TIMEOUT = 0.25
 

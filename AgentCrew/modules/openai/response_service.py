@@ -505,7 +505,10 @@ class OpenAIResponseService(BaseLLMService):
                     assistant_response = text
                     chunk_text = text
 
-            elif event_type == "response.reasoning_summary_text.delta":
+            elif event_type in (
+                "response.reasoning_summary_text.delta",
+                "response.reasoning_text.delta",
+            ):
                 delta = getattr(chunk, "delta", "")
                 if delta:
                     thinking_content = (delta, None)
