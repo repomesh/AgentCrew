@@ -1,27 +1,22 @@
 import base64
-import hashlib
 import json
 import os
-import secrets
 import time
-import webbrowser
+from collections.abc import Callable
 from datetime import UTC, datetime
-from http.server import BaseHTTPRequestHandler, HTTPServer
-from threading import Event, Thread
 from typing import Any
-from urllib.parse import parse_qs, urlencode, urlparse
 
 import httpx2
 from loguru import logger
 
 CLIENT_ID = "app_EMoamEEZ73f0CkXaXp7hrann"
-AUTH_ENDPOINT = "https://auth.openai.com/oauth/authorize"
-TOKEN_ENDPOINT = "https://auth.openai.com/oauth/token"
-SCOPES = "openid profile email offline_access"
+AUTH_BASE_URL = "https://auth.openai.com"
+DEVICE_CODE_ENDPOINT = f"{AUTH_BASE_URL}/api/accounts/deviceauth/usercode"
+DEVICE_TOKEN_ENDPOINT = f"{AUTH_BASE_URL}/api/accounts/deviceauth/token"
+DEVICE_VERIFICATION_URL = f"{AUTH_BASE_URL}/codex/device"
+DEVICE_REDIRECT_URI = f"{AUTH_BASE_URL}/deviceauth/callback"
+TOKEN_ENDPOINT = f"{AUTH_BASE_URL}/oauth/token"
 DEFAULT_TOKEN_PATH = os.path.expanduser("~/.codex/auth.json")
-CALLBACK_HOST = "127.0.0.1"
-CALLBACK_REDIRECT_HOST = "localhost"
-CALLBACK_PORT_RANGE = (1455, 1475)
 LEGACY_TOP_LEVEL_KEYS = {
     "openai-codex",
     "access",
@@ -31,13 +26,6 @@ LEGACY_TOP_LEVEL_KEYS = {
     "id_token",
     "account_id",
 }
-
-
-def _generate_pkce_pair():
-    code_verifier = secrets.token_urlsafe(64)
-    digest = hashlib.sha256(code_verifier.encode("ascii")).digest()
-    code_challenge = base64.urlsafe_b64encode(digest).rstrip(b"=").decode("ascii")
-    return code_verifier, code_challenge
 
 
 def _current_time_ms() -> int:
@@ -111,58 +99,18 @@ def _extract_account_id(data: dict[str, Any]) -> str | None:
         if isinstance(nested_account_id, str) and nested_account_id:
             return nested_account_id
 
+    id_token = data.get("id_token")
+    if isinstance(id_token, str):
+        parts = id_token.split(".")
+        claims = _decode_base64url_json(parts[1]) if len(parts) == 3 else None
+        if claims:
+            auth_claims = claims.get("https://api.openai.com/auth")
+            if isinstance(auth_claims, dict):
+                nested_id = auth_claims.get("chatgpt_account_id")
+                if isinstance(nested_id, str) and nested_id:
+                    return nested_id
+
     return None
-
-
-class _OAuthCallbackHandler(BaseHTTPRequestHandler):
-    auth_code: str | None = None
-    error: str | None = None
-
-    def do_GET(self):
-        parsed = urlparse(self.path)
-        params = parse_qs(parsed.query)
-
-        if parsed.path != "/auth/callback":
-            self._send_response(
-                "<html><body><h2>Waiting for authentication...</h2></body></html>"
-            )
-            return
-
-        if "code" in params:
-            _OAuthCallbackHandler.auth_code = params["code"][0]
-            self._send_response(
-                "<html><body><h2>Authentication successful!</h2>"
-                "<p>You can close this window and return to AgentCrew.</p></body></html>"
-            )
-        elif "error" in params:
-            _OAuthCallbackHandler.error = params.get(
-                "error_description", params["error"]
-            )[0]
-            self._send_response(
-                f"<html><body><h2>Authentication failed</h2>"
-                f"<p>{_OAuthCallbackHandler.error}</p></body></html>"
-            )
-        else:
-            self._send_response(
-                "<html><body><h2>Unexpected response</h2></body></html>"
-            )
-
-        self.server.shutdown_event.set()
-
-    def _send_response(self, html: str):
-        self.send_response(200)
-        self.send_header("Content-Type", "text/html")
-        self.end_headers()
-        self.wfile.write(html.encode("utf-8"))
-
-    def log_message(self, format, *args):
-        pass
-
-
-class _ShutdownHTTPServer(HTTPServer):
-    def __init__(self, *args, **kwargs):
-        self.shutdown_event = Event()
-        super().__init__(*args, **kwargs)
 
 
 class OpenAICodexOAuth:
@@ -349,11 +297,11 @@ class OpenAICodexOAuth:
 
     def _update_tokens_from_response(self, data: dict[str, Any]):
         expires_in = data.get("expires_in", 3600)
+        previous_tokens = self._tokens or {}
         self._tokens = {
             "type": "oauth",
             "access": data["access_token"],
-            "refresh": data.get("refresh_token")
-            or (self._tokens or {}).get("refresh", ""),
+            "refresh": data.get("refresh_token") or previous_tokens.get("refresh", ""),
             "expires": int((time.time() + expires_in) * 1000),
             "auth_mode": "chatgpt",
             "last_refresh": _current_time_rfc3339(),
@@ -362,10 +310,10 @@ class OpenAICodexOAuth:
         id_token = data.get("id_token")
         if isinstance(id_token, str) and id_token:
             self._tokens["id_token"] = id_token
-        elif self._tokens.get("id_token"):
-            self._tokens["id_token"] = self._tokens["id_token"]
+        elif previous_tokens.get("id_token"):
+            self._tokens["id_token"] = previous_tokens["id_token"]
 
-        account_id = _extract_account_id(data) or (self._tokens or {}).get("account_id")
+        account_id = _extract_account_id(data) or previous_tokens.get("account_id")
         if isinstance(account_id, str) and account_id:
             self._tokens["account_id"] = account_id
 
@@ -427,87 +375,116 @@ class OpenAICodexOAuth:
             return None
         return None
 
-    def login(self) -> bool:
-        code_verifier, code_challenge = _generate_pkce_pair()
-
-        server = None
-        callback_port = None
-        for port in range(CALLBACK_PORT_RANGE[0], CALLBACK_PORT_RANGE[1]):
-            try:
-                server = _ShutdownHTTPServer(
-                    (CALLBACK_HOST, port), _OAuthCallbackHandler
-                )
-                callback_port = port
-                break
-            except OSError:
-                continue
-
-        if not server or callback_port is None:
-            logger.error("Could not find available port for OAuth callback")
-            return False
-
-        redirect_uri = f"http://{CALLBACK_REDIRECT_HOST}:{callback_port}/auth/callback"
-
-        _OAuthCallbackHandler.auth_code = None
-        _OAuthCallbackHandler.error = None
-
-        state = secrets.token_urlsafe(32)
-
-        auth_params = urlencode(
-            {
-                "response_type": "code",
-                "client_id": CLIENT_ID,
-                "redirect_uri": redirect_uri,
-                "scope": SCOPES,
-                "code_challenge": code_challenge,
-                "code_challenge_method": "S256",
-                "state": state,
-                "id_token_add_organizations": "true",
-                "codex_cli_simplified_flow": "true",
-            }
-        )
-        auth_url = f"{AUTH_ENDPOINT}?{auth_params}"
-
-        server_thread = Thread(target=server.serve_forever, daemon=True)
-        server_thread.start()
-
-        logger.info("Opening browser for OpenAI authentication...")
-        webbrowser.open(auth_url)
-
-        server.shutdown_event.wait(timeout=300)
-        server.shutdown()
-
-        if _OAuthCallbackHandler.error:
-            logger.error(f"OAuth error: {_OAuthCallbackHandler.error}")
-            return False
-
-        if not _OAuthCallbackHandler.auth_code:
-            logger.error("OAuth flow timed out or no authorization code received")
-            return False
-
+    def login(self, display: Callable[[str], None] = print) -> bool:
+        """Authorize through Codex device login without a local callback server."""
         try:
             with httpx2.Client(timeout=30) as client:
-                resp = client.post(
+                response = client.post(
+                    DEVICE_CODE_ENDPOINT,
+                    json={"client_id": CLIENT_ID},
+                    headers={"Content-Type": "application/json"},
+                )
+                if response.status_code != 200:
+                    logger.error(
+                        "Device code request failed with status {}",
+                        response.status_code,
+                    )
+                    return False
+                device = response.json()
+                if not isinstance(device, dict):
+                    raise TypeError("Invalid device code response")
+                device_auth_id = device.get("device_auth_id")
+                user_code = device.get("user_code") or device.get("usercode")
+                raw_interval = device.get("interval")
+                if (
+                    not isinstance(device_auth_id, str)
+                    or not device_auth_id
+                    or not isinstance(user_code, str)
+                    or not user_code
+                    or isinstance(raw_interval, bool)
+                    or not isinstance(raw_interval, (str, int))
+                ):
+                    raise ValueError("Invalid device code response")
+                interval = int(raw_interval)
+                if interval <= 0:
+                    raise ValueError("Invalid device code response")
+
+                display(f"Open {DEVICE_VERIFICATION_URL} and sign in to ChatGPT.")
+                display(
+                    f"Enter this one-time code (expires in 15 minutes): {user_code}"
+                )
+                display(
+                    "Only enter this code if you initiated this login in AgentCrew."
+                )
+
+                deadline = time.monotonic() + 15 * 60
+                while True:
+                    remaining = deadline - time.monotonic()
+                    if remaining <= 0:
+                        logger.error("Device authorization timed out after 15 minutes")
+                        return False
+                    response = client.post(
+                        DEVICE_TOKEN_ENDPOINT,
+                        json={
+                            "device_auth_id": device_auth_id,
+                            "user_code": user_code,
+                        },
+                        headers={"Content-Type": "application/json"},
+                        timeout=min(30, remaining),
+                    )
+                    if response.status_code == 200:
+                        code_data = response.json()
+                        if not isinstance(code_data, dict) or not all(
+                            isinstance(code_data.get(field), str) and code_data[field]
+                            for field in (
+                                "authorization_code",
+                                "code_challenge",
+                                "code_verifier",
+                            )
+                        ):
+                            raise ValueError("Invalid device authorization response")
+                        break
+                    if response.status_code not in (403, 404):
+                        logger.error(
+                            "Device authorization failed with status {}",
+                            response.status_code,
+                        )
+                        return False
+                    remaining = deadline - time.monotonic()
+                    if remaining <= 0:
+                        logger.error("Device authorization timed out after 15 minutes")
+                        return False
+                    time.sleep(min(interval, remaining))
+
+                response = client.post(
                     TOKEN_ENDPOINT,
                     data={
                         "grant_type": "authorization_code",
                         "client_id": CLIENT_ID,
-                        "code": _OAuthCallbackHandler.auth_code,
-                        "redirect_uri": redirect_uri,
-                        "code_verifier": code_verifier,
+                        "code": code_data["authorization_code"],
+                        "redirect_uri": DEVICE_REDIRECT_URI,
+                        "code_verifier": code_data["code_verifier"],
                     },
                     headers={"Content-Type": "application/x-www-form-urlencoded"},
                 )
-                if resp.status_code != 200:
+                if response.status_code != 200:
                     logger.error(
-                        f"Token exchange failed: {resp.status_code} {resp.text}"
+                        "Token exchange failed with status {}", response.status_code
                     )
                     return False
-                data = resp.json()
-                self._update_tokens_from_response(data)
+                tokens = response.json()
+                if not isinstance(tokens, dict) or not all(
+                    isinstance(tokens.get(field), str) and tokens[field]
+                    for field in ("access_token", "refresh_token", "id_token")
+                ):
+                    raise ValueError("Invalid token exchange response")
+                self._update_tokens_from_response(tokens)
                 self._save_tokens()
                 logger.info("OpenAI Codex OAuth authentication successful")
                 return True
-        except Exception as e:
-            logger.error(f"Token exchange error: {e}")
+        except KeyboardInterrupt:
+            logger.info("Device authorization cancelled")
+            return False
+        except (httpx2.HTTPError, OSError, ValueError, TypeError) as exc:
+            logger.error("Device authorization failed: {}", type(exc).__name__)
             return False

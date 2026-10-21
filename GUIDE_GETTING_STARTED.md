@@ -72,8 +72,12 @@ agentcrew chatgpt-auth
 agentcrew chat --provider openai_codex
 ```
 
-The `chatgpt-auth` command opens a browser for you to log in to your OpenAI
-account. After that, AgentCrew uses your subscription directly.
+The `chatgpt-auth` command prints a verification URL and one-time code. Open
+the URL in any browser, sign in to your ChatGPT account, and enter the code.
+Keep the command running until authorization completes (up to 15 minutes).
+AgentCrew saves credentials to `~/.codex/auth.json` and uses your subscription
+for the `openai_codex` provider. Treat this file like a password. Device-code
+login may need to be enabled in your ChatGPT workspace settings.
 
 ### Option C: GitHub Copilot subscription
 

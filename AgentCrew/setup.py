@@ -980,14 +980,15 @@ tools = ["memory", "browser", "web_search", "code_analysis"]
         try:
             click.echo("\U0001f510 Starting ChatGPT subscription authentication...")
             click.echo(
-                "This will open your browser to sign in with your ChatGPT account."
+                "Use the link and one-time code below to sign in to ChatGPT "
+                "from any browser."
             )
             click.echo("Your subscription (Plus/Pro) will be used for API access.\n")
 
             from AgentCrew.modules.openai_codex.oauth import OpenAICodexOAuth
 
             oauth = OpenAICodexOAuth()
-            if oauth.login():
+            if oauth.login(display=click.echo):
                 click.echo("\u2705 ChatGPT authentication successful!")
                 click.echo(f"\U0001f4be OAuth tokens saved to {oauth.token_path}")
                 click.echo(
