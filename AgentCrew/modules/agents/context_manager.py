@@ -12,6 +12,45 @@ if TYPE_CHECKING:
 SHRINK_LENGTH_THRESHOLD = 10
 
 
+def build_persisted_behaviors(persistence_service: Any, agent_name: str) -> str:
+    """Format the global and project behaviors shared by agent runtimes."""
+    global_behaviors = dict(persistence_service.get_adaptive_behaviors(agent_name))
+    global_behaviors.update(
+        {
+            "good-to-say-no": "When encountering tasks that you have no data in the context and you don't know the anwser, be honest and say I don't know and ask user for helping you find the solution.",
+        }
+    )
+    project_behaviors = persistence_service.get_adaptive_behaviors(
+        agent_name, is_local=True
+    )
+
+    adaptive_sections = []
+    if global_behaviors:
+        adaptive_sections.append(
+            "### Global Behaviors\n"
+            + "\n".join(
+                f"- `{key}`: {value}" for key, value in global_behaviors.items()
+            )
+        )
+    if project_behaviors:
+        adaptive_sections.append(
+            "### Project Behaviors\n"
+            + "\n".join(f"- {value}" for value in project_behaviors.values())
+        )
+
+    if not adaptive_sections:
+        return ""
+    return (
+        "## Current Behaviors\n"
+        "### How to Apply\n"
+        "Each behavior follows the format: `when [condition], [action steps]`.\n"
+        "- **Condition matching**: At the start of every task, scan all behaviors. If the current task matches a condition, apply its action steps.\n"
+        "- **Multiple matches**: Apply all matching behaviors. Project behaviors override global ones when they conflict.\n"
+        "- **What counts as a match**: The condition describes a triggering situation — project context, user preferences, task type, etc. Use your best judgment.\n\n"
+        f"{'\n\n'.join(adaptive_sections)}"
+    )
+
+
 class AgentContextManager:
     """
     Manages context preparation and token budget for a LocalAgent.
@@ -64,42 +103,9 @@ You must analyze and plan out the steps then execute it with your available tool
         ):
             return adaptive_messages
 
-        global_behaviors = dict(
-            agent.services["context_persistent"].get_adaptive_behaviors(agent.name)
+        adaptive_messages.append(
+            build_persisted_behaviors(agent.services["context_persistent"], agent.name)
         )
-        global_behaviors.update(
-            {
-                "good-to-say-no": "When encountering tasks that you have no data in the context and you don't know the anwser, be honest and say I don't know and ask user for helping you find the solution.",
-            }
-        )
-        project_behaviors = agent.services["context_persistent"].get_adaptive_behaviors(
-            agent.name, is_local=True
-        )
-
-        adaptive_sections = []
-        if global_behaviors:
-            adaptive_sections.append(
-                "### Global Behaviors\n"
-                + "\n".join(
-                    f"- `{key}`: {value}" for key, value in global_behaviors.items()
-                )
-            )
-        if project_behaviors:
-            adaptive_sections.append(
-                "### Project Behaviors\n"
-                + "\n".join(f"- {value}" for _, value in project_behaviors.items())
-            )
-
-        if adaptive_sections:
-            adaptive_messages.append(
-                "## Current Behaviors\n"
-                "### How to Apply\n"
-                "Each behavior follows the format: `when [condition], [action steps]`.\n"
-                "- **Condition matching**: At the start of every task, scan all behaviors. If the current task matches a condition, apply its action steps.\n"
-                "- **Multiple matches**: Apply all matching behaviors. Project behaviors override global ones when they conflict.\n"
-                "- **What counts as a match**: The condition describes a triggering situation — project context, user preferences, task type, etc. Use your best judgment.\n\n"
-                f"{'\n\n'.join(adaptive_sections)}"
-            )
 
         return adaptive_messages
 

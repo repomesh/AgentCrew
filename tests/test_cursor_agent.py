@@ -116,8 +116,10 @@ def _isolated_manager():
     manager = AgentManager.get_instance()
     saved_agents = dict(manager.agents)
     saved_current = manager.current_agent
+    saved_cursor_services = manager.cursor_services
     manager.agents = {}
     manager.current_agent = None
+    manager.cursor_services = None
     try:
         yield manager
     finally:
@@ -127,6 +129,7 @@ def _isolated_manager():
                 dispose()
         manager.agents = saved_agents
         manager.current_agent = saved_current
+        manager.cursor_services = saved_cursor_services
 
 
 def _user(text: str) -> dict:
@@ -160,6 +163,7 @@ name = "CursorCoder"
 description = "Edits the repo"
 model_id = "composer-2.5"
 cwd = "."
+tools = ["memory"]
 
 [[cursor_agents]]
 name = "DisabledCursor"
@@ -171,6 +175,7 @@ enabled = false
     cursor_defs = [item for item in defs if item.get("agent_type") == "cursor"]
     assert [item["name"] for item in cursor_defs] == ["CursorCoder"]
     assert os.path.isabs(cursor_defs[0]["cwd"])
+    assert cursor_defs[0]["tools"] == ["memory"]
 
     calls = []
     monkeypatch.setattr(
@@ -185,6 +190,7 @@ enabled = false
         assert agent.get_provider() == "cursor"
         assert agent.get_model() == "composer-2.5"
         assert agent._sdk_agent is None
+        assert agent.tools == ["memory"]
         assert calls == []
 
 
@@ -208,6 +214,7 @@ def test_config_write_preserves_cursor_agents(tmp_path, monkeypatch):
                         description="Edits the repo",
                         model_id="composer-2.5",
                         cwd=".",
+                        tools=["memory"],
                     )
                 ],
             )
@@ -220,9 +227,12 @@ def test_config_write_preserves_cursor_agents(tmp_path, monkeypatch):
     assert written["cursor_agents"][0]["model_id"] == "composer-2.5"
     assert "system_prompt" not in written["cursor_agents"][0]
     assert "api_key" not in written["cursor_agents"][0]
+    assert written["cursor_agents"][0]["tools"] == ["memory"]
     reread = AgentsFileConfig.from_dict(written)
+    assert reread.cursor_agents[0].tools == ["memory"]
     assert reread.cursor_agents[0].enabled is True
     assert reread.agents[0].system_prompt == "keep"
+    assert CursorAgentConfig.from_dict({"name": "Legacy"}).tools == []
 
 
 @pytest.mark.asyncio
@@ -488,3 +498,218 @@ def test_new_conversation_disposes_sdk_agent(tmp_path):
     assert cursor._sdk_agent is None
     assert cursor._sdk_agent_id is None
     assert cursor.cwd not in _cwd_owners
+
+
+def test_cursor_context_disabled_and_independent_behaviors(tmp_path):
+    persistence = SimpleNamespace(
+        get_adaptive_behaviors=lambda name, is_local=False: (
+            {"project_rule": "when working here, do use project rules"}
+            if is_local
+            else {"global_rule": "when coding, do check changes"}
+        )
+    )
+    cursor = CursorAgent("CursorCoder", "edits", cwd=str(tmp_path))
+    assert cursor._task_text("hello").endswith("hello")
+    assert "Memory_Tools_Instruction" not in cursor._task_text("hello")
+    with _isolated_manager() as manager:
+        manager.agents = {cursor.name: cursor}
+        sdk = SimpleNamespace(CustomTool=lambda **kwargs: SimpleNamespace(**kwargs))
+        assert set(cursor._custom_tools(sdk)) == {"transfer", "delegate"}
+    cursor.services = {"context_persistent": persistence}
+    prompt = cursor._task_text("hello")
+    assert "## Current Behaviors" in prompt
+    assert "### Global Behaviors" in prompt
+    assert "### Project Behaviors" in prompt
+    assert "- `global_rule`: when coding, do check changes" in prompt
+    assert "- when working here, do use project rules" in prompt
+    assert "Project behaviors override global ones" in prompt
+    assert "good-to-say-no" in prompt
+    assert "learn_behavior` tool" not in prompt
+    assert prompt.index("## Current Behaviors") < prompt.index("Generate then execute")
+
+
+def test_cursor_memory_tools_and_prompt_scoping(tmp_path):
+    calls = []
+    memory = SimpleNamespace(
+        list_memory_headers=lambda agent_name: (
+            calls.append(("headers", agent_name)) or ["remember the patch"]
+        ),
+        retrieve_memory=lambda query, start, end, agent_name: (
+            calls.append(("retrieve", query, agent_name)) or "patch details"
+        ),
+        forget_ids=lambda ids, agent_name: (
+            calls.append(("forget", ids, agent_name))
+            or {"success": True, "message": "Done"}
+        ),
+    )
+    persistence = SimpleNamespace(
+        get_adaptive_behaviors=lambda name, is_local=False: (
+            {"local": "when in repo, do follow conventions"} if is_local else {}
+        ),
+        store_adaptive_behavior=lambda name, key, behavior, is_local: (
+            calls.append(("learn", name, key, behavior, is_local)) or True
+        ),
+    )
+    cursor = CursorAgent(
+        "CursorCoder",
+        "edits",
+        cwd=str(tmp_path),
+        tools=["memory"],
+        services={"memory": memory, "context_persistent": persistence},
+    )
+    with _isolated_manager() as manager:
+        manager.agents = {cursor.name: cursor}
+        sdk = SimpleNamespace(CustomTool=lambda **kwargs: SimpleNamespace(**kwargs))
+        tools = cursor._custom_tools(sdk)
+    assert set(tools) == {
+        "transfer",
+        "delegate",
+        "search_memory",
+        "forget_memory_topic",
+        "learn_behavior",
+    }
+    assert tools["search_memory"].input_schema["required"] == ["query"]
+    assert "semantic search" in tools["search_memory"].description
+    prompt = cursor._task_text("fix this")
+    assert "<Memory_Tools_Instruction>" in prompt
+    assert "<Learn_Behavior_Tool_Instruction>" in prompt
+    assert "remember the patch" in prompt
+    assert "call search_memory" in prompt
+    assert "### Project Behaviors" in prompt
+    assert prompt.index("<Memory_Tools_Instruction>") < prompt.index(
+        "Generate then execute"
+    )
+    assert (
+        tools["search_memory"]
+        .execute({"query": "patch details"}, None)
+        .startswith("Found relevant memories:")
+    )
+    assert (
+        tools["forget_memory_topic"].execute({"ids": ["m1"]}, None)
+        == "Removed memories: Done"
+    )
+    result = tools["learn_behavior"].execute(
+        {
+            "id": "style",
+            "condition": "editing",
+            "action_steps": ["verify"],
+            "scope": "project",
+        },
+        None,
+    )
+    assert "Stored behavior 'style'" in result
+    assert ("headers", "CursorCoder") in calls
+    assert ("retrieve", "patch details", "CursorCoder") in calls
+    assert ("forget", ["m1"], "CursorCoder") in calls
+    assert ("learn", "CursorCoder", "style", "when editing, do verify", True) in calls
+
+
+@pytest.mark.asyncio
+async def test_cursor_sdk_invokes_memory_tool_on_running_loop(tmp_path, monkeypatch):
+    created = _install_sdk(
+        monkeypatch, [("call", "search_memory", {"query": "previous plan"})]
+    )
+    memory = SimpleNamespace(
+        list_memory_headers=lambda agent_name: [],
+        retrieve_memory=lambda query, start, end, agent_name: f"{agent_name}: {query}",
+    )
+    with _isolated_manager() as manager:
+        cursor = CursorAgent(
+            "CursorCoder",
+            "edits",
+            cwd=str(tmp_path),
+            tools=["memory"],
+            services={"memory": memory},
+        )
+        manager.agents = {cursor.name: cursor}
+        await _collect(cursor, [_user("find prior context")])
+        assert created[0].call_results == [
+            "Found relevant memories:\n\nCursorCoder: previous plan"
+        ]
+        assert "<Memory_Tools_Instruction>" in created[0].last_prompt
+        assert "<Learn_Behavior_Tool_Instruction>" not in created[0].last_prompt
+        assert set(created[0].custom_tools) == {
+            "transfer",
+            "delegate",
+            "search_memory",
+            "forget_memory_topic",
+        }
+
+
+def test_cursor_memory_missing_or_failing_services_fail_open(tmp_path):
+    sdk = SimpleNamespace(CustomTool=lambda **kwargs: SimpleNamespace(**kwargs))
+    cursor = CursorAgent(
+        "CursorCoder", "edits", cwd=str(tmp_path), tools=["memory", "other"]
+    )
+    with _isolated_manager() as manager:
+        manager.agents = {cursor.name: cursor}
+        assert set(cursor._custom_tools(sdk)) == {"transfer", "delegate"}
+    assert "search_memory" not in cursor._task_text("hello")
+    cursor.services = {
+        "memory": SimpleNamespace(list_memory_headers=lambda **kwargs: 1 / 0),
+        "context_persistent": SimpleNamespace(
+            get_adaptive_behaviors=lambda *args, **kwargs: 1 / 0
+        ),
+    }
+    assert cursor._task_text("hello").endswith("hello")
+    assert "Recent conversation memory headlines" not in cursor._task_text("hello")
+    cursor.services.pop("context_persistent")
+    with _isolated_manager() as manager:
+        manager.agents = {cursor.name: cursor}
+        assert set(cursor._custom_tools(sdk)) == {
+            "transfer",
+            "delegate",
+            "search_memory",
+            "forget_memory_topic",
+        }
+    assert "<Learn_Behavior_Tool_Instruction>" not in cursor._task_text("hello")
+
+
+@pytest.mark.parametrize("async_reload", [False, True])
+@pytest.mark.asyncio
+async def test_cursor_reload_preserves_services_and_refreshes_tools(
+    tmp_path, monkeypatch, async_reload
+):
+    services = {"memory": SimpleNamespace(list_memory_headers=lambda **kwargs: [])}
+    definitions = [
+        {
+            "name": "CursorCoder",
+            "description": "edits",
+            "cwd": str(tmp_path),
+            "agent_type": "cursor",
+            "tools": ["memory"],
+        }
+    ]
+    monkeypatch.setattr(
+        AgentManager, "load_agents_from_config", staticmethod(lambda path: definitions)
+    )
+    with _isolated_manager() as manager:
+        manager.cursor_services = services
+        assert upsert_cursor_agent(manager, definitions[0], services)
+        cursor = manager.agents["CursorCoder"]
+        fake = _FakeSdkAgent([])
+        cursor._sdk_agent = fake
+        definitions[0] = {**definitions[0], "tools": []}
+        if async_reload:
+            await AgentsConfig().reload_async()
+        else:
+            AgentsConfig().reload()
+        assert manager.agents["CursorCoder"] is cursor
+        assert cursor.services is services
+        assert cursor.tools == []
+        assert fake.closed
+        definitions.append(
+            {
+                "name": "CursorNew",
+                "description": "new",
+                "cwd": str(tmp_path / "other"),
+                "agent_type": "cursor",
+                "tools": ["memory"],
+            }
+        )
+        if async_reload:
+            await AgentsConfig().reload_async()
+        else:
+            AgentsConfig().reload()
+        assert manager.agents["CursorNew"].services is services
+        assert manager.agents["CursorNew"].tools == ["memory"]

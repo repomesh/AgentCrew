@@ -650,6 +650,7 @@ class ApplicationSetup:
         if self.agent_manager is None:
             raise ValueError("Agent manager is not initialized")
         llm_manager = ServiceManager.get_instance()
+        self.agent_manager.cursor_services = services
 
         if runtime_model is None:
             raise ValueError("Runtime model input is required to set up agents")
@@ -721,7 +722,7 @@ tools = ["memory", "browser", "web_search", "code_analysis"]
             if agent_def.get("agent_type") == "cursor":
                 from AgentCrew.modules.agents.cursor_agent import upsert_cursor_agent
 
-                if not upsert_cursor_agent(self.agent_manager, agent_def):
+                if not upsert_cursor_agent(self.agent_manager, agent_def, services):
                     click.echo(
                         f"⚠️  Cannot set up Cursor agent '{agent_def.get('name')}', skipping.",
                         err=True,

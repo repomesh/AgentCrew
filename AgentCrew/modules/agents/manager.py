@@ -122,6 +122,7 @@ class AgentManager:
         if not self._initialized:
             self.agents: dict[str, BaseAgent] = {}
             self.current_agent: BaseAgent | None = None
+            self.cursor_services: dict[str, Any] | None = None
             self.agent_mode: AgentMode = AgentMode.TRANSFER
             self.one_turn_process: bool = False
             self.context_shrink_enabled: bool = True

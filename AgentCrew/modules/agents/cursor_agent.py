@@ -1,8 +1,8 @@
 """Local Cursor SDK agent.
 
-Cursor owns its run and transcript. AgentCrew owns routing through two custom
-tools: ``transfer`` hands the conversation back, and ``delegate`` returns text
-without changing the current agent.
+Cursor owns its run and transcript. AgentCrew owns routing through custom
+tools: ``transfer`` hands the conversation back, ``delegate`` returns text
+without changing the current agent, and memory tools are opt-in.
 """
 
 from __future__ import annotations
@@ -134,7 +134,9 @@ def _run_coroutine(factory: Callable[[], Any]) -> Any:
     return asyncio.run(factory())
 
 
-def create_cursor_agent_from_definition(agent_def: Mapping[str, Any]) -> CursorAgent:
+def create_cursor_agent_from_definition(
+    agent_def: Mapping[str, Any], services: dict[str, Any] | None = None
+) -> CursorAgent:
     name = str(agent_def.get("name") or "").strip()
     if not name:
         raise CursorAgentError("Cursor agent name is required")
@@ -143,22 +145,28 @@ def create_cursor_agent_from_definition(agent_def: Mapping[str, Any]) -> CursorA
         description=str(agent_def.get("description") or ""),
         model_id=str(agent_def.get("model_id") or DEFAULT_MODEL_ID),
         cwd=str(agent_def.get("cwd") or "."),
+        tools=agent_def.get("tools") or [],
+        services=services,
     )
 
 
 def upsert_cursor_agent(
-    agent_manager: AgentManager, agent_def: Mapping[str, Any]
+    agent_manager: AgentManager,
+    agent_def: Mapping[str, Any],
+    services: dict[str, Any] | None = None,
 ) -> bool:
     """Register or update a Cursor agent without constructing an LLM service."""
     name = str(agent_def.get("name") or "").strip()
     try:
         existing = agent_manager.agents.get(name)
         if isinstance(existing, CursorAgent):
-            existing.apply_config(agent_def)
+            existing.apply_config(agent_def, services=services)
             return True
         if existing is not None and hasattr(existing, "release_llm"):
             existing.release_llm()  # type: ignore
-        agent_manager.register_agent(create_cursor_agent_from_definition(agent_def))
+        agent_manager.register_agent(
+            create_cursor_agent_from_definition(agent_def, services)
+        )
         status = cursor_sdk_status()
         if status:
             logger.warning(
@@ -181,8 +189,12 @@ class CursorAgent(BaseAgent):
         description: str,
         model_id: str = DEFAULT_MODEL_ID,
         cwd: str = ".",
+        tools: list[str] | None = None,
+        services: dict[str, Any] | None = None,
     ) -> None:
         super().__init__(name, description)
+        self.tools = list(tools or [])
+        self.services = services if services is not None else {}
         self.model_id = model_id or DEFAULT_MODEL_ID
         self.cwd = _resolve_cwd(cwd)
         self._cwd_owner = f"cursor:{id(self)}"
@@ -195,16 +207,27 @@ class CursorAgent(BaseAgent):
         self._transfer_emitted = False
         self._announced_cwd = False
 
-    def apply_config(self, agent_def: Mapping[str, Any]) -> None:
-        """Update routing fields. Does not connect to Cursor."""
+    def apply_config(
+        self, agent_def: Mapping[str, Any], services: dict[str, Any] | None = None
+    ) -> None:
+        """Update routing fields and tool configuration without connecting to Cursor."""
         self.description = str(agent_def.get("description") or "")
         model_id = str(agent_def.get("model_id") or DEFAULT_MODEL_ID)
         cwd = _resolve_cwd(str(agent_def.get("cwd") or "."))
-        changed = model_id != self.model_id or cwd != self.cwd
+        tools = list(agent_def.get("tools") or [])
+        changed = (
+            model_id != self.model_id
+            or cwd != self.cwd
+            or tools != self.tools
+            or (services is not None and services is not self.services)
+        )
         self.model_id = model_id
+        self.tools = tools
         if changed:
             self.dispose_sdk_agent()
         self.cwd = cwd
+        if services is not None:
+            self.services = services
 
     def activate(self) -> bool:
         self.is_active = True
@@ -362,11 +385,47 @@ class CursorAgent(BaseAgent):
                     self._active_run = None
 
     def _task_text(self, user_text: str) -> str:
-        return (
+        context: list[str] = []
+        memory = self.services.get("memory") if "memory" in self.tools else None
+        persistence = self.services.get("context_persistent")
+        if memory is not None:
+            from AgentCrew.modules.memory.tool import (
+                adaptive_instruction_prompt,
+                memory_instruction_prompt,
+            )
+
+            context.append(memory_instruction_prompt())
+            if persistence is not None:
+                context.append(adaptive_instruction_prompt())
+            try:
+                headers = memory.list_memory_headers(agent_name=self.name)
+                if headers:
+                    context.append(
+                        f"## Recent conversation memory headlines:\n- {'\n - '.join(headers)}\n---\nIf the user request related to any recent memories, call search_memory before responding."
+                    )
+            except Exception as exc:
+                logger.warning(
+                    f"Failed to list Cursor memory headlines for '{self.name}': {exc}"
+                )
+        if persistence is not None:
+            from AgentCrew.modules.agents.context_manager import (
+                build_persisted_behaviors,
+            )
+
+            try:
+                behaviors = build_persisted_behaviors(persistence, self.name)
+                if behaviors:
+                    context.append(behaviors)
+            except Exception as exc:
+                logger.warning(
+                    f"Failed to load Cursor behaviors for '{self.name}': {exc}"
+                )
+        plan = (
             "Generate then execute the plan to fulfill user task below, the plan must stay inside <agent_evaluation> tags:\n"
             "  - Plan out the tool call strategy for this task: which tools you should call, in what order, and what inputs each needs."
             f"  - The purpose of the planning is finding the optimal way to gather necessary information and organize steps to be taken to accomplished the task..\n\n{user_text}"
         )
+        return "\n\n".join([*context, plan])
 
     def _ensure_sdk_agent(self) -> Any:
         with self._sdk_lock:
@@ -401,7 +460,7 @@ class CursorAgent(BaseAgent):
 
     def _custom_tools(self, sdk: Any) -> dict[str, Any]:
         names = ", ".join(self._other_agent_names()) or "(none)"
-        return {
+        tools = {
             "transfer": sdk.CustomTool(
                 description=(
                     "Hand the conversation back to another AgentCrew agent. "
@@ -448,6 +507,54 @@ class CursorAgent(BaseAgent):
                 execute=self._execute_delegate,
             ),
         }
+        unsupported = set(self.tools) - {"memory"}
+        if unsupported:
+            logger.warning(
+                f"Unsupported Cursor tools for '{self.name}': {sorted(unsupported)}"
+            )
+        memory = self.services.get("memory") if "memory" in self.tools else None
+        if memory is None:
+            return tools
+
+        from AgentCrew.modules.memory.tool import (
+            MemoryToolContext,
+            get_learn_behavior_tool_definition,
+            get_learn_behavior_tool_handler,
+            get_memory_forget_tool_definition,
+            get_memory_forget_tool_handler,
+            get_memory_retrieve_tool_definition,
+            get_memory_retrieve_tool_handler,
+        )
+
+        persistence = self.services.get("context_persistent")
+        context = MemoryToolContext(
+            agent_name=self.name,
+            memory_service=memory,
+            persistence_service=persistence,
+        )
+        pairs = [
+            (get_memory_retrieve_tool_definition, get_memory_retrieve_tool_handler),
+            (get_memory_forget_tool_definition, get_memory_forget_tool_handler),
+        ]
+        if persistence is not None:
+            pairs.append(
+                (get_learn_behavior_tool_definition, get_learn_behavior_tool_handler)
+            )
+        for definition_factory, handler_factory in pairs:
+            function = definition_factory()["function"]
+            handler = handler_factory(context)
+
+            def execute(
+                args: Mapping[str, Any], _context: Any = None, *, _handler=handler
+            ) -> str:
+                return _run_coroutine(lambda: _handler(**(args or {})))
+
+            tools[function["name"]] = sdk.CustomTool(
+                description=function["description"],
+                input_schema=function["parameters"],
+                execute=execute,
+            )
+        return tools
 
     def _execute_transfer(self, args: Mapping[str, Any], _context: Any = None) -> str:
         if self._pending_transfer is not None:

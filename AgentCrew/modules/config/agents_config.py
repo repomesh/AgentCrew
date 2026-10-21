@@ -98,6 +98,7 @@ class CursorAgentConfig:
     enabled: bool = True
     model_id: str = "composer-2.5"
     cwd: str = "."
+    tools: list[str] = field(default_factory=list)
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "CursorAgentConfig":
@@ -107,6 +108,7 @@ class CursorAgentConfig:
             enabled=data.get("enabled", True),
             model_id=data.get("model_id") or "composer-2.5",
             cwd=data.get("cwd") or ".",
+            tools=data.get("tools", []),
         )
 
     def to_dict(self) -> dict[str, Any]:
@@ -116,6 +118,7 @@ class CursorAgentConfig:
             "enabled": self.enabled,
             "model_id": self.model_id,
             "cwd": self.cwd,
+            "tools": self.tools,
         }
 
 
@@ -277,7 +280,9 @@ class AgentsConfig:
             if agent_cfg.get("agent_type") == "cursor":
                 from AgentCrew.modules.agents.cursor_agent import upsert_cursor_agent
 
-                upsert_cursor_agent(agent_manager, agent_cfg)
+                upsert_cursor_agent(
+                    agent_manager, agent_cfg, agent_manager.cursor_services
+                )
                 continue
             if agent_cfg.get("base_url"):
                 try:
@@ -386,7 +391,9 @@ class AgentsConfig:
             if agent_cfg.get("agent_type") == "cursor":
                 from AgentCrew.modules.agents.cursor_agent import upsert_cursor_agent
 
-                upsert_cursor_agent(agent_manager, agent_cfg)
+                upsert_cursor_agent(
+                    agent_manager, agent_cfg, agent_manager.cursor_services
+                )
                 continue
             if agent_cfg.get("base_url"):
                 try:
