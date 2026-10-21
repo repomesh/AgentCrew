@@ -310,9 +310,10 @@ IDE and Cursor CLI are not required. Local runtime means files stay on this
 machine and inference is hosted by Cursor. Set `CURSOR_API_KEY` in the
 environment; the key is never stored in this file. There is no `system_prompt`
 field. Install the optional SDK with `uv sync --extra cursor`. Set
-`tools = ["memory"]` to enable AgentCrew memory search/forget tools and, when
-behavior persistence is available, behavior learning. Persisted behaviors are
-included in Cursor task context even without memory enabled.
+`tools = ["memory"]` to enable AgentCrew memory search/forget tools and automatic
+storage of completed chat turns. When behavior persistence is available, it
+also enables behavior learning. Persisted behaviors are included in Cursor task
+context even without memory enabled.
 
 ### Agent Fields
 

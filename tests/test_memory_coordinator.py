@@ -9,12 +9,18 @@ Covers the conversation-memory parsing/storage behavior extracted from
 - memory storage (absent service, wrong type, payload/session_id,
   fail-open logging)
 - LocalAgent delegation boundary for the three wrappers
+- Cursor opt-in memory storage through completed chat-turn finalization
 """
 
 from __future__ import annotations
 
+from unittest.mock import MagicMock
+
+from AgentCrew.modules.agents.cursor_agent import CursorAgent
 from AgentCrew.modules.agents.local_agent import LocalAgent
 from AgentCrew.modules.agents.memory_coordinator import AgentMemoryCoordinator
+from AgentCrew.modules.chat.message.handler import MessageHandler
+from AgentCrew.modules.llm.token_usage import TokenUsage
 from AgentCrew.modules.memory.base_service import BaseMemoryService
 
 
@@ -141,6 +147,23 @@ class TestExtractAssistantMessages:
         assert agent._memory_coordinator.extract_assistant_messages_for_memory(
             messages
         ) == ["after boundary"]
+
+    def test_assistant_text_blocks_preserve_text_without_other_blocks(self):
+        agent = _make_agent([])
+        messages = [
+            {
+                "role": "assistant",
+                "content": [
+                    {"type": "text", "text": " first "},
+                    {"type": "image", "url": "image.png"},
+                    "second",
+                    {"type": "text", "text": "  "},
+                ],
+            }
+        ]
+        assert agent._memory_coordinator.extract_assistant_messages_for_memory(
+            messages
+        ) == ["first second"]
 
     def test_multiple_assistants_preserved_in_order(self):
         agent = _make_agent([])
@@ -351,6 +374,89 @@ class TestStoreMemory:
         agent.store_memory_if_available(
             "u", [{"role": "assistant", "content": "r"}], "r"
         )
+
+
+def _finalize_chat_turn(agent, store_memory=True):
+    handler = MessageHandler.__new__(MessageHandler)
+    handler.agent = agent
+    handler.current_conversation_id = "conv-1"
+    handler.current_user_input = {
+        "role": "user",
+        "content": [{"type": "text", "text": "Remember the fix"}],
+    }
+    handler.current_user_input_idx = 0
+    handler.last_assisstant_response_idx = 0
+    handler.streamline_messages = [
+        handler.current_user_input,
+        {
+            "role": "assistant",
+            "content": [{"type": "text", "text": "The fix is ready"}],
+        },
+    ]
+    handler.conversation_manager = MagicMock()
+    handler.persistent_service = MagicMock()
+    handler.bus = MagicMock()
+    handler._turn_usage_ledger = {}
+    handler._turn_usage_committed = {}
+    messages = handler._finalize_current_turn(TokenUsage(), store_memory)
+    assert messages == handler.streamline_messages
+    assert handler.current_user_input is None
+    assert handler.current_user_input_idx == -1
+    handler.persistent_service.append_conversation_messages.assert_called_once_with(
+        "conv-1", messages
+    )
+
+
+class TestChatMemoryFinalization:
+    def test_cursor_with_memory_stores_user_and_assistant_under_agent_name(self):
+        memory = _FakeMemory()
+        cursor = CursorAgent(
+            "CursorCoder", "edits", tools=["memory"], services={"memory": memory}
+        )
+        assert cursor._memory_coordinator.agent is cursor
+        _finalize_chat_turn(cursor)
+        assert memory.stored == [
+            ("Remember the fix", ["The fix is ready"], "CursorCoder", None)
+        ]
+
+    def test_cursor_without_opt_in_does_not_store(self):
+        memory = _FakeMemory()
+        cursor = CursorAgent("CursorCoder", "edits", services={"memory": memory})
+        _finalize_chat_turn(cursor)
+        assert memory.stored == []
+
+    def test_missing_and_failing_memory_services_do_not_break_turn(self):
+        missing = CursorAgent("CursorCoder", "edits", tools=["memory"])
+        _finalize_chat_turn(missing)
+
+        class FailingMemory(_FakeMemory):
+            def store_conversation(self, *args, **kwargs):
+                raise RuntimeError("memory unavailable")
+
+        failing = CursorAgent(
+            "CursorCoder",
+            "edits",
+            tools=["memory"],
+            services={"memory": FailingMemory()},
+        )
+        _finalize_chat_turn(failing)
+
+    def test_local_storage_and_non_capable_agent_remain_unchanged(self):
+        memory = _FakeMemory()
+        local = _make_agent(memory, name="Engineer")
+        _finalize_chat_turn(local)
+        assert memory.stored == [
+            ("Remember the fix", ["The fix is ready"], "Engineer", None)
+        ]
+        _finalize_chat_turn(object())
+
+    def test_turn_memory_flag_remains_a_gate(self):
+        memory = _FakeMemory()
+        cursor = CursorAgent(
+            "CursorCoder", "edits", tools=["memory"], services={"memory": memory}
+        )
+        _finalize_chat_turn(cursor, store_memory=False)
+        assert memory.stored == []
 
 
 # ---------------------------------------------------------------------------

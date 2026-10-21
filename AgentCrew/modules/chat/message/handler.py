@@ -360,10 +360,9 @@ class MessageHandler:
             )
 
             if store_memory:
-                from AgentCrew.modules.agents.local_agent import LocalAgent
-
-                if isinstance(self.agent, LocalAgent):
-                    self.agent.store_memory_if_available(
+                store_turn = getattr(self.agent, "store_memory_if_available", None)
+                if callable(store_turn):
+                    store_turn(
                         self._extract_user_text(self.current_user_input),
                         messages_for_this_turn,
                         "",
@@ -401,6 +400,7 @@ class MessageHandler:
         """
         assistant_response = ""
         tool_uses = []
+        tool_uses_without_transfer = []
         token_usage = prior_token_usage or TokenUsage()
         thinking_content = ""  # Reset thinking content for new response
         thinking_signature = ""  # Store the signature

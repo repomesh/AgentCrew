@@ -195,6 +195,9 @@ class CursorAgent(BaseAgent):
         super().__init__(name, description)
         self.tools = list(tools or [])
         self.services = services if services is not None else {}
+        from .memory_coordinator import AgentMemoryCoordinator
+
+        self._memory_coordinator = AgentMemoryCoordinator(self)
         self.model_id = model_id or DEFAULT_MODEL_ID
         self.cwd = _resolve_cwd(cwd)
         self._cwd_owner = f"cursor:{id(self)}"
@@ -249,6 +252,20 @@ class CursorAgent(BaseAgent):
     def clean_history(self) -> list:
         return self.history
 
+    def store_memory_if_available(
+        self,
+        user_message: str,
+        messages: list[dict],
+        current_response: str,
+        session_id: str | None = None,
+    ) -> None:
+        """Queue completed Cursor turns only when memory is configured."""
+        if "memory" not in self.tools:
+            return
+        self._memory_coordinator.store_memory_if_available(
+            user_message, messages, current_response, session_id
+        )
+
     def get_provider(self) -> str:
         return "cursor"
 
@@ -263,6 +280,7 @@ class CursorAgent(BaseAgent):
     ) -> dict[str, Any] | None:
         if message_type == MessageType.Assistant:
             return {
+                "agent": self.name,
                 "role": "assistant",
                 "content": [{"type": "text", "text": message_data.get("message", "")}],
             }
@@ -270,6 +288,7 @@ class CursorAgent(BaseAgent):
             tool_use = message_data.get("tool_use", {"id": ""})
             return {
                 "role": "tool",
+                "agent": self.name,
                 "tool_call_id": tool_use.get("id", ""),
                 "content": message_data.get("tool_result", ""),
             }
@@ -532,7 +551,7 @@ class CursorAgent(BaseAgent):
             memory_service=memory,
             persistence_service=persistence,
         )
-        pairs = [
+        pairs: list[tuple[Callable, Callable]] = [
             (get_memory_retrieve_tool_definition, get_memory_retrieve_tool_handler),
             (get_memory_forget_tool_definition, get_memory_forget_tool_handler),
         ]

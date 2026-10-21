@@ -1,4 +1,4 @@
-"""Conversation-memory parsing and storage for ``LocalAgent``.
+"""Conversation-memory parsing and storage for agents with memory support.
 
 Extracted from :mod:`AgentCrew.modules.agents.local_agent` so the agent
 class focuses on orchestration while a focused collaborator owns:
@@ -20,22 +20,23 @@ from typing import TYPE_CHECKING
 from loguru import logger
 
 if TYPE_CHECKING:
+    from .cursor_agent import CursorAgent
     from .local_agent import LocalAgent
 
 
 class AgentMemoryCoordinator:
-    """Parses and stores conversation memory for a ``LocalAgent``.
+    """Parses and stores conversation memory for local and Cursor agents.
 
     Reads ``agent.name`` and ``agent.services`` as needed but never owns or
     duplicates those values.
     """
 
-    def __init__(self, agent: LocalAgent) -> None:
+    def __init__(self, agent: LocalAgent | CursorAgent) -> None:
         self._agent = agent
 
     @property
-    def agent(self) -> LocalAgent:
-        """Return the owning LocalAgent."""
+    def agent(self) -> LocalAgent | CursorAgent:
+        """Return the owning agent."""
         return self._agent
 
     def extract_last_user_message_for_memory(self, messages: list[dict]) -> str:
@@ -97,6 +98,17 @@ class AgentMemoryCoordinator:
                     normalized = content.strip()
                     if normalized:
                         assistant_messages.append(normalized)
+                elif isinstance(content, list):
+                    text_parts = []
+                    for part in content:
+                        if isinstance(part, str) and part.strip():
+                            text_parts.append(part.strip())
+                        elif isinstance(part, dict) and part.get("type") == "text":
+                            text = str(part.get("text", "")).strip()
+                            if text:
+                                text_parts.append(text)
+                    if text_parts:
+                        assistant_messages.append(" ".join(text_parts))
 
                 # Index ask tool questions by their tool call id
                 for tc in message.get("tool_calls") or []:
