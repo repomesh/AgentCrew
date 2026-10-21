@@ -248,7 +248,6 @@ You must analyze and plan out the steps then execute it with your available tool
                 eval_text = """Generate then execute the plan to fulfill user or agent task below, the plan must stay inside <agent_evaluation> tags:
     - Plan out the tool call strategy for this task: which tools you should call, in what order, and what inputs each needs.
     - The purpose of the planning is finding the optimal way to gather necessary information and organize steps to be taken to accomplished the task
-    - Sum up what you get from tool results in your next messages.
     - Is another agent better suited? If yes, transfer immediately.
     Then execute your plan.
     Skip evaluation for: simple one-sentence answers, or when the request matches "when [condition], [action]" — call `learn_behavior` directly instead."""
@@ -256,7 +255,6 @@ You must analyze and plan out the steps then execute it with your available tool
                 eval_text = """Generate then execute the plan to fulfill user task below, the plan must stay inside <agent_evaluation> tags:
     - Plan out the tool call strategy for this task: which tools you should call, in what order, and what inputs each needs.
     - The purpose of the planning is finding the optimal way to gather necessary information and organize steps to be taken to accomplished the task
-    - Sum up what you get from tool results in your next messages.
     - Can this task break into multiple sub-tasks and be delegated to specialist agents? If yes, create sub-tasks and delegate them.
     - Can multiple sub-tasks run in parallel? If yes, emit multiple delegate calls in one turn.
     Then execute your plan.
@@ -264,8 +262,7 @@ You must analyze and plan out the steps then execute it with your available tool
             else:
                 eval_text = """"Generate then execute the plan to fulfill user task below, the plan must stay inside <agent_evaluation> tags:
     - Plan out the tool call strategy for this task: which tools you should call, in what order, and what inputs each needs.
-    - The purpose of the planning is finding the optimal way to gather necessary information and organize steps to be taken to accomplished the task
-    - Sum up what you get from tool results in your next messages."""
+    - The purpose of the planning is finding the optimal way to gather necessary information and organize steps to be taken to accomplished the task."""
 
             if eval_text:
                 adaptive_messages.append(eval_text)

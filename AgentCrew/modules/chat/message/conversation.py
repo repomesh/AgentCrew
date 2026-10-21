@@ -53,11 +53,14 @@ class ConversationManager:
             self.message_handler.current_user_input = None
             self.message_handler.current_user_input_idx = -1
             if not isinstance(self.message_handler.agent, LocalAgent):
+                from AgentCrew.modules.agents.cursor_agent import CursorAgent
                 from AgentCrew.modules.agents.remote_agent import RemoteAgent
 
                 if isinstance(self.message_handler.agent, RemoteAgent):
                     # Reset remote agent state
                     self.message_handler.agent.current_task_id = None
+                elif isinstance(self.message_handler.agent, CursorAgent):
+                    self.message_handler.agent.dispose_sdk_agent()
 
             # Notify UI about the new conversation
             self.message_handler.bus.emit_sync(

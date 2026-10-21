@@ -295,7 +295,20 @@ description = "Example remote AgentCrew agent"
 base_url = "https://agents.example.com"
 enabled = true
 headers = { Authorization = "Bearer YOUR_A2A_TOKEN" }
+
+[[cursor_agents]]
+name = "CursorCoder"
+description = "Edits the current repo with Cursor's agent."
+enabled = true
+model_id = "composer-2.5"
+cwd = "."
 ```
+
+Cursor agents are a separate list. Do not put them in `[[agents]]`. The Cursor
+IDE and Cursor CLI are not required. Local runtime means files stay on this
+machine and inference is hosted by Cursor. Set `CURSOR_API_KEY` in the
+environment; the key is never stored in this file. There is no `system_prompt`
+field. Install the optional SDK with `uv sync --extra cursor`.
 
 ### Agent Fields
 

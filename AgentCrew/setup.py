@@ -171,7 +171,10 @@ class ApplicationSetup:
                 try:
                     await self.agent_manager.close_all_remote_agents()
                 finally:
-                    await self._close_dedicated_llm_services()
+                    try:
+                        await self.agent_manager.close_all_cursor_agents()
+                    finally:
+                        await self._close_dedicated_llm_services()
             else:
                 from AgentCrew.modules.llm.service_manager import ServiceManager
 
@@ -258,6 +261,7 @@ class ApplicationSetup:
             "TAVILY_API_KEY",
             "VOYAGE_API_KEY",
             "ELEVENLABS_API_KEY",
+            "CURSOR_API_KEY",
         ]
 
         for key_name in keys_to_check:
@@ -714,6 +718,15 @@ tools = ["memory", "browser", "web_search", "code_analysis"]
         )
 
         for agent_def in agent_definitions:
+            if agent_def.get("agent_type") == "cursor":
+                from AgentCrew.modules.agents.cursor_agent import upsert_cursor_agent
+
+                if not upsert_cursor_agent(self.agent_manager, agent_def):
+                    click.echo(
+                        f"⚠️  Cannot set up Cursor agent '{agent_def.get('name')}', skipping.",
+                        err=True,
+                    )
+                continue
             if agent_def.get("base_url", ""):
                 from AgentCrew.modules.agents.remote_agent import RemoteAgent
 

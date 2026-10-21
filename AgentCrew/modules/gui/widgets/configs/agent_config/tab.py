@@ -357,9 +357,11 @@ class AgentsConfigTab(QWidget):
             elif agent_type_for_sorting == "remote":
                 remote_agents_list.append(config_data)
 
+        previous_cursor_agents = getattr(self.agents_config, "cursor_agents", [])
         self.agents_config = AgentsFileConfig(
             agents=[LocalAgentConfig.from_dict(d) for d in local_agents_list],
             remote_agents=[RemoteAgentConfig.from_dict(d) for d in remote_agents_list],
+            cursor_agents=list(previous_cursor_agents),
         )
 
         self.save_worker = SaveWorker(self._perform_agent_save, self.agents_config)

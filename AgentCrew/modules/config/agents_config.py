@@ -90,11 +90,42 @@ class RemoteAgentConfig:
 
 
 @dataclass
+class CursorAgentConfig:
+    """Type-safe representation of a Cursor SDK agent entry in agents.toml."""
+
+    name: str
+    description: str = ""
+    enabled: bool = True
+    model_id: str = "composer-2.5"
+    cwd: str = "."
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "CursorAgentConfig":
+        return cls(
+            name=data["name"],
+            description=data.get("description", ""),
+            enabled=data.get("enabled", True),
+            model_id=data.get("model_id") or "composer-2.5",
+            cwd=data.get("cwd") or ".",
+        )
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "name": self.name,
+            "description": self.description,
+            "enabled": self.enabled,
+            "model_id": self.model_id,
+            "cwd": self.cwd,
+        }
+
+
+@dataclass
 class AgentsFileConfig:
     """Type-safe representation of the full agents.toml file."""
 
     agents: list[LocalAgentConfig] = field(default_factory=list)
     remote_agents: list[RemoteAgentConfig] = field(default_factory=list)
+    cursor_agents: list[CursorAgentConfig] = field(default_factory=list)
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "AgentsFileConfig":
@@ -102,7 +133,14 @@ class AgentsFileConfig:
         remote_agents = [
             RemoteAgentConfig.from_dict(r) for r in data.get("remote_agents", [])
         ]
-        return cls(agents=agents, remote_agents=remote_agents)
+        cursor_agents = [
+            CursorAgentConfig.from_dict(item) for item in data.get("cursor_agents", [])
+        ]
+        return cls(
+            agents=agents,
+            remote_agents=remote_agents,
+            cursor_agents=cursor_agents,
+        )
 
     def to_dict(self) -> dict[str, Any]:
         result: dict[str, Any] = {}
@@ -110,6 +148,8 @@ class AgentsFileConfig:
             result["agents"] = [a.to_dict() for a in self.agents]
         if self.remote_agents:
             result["remote_agents"] = [r.to_dict() for r in self.remote_agents]
+        if self.cursor_agents:
+            result["cursor_agents"] = [item.to_dict() for item in self.cursor_agents]
         return result
 
 
@@ -234,6 +274,11 @@ class AgentsConfig:
         agent_manager = AgentManager.get_instance()
         new_agents_config = agent_manager.load_agents_from_config(self._path)
         for agent_cfg in new_agents_config:
+            if agent_cfg.get("agent_type") == "cursor":
+                from AgentCrew.modules.agents.cursor_agent import upsert_cursor_agent
+
+                upsert_cursor_agent(agent_manager, agent_cfg)
+                continue
             if agent_cfg.get("base_url"):
                 try:
                     agent_manager.agents[agent_cfg["name"]] = RemoteAgent(
@@ -338,6 +383,11 @@ class AgentsConfig:
         agent_manager = AgentManager.get_instance()
         new_agents_config = agent_manager.load_agents_from_config(self._path)
         for agent_cfg in new_agents_config:
+            if agent_cfg.get("agent_type") == "cursor":
+                from AgentCrew.modules.agents.cursor_agent import upsert_cursor_agent
+
+                upsert_cursor_agent(agent_manager, agent_cfg)
+                continue
             if agent_cfg.get("base_url"):
                 try:
                     agent_manager.agents[agent_cfg["name"]] = RemoteAgent(
@@ -682,7 +732,9 @@ class AgentsConfig:
             if remote_agent_map:
                 final_config["remote_agents"] = list(remote_agent_map.values())
 
-            self.write(AgentsFileConfig.from_dict(final_config))
+            written = AgentsFileConfig.from_dict(final_config)
+            written.cursor_agents = list(current_config.cursor_agents)
+            self.write(written)
 
             result["success"] = True
             logger.info(

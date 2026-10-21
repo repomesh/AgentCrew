@@ -1,4 +1,5 @@
 import json
+import os
 import tomllib as toml
 from enum import Enum
 from typing import Any
@@ -41,8 +42,6 @@ class AgentManager:
         """
 
         if config_uri.startswith("@hub/"):
-            import os
-
             hub_host = os.environ.get("AGENTCREW_HUB_HOST", "https://agentplace.cloud")
             config_uri = hub_host.rstrip("/") + "/" + config_uri[5:]
 
@@ -93,8 +92,30 @@ class AgentManager:
             for agent in config.get("remote_agents", [])
             if agent.get("enabled", True)
         ]
+        seen_names = {
+            agent.get("name")
+            for agent in local_agents + remote_agents
+            if agent.get("name")
+        }
+        cursor_agents = []
+        for agent in config.get("cursor_agents", []):
+            if not agent.get("enabled", True):
+                continue
+            name = agent.get("name")
+            if not name:
+                logger.warning("Skipping cursor agent with no name")
+                continue
+            if name in seen_names:
+                logger.warning(f"Skipping cursor agent '{name}': name is already used")
+                continue
+            seen_names.add(name)
+            resolved = {**agent, "agent_type": "cursor"}
+            resolved["cwd"] = os.path.abspath(
+                os.path.expanduser(agent.get("cwd") or ".")
+            )
+            cursor_agents.append(resolved)
 
-        return local_agents + remote_agents
+        return local_agents + remote_agents + cursor_agents
 
     def __init__(self):
         """Initialize the agent manager."""
@@ -273,7 +294,11 @@ class AgentManager:
         self._defered_transfer = value
 
     def clean_agents_messages(self):
+        from AgentCrew.modules.agents.cursor_agent import CursorAgent
+
         for agent in self.agents.values():
+            if isinstance(agent, CursorAgent):
+                agent.dispose_sdk_agent()
             agent.history = []
             agent.shared_context_pool = {}
 
@@ -764,3 +789,15 @@ When system access is requested:
                     await agent.close()
                 except Exception:
                     logger.exception(f"Error closing remote agent {agent.name}")
+
+    async def close_all_cursor_agents(self) -> None:
+        """Dispose Cursor SDK agents so shutdown does not leave their runs open."""
+        from AgentCrew.modules.agents.cursor_agent import CursorAgent
+
+        for agent in list(self.agents.values()):
+            if not isinstance(agent, CursorAgent):
+                continue
+            try:
+                agent.dispose_sdk_agent()
+            except Exception:
+                logger.exception(f"Error closing Cursor agent {agent.name}")

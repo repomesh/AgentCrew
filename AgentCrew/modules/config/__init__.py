@@ -1,6 +1,7 @@
 from .agents_config import (
     AgentsConfig,
     AgentsFileConfig,
+    CursorAgentConfig,
     LocalAgentConfig,
     RemoteAgentConfig,
 )
@@ -12,6 +13,7 @@ __all__ = [
     "AgentsConfig",
     "AgentsFileConfig",
     "ConfigManagement",
+    "CursorAgentConfig",
     "GlobalConfig",
     "LocalAgentConfig",
     "MCPConfig",

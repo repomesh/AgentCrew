@@ -41,7 +41,7 @@ conflicts = [[
 
 [[package]]
 name = "a2a-sdk"
-version = "1.1.2"
+version = "1.2.3"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "culsans", marker = "python_full_version < '3.13' or (extra == 'extra-12-agentcrew-ai-cpu' and extra == 'extra-12-agentcrew-ai-nvidia')" },
@@ -53,9 +53,9 @@ dependencies = [
     { name = "protobuf" },
     { name = "pydantic" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/38/cc/59b35c518d8289bd59d20d9d216ca29ccb41c4697eb85971efe41d1adaf3/a2a_sdk-1.1.2.tar.gz", hash = "sha256:f928d8bf9a0dc0a473ee8258bd5226c1b8520a85c70e7f233c3b9b0e30a1bd10", size = 379627, upload-time = "2026-07-22T13:40:51.409Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/e7/5a/2b5ff74f3f0dbec13787c7139cb1047a562544c9b8b062d0eaa9392c79f9/a2a_sdk-1.2.3.tar.gz", hash = "sha256:a28bc40b010d088ea4a10d05a5ba021d183f02cacab15929072ea5b34cde3fe6", size = 434137, upload-time = "2026-10-19T10:11:31.052Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/c1/33/d414a03d5ef5a7d6d09a20dc9f8094e7fb9edb488662ff99c535a2a62cf1/a2a_sdk-1.1.2-py3-none-any.whl", hash = "sha256:eb9a698f526dc45a9ea967d7804e7aa363ff273d2c44fbed699bc68c9399f9c9", size = 245981, upload-time = "2026-07-22T13:40:49.484Z" },
+    { url = "https://files.pythonhosted.org/packages/7b/df/138f64f3138db7b44b9798426909357d27429c868715af8751ace6083238/a2a_sdk-1.2.3-py3-none-any.whl", hash = "sha256:a89529ab7d026900170aefc1515f35c68d9a14b6a9133f8cc775c8fe598f8ae7", size = 278339, upload-time = "2026-10-19T10:11:29.102Z" },
 ]
 
 [package.optional-dependencies]
@@ -107,6 +107,7 @@ dependencies = [
     { name = "anthropic" },
     { name = "chromadb" },
     { name = "click" },
+    { name = "cursor-sdk" },
     { name = "elevenlabs" },
     { name = "firecrawl-anydoc" },
     { name = "google-genai" },
@@ -172,11 +173,12 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "a2a-sdk", extras = ["http-server"], specifier = "==1.1.2" },
+    { name = "a2a-sdk", extras = ["http-server"], specifier = "==1.2.3" },
     { name = "agent-client-protocol", specifier = "==0.12.1" },
     { name = "anthropic", specifier = "==1.0.0" },
     { name = "chromadb", specifier = "==1.5.9" },
     { name = "click", specifier = "==8.4.2" },
+    { name = "cursor-sdk", specifier = "==0.1.9" },
     { name = "docling", marker = "extra == 'cpu'", specifier = "==2.122.0" },
     { name = "docling", marker = "extra == 'nvidia'", specifier = "==2.122.0" },
     { name = "elevenlabs", specifier = "==2.65.0" },
@@ -882,6 +884,22 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/d9/e3/49afa1bc180e0d28008ec6bcdf82a4072d1c7a41032b5b759b60814ca4b0/culsans-0.11.0.tar.gz", hash = "sha256:0b43d0d05dce6106293d114c86e3fb4bfc63088cfe8ff08ed3fe36891447fe33", size = 107546, upload-time = "2025-12-31T23:15:38.196Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/e0/5d/9fb19fb38f6d6120422064279ea5532e22b84aa2be8831d49607194feda3/culsans-0.11.0-py3-none-any.whl", hash = "sha256:278d118f63fc75b9db11b664b436a1b83cc30d9577127848ba41420e66eb5a47", size = 21811, upload-time = "2025-12-31T23:15:37.189Z" },
+]
+
+[[package]]
+name = "cursor-sdk"
+version = "0.1.9"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "httpx" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/85/2d/ee287452a15a1800582e0672626abc758e139fcaa49600c1993f43648b64/cursor_sdk-0.1.9.tar.gz", hash = "sha256:078cc81faa286ed8827f917378ea21548119e12f03acc9fe78bf88ce56d7086b", size = 1175, upload-time = "2026-07-03T22:24:26.4Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/dd/6d/41851a2ee1c56e541d720fab9837b4c74222af5a0d5d1f8a35a40111a014/cursor_sdk-0.1.9-py3-none-macosx_11_0_arm64.whl", hash = "sha256:278cae1728a6db89ead0336cd372419d24ef186aedbffe9b72df2dda27a4b43b", size = 47880255, upload-time = "2026-07-03T22:24:12.195Z" },
+    { url = "https://files.pythonhosted.org/packages/1b/cc/233da13e0d6b58728db8c288aa78c15f82a1e771379b5933adf7e0f585cf/cursor_sdk-0.1.9-py3-none-macosx_11_0_x86_64.whl", hash = "sha256:17ea5f7f74b5b2037c6df50b989836544e8f88db8a450536baa37aad635697cd", size = 49377651, upload-time = "2026-07-03T22:24:14.975Z" },
+    { url = "https://files.pythonhosted.org/packages/43/05/15da63d82878f4329888fc3ffbf5f3cd05a49656b56beeb8200b112432d4/cursor_sdk-0.1.9-py3-none-manylinux2014_aarch64.manylinux_2_17_aarch64.whl", hash = "sha256:664c8913a866ecc35458f2abdd28bad1ab252c33a6f5655090d0a803381206dc", size = 56447110, upload-time = "2026-07-03T22:24:17.835Z" },
+    { url = "https://files.pythonhosted.org/packages/e8/a0/3e5962967ce1b2c52013314799dbe9946b4699dfe90a4424d8c89a38c022/cursor_sdk-0.1.9-py3-none-manylinux2014_x86_64.manylinux_2_17_x86_64.whl", hash = "sha256:a0a93ed45be76421a4b9723da402ead622490dd0edba171b5c0c69319fd7f6c7", size = 57096437, upload-time = "2026-07-03T22:24:20.922Z" },
+    { url = "https://files.pythonhosted.org/packages/5e/24/2d5fdfb07ff4ebfafae9c59dad3d9f70364455a5ccbd8a14a5e94f1429ae/cursor_sdk-0.1.9-py3-none-win_amd64.whl", hash = "sha256:e0db9ad4a8ed39bdd1889efa16ab5d6ce6ed86cf4bd63fb779d955cf0b5e2d3b", size = 43868696, upload-time = "2026-07-03T22:24:23.687Z" },
 ]
 
 [[package]]

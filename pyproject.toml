@@ -35,7 +35,7 @@ dependencies = [
   "numpy==1.26.4; python_version < '3.13' and sys_platform == 'darwin'",
   "pywin32; sys_platform == 'win32'",
   "pyobjc; sys_platform == 'darwin'",
-  "a2a-sdk[http-server]==1.1.2",
+  "a2a-sdk[http-server]==1.2.3",
   "agent-client-protocol==0.12.1",
   "xmltodict==1.0.4",
   "elevenlabs==2.65.0",
@@ -51,6 +51,7 @@ dependencies = [
   "together==2.31.0",
   "textual-image==0.13.2",
   "firecrawl-anydoc==0.2.4",
+  "cursor-sdk==0.1.9",
 ]
 
 [project.optional-dependencies]
