@@ -57,7 +57,8 @@ the full file shape.
     "FIREWORKS_API_KEY": "YOUR_FIREWORKS_API_KEY",
     "TAVILY_API_KEY": "YOUR_TAVILY_API_KEY",
     "VOYAGE_API_KEY": "YOUR_VOYAGE_API_KEY",
-    "ELEVENLABS_API_KEY": "YOUR_ELEVENLABS_API_KEY"
+    "ELEVENLABS_API_KEY": "YOUR_ELEVENLABS_API_KEY",
+    "CURSOR_API_KEY": "YOUR_CURSOR_API_KEY"
   },
   "auto_approval_tools": [
     "read_file"
@@ -114,7 +115,7 @@ than keeping placeholder text in a live configuration.
 
 ### API Keys and Credential Scope
 
-The following twelve names are the complete `config.json.api_keys` allow-list.
+The following thirteen names are the complete `config.json.api_keys` allow-list.
 At startup, AgentCrew copies each non-empty value into the process environment.
 They can also be set directly as environment variables.
 
@@ -132,25 +133,35 @@ They can also be set directly as environment variables.
 | `TAVILY_API_KEY` | Tavily web-search feature credential; not an LLM provider credential. |
 | `VOYAGE_API_KEY` | Voyage embedding credential for the normal memory path. |
 | `ELEVENLABS_API_KEY` | ElevenLabs voice-synthesis credential. |
+| `CURSOR_API_KEY` | Cursor Agent SDK credential. It can also be set directly in the environment. |
 
 For OpenAI Codex subscription authentication, use `agentcrew chatgpt-auth`.
 That flow stores OAuth state and does not introduce another `*_API_KEY` setting.
 
-### Experimental xAI Subscription OAuth
+### xAI Subscription OAuth
 
-Obtain an **AgentCrew-authorized OAuth client ID** from xAI and set it in the environment
-as `XAI_OAUTH_CLIENT_ID`. AgentCrew does not ship another application's client ID and
-does not read OpenCode/Grok CLI credentials or browser cookies. Without an authorized
-client ID, authentication and inference cannot run. With a limited, eligible account:
+AgentCrew supports xAI Subscription through its built-in OAuth device login and
+the direct xAI Responses API. With an eligible xAI account, sign in and select a
+curated model:
 
 ```bash
-export XAI_OAUTH_CLIENT_ID='your-authorized-client-id'
 agentcrew xai-auth
 agentcrew chat --provider xai --model-id grok-4.7
-# Optional curated models (account entitlement has not been live-validated):
+# Other curated subscription models:
 agentcrew chat --provider xai --model-id grok-build-0.1
 agentcrew chat --provider xai --model-id grok-4.3
 ```
+
+Normal setup uses AgentCrew's built-in OAuth client ID. If your organization has
+a separate xAI-authorized OAuth client, set `XAI_OAUTH_CLIENT_ID` before login to
+override the built-in value:
+
+```bash
+export XAI_OAUTH_CLIENT_ID="your-authorized-client-id"
+agentcrew xai-auth
+```
+
+AgentCrew does not read OpenCode/Grok CLI credentials or browser cookies.
 
 The device authorization screen displays a URL and code for the user to enter.
 Tokens are kept only in `~/.AgentCrew/xai_oauth.json` (owner-only POSIX file and
@@ -187,25 +198,20 @@ vision, hosted tools, multi-agent, image/video/audio, and realtime/WebSocket
 modes are not supported in this slice. There is no API-key fallback and no
 OpenCode Console/Go gateway routing.
 
-**Authorization and commercial caveat:** Availability of direct Responses with
-subscription OAuth is experimental and must be confirmed with xAI for the
-AgentCrew OAuth client and your specific account. Eligibility, allowance, overage,
-and commercial treatment depend on xAI's current terms/account entitlement; do
-not assume every X plan qualifies or requests are free/unlimited. AgentCrew sets
-subscription token prices to zero rather than claiming to know subscription
-charges: a displayed token cost of 0.0 does not mean requests are free.
-For manual live validation, use an explicitly authorized, limited account:
-run `agentcrew xai-auth`, send a short text prompt with each curated model,
-run one local tool call, then repeat a Grok 4.7 reasoning turn to check encrypted
-continuation. Verify quota and billing
-in your xAI account separately; automated tests use fixtures only.
+**Account and commercial terms:** The xAI Subscription integration is supported
+by AgentCrew, but actual availability and model access depend on xAI's current
+plan and account entitlements. Allowances, overages, and commercial treatment
+are controlled by xAI; do not assume every X plan qualifies or that requests are
+free or unlimited. AgentCrew records subscription token prices as zero because
+it does not calculate xAI subscription charges. A displayed token cost of 0.0
+does not mean requests are free. Check quota and billing in your xAI account.
 
 
 Every distinct `*_API_KEY` name referenced by runtime source is covered here:
 
 | Name | Scope and use |
 | --- | --- |
-| The twelve keys above | Accepted under `config.json.api_keys` and loaded into the environment at startup. |
+| The thirteen keys above | Accepted under `config.json.api_keys` and loaded into the environment at startup. |
 | `A2A_SERVER_API_KEY` | Environment-only inbound A2A server authentication key. Alternatively pass `a2a-server --api-key`. It is not a provider credential and is not read from `config.json.api_keys`. |
 | `CHROMA_OPENAI_API_KEY` | Advanced, low-level OpenAI-compatible embedding-adapter default. It is not used by the normal memory setup path. |
 | `CHROMA_GOOGLE_GENAI_API_KEY` | Advanced, low-level Google GenAI embedding-adapter default. It is not used by the normal memory setup path. |
@@ -271,8 +277,8 @@ maintained by AgentCrew; do not use it as a shared configuration setting.
 
 ## Agent Configuration (`agents.toml`)
 
-Define specialized local agents and remote A2A agents in `agents.toml`. Set
-`SW_AGENTS_CONFIG` before startup to use another path.
+Define specialized local agents, remote A2A agents, and Cursor agents in
+`agents.toml`. Set `SW_AGENTS_CONFIG` before startup to use another path.
 
 ### Complete Local and Remote Example
 
@@ -305,21 +311,37 @@ cwd = "."
 tools = ["memory"]
 ```
 
-Cursor agents are a separate list. Do not put them in `[[agents]]`. The Cursor
-IDE and Cursor CLI are not required. Local runtime means files stay on this
-machine and inference is hosted by Cursor. Set `CURSOR_API_KEY` in the
-environment; the key is never stored in this file. There is no `system_prompt`
-field. Install the optional SDK with `uv sync --extra cursor`. Set
-`tools = ["memory"]` to enable AgentCrew memory search/forget tools and automatic
-storage of completed chat turns. When behavior persistence is available, it
-also enables behavior learning. Persisted behaviors are included in Cursor task
-context even without memory enabled.
+### Cursor Agents
+
+Cursor Agent is a supported AgentCrew agent type. Cursor agents use a separate
+`[[cursor_agents]]` list; do not put them in `[[agents]]`. The standard AgentCrew
+installation includes the Cursor SDK, and the Cursor IDE and CLI are not
+required. Files stay on this machine while inference is hosted by Cursor.
+
+Set `CURSOR_API_KEY` directly in the environment or under `config.json.api_keys`.
+Never store the key in `agents.toml`. Cursor agents do not have a `system_prompt`
+field. Set `tools = ["memory"]` to enable AgentCrew memory search/forget tools
+and automatic storage of completed chat turns. When behavior persistence is
+available, it also enables behavior learning. Persisted behaviors are included
+in Cursor task context even without memory enabled.
 
 For `model_id = "auto-smart"`, set `optimize_for` to `"cost"`, `"balanced"`,
 or `"intelligence"` to select **Cost**, **Balance**, or **Intelligence**.
 **Balance** is the default for existing configurations without this field.
 Only `auto-smart` sends this setting to the Cursor SDK; `auto` and other models
 keep their existing behavior.
+
+Cursor agent fields are:
+
+| Field | Required | Description |
+| --- | --- | --- |
+| `name` | Yes | Unique Cursor-agent identifier. |
+| `description` | No | Short purpose used for selection and transfers. Defaults to `""`. |
+| `enabled` | No | Whether the agent is available. Defaults to `true`. |
+| `model_id` | No | Cursor model ID. Defaults to `"composer-2.5"`. |
+| `cwd` | No | Working directory the agent can edit. Defaults to `"."`. |
+| `tools` | No | AgentCrew integrations enabled for the Cursor agent. Use `["memory"]` for memory support. |
+| `optimize_for` | No | `"cost"`, `"balanced"`, or `"intelligence"` for `auto-smart`. Defaults to `"balanced"`. |
 
 ### Agent Fields
 
@@ -483,6 +505,8 @@ export AGENTCREW_MODEL_ID="YOUR_MODEL_ID"
 | `OPENAI_BASE_URL` | OpenAI-compatible API base URL override. |
 | `GEMINI_BASE_URL` | Gemini API base URL override. |
 | `TOGETHER_BASE_URL` | Together API base URL override. |
+| `XAI_OAUTH_CLIENT_ID` | Optional override for the built-in xAI OAuth client ID. |
+| `CURSOR_API_KEY` | Cursor Agent SDK credential. |
 | `A2A_SERVER_API_KEY` | Inbound A2A server authentication key; equivalent to the `a2a-server --api-key` option. |
 | `A2A_SERVER_EXPOSED_URL` | Public URL advertised by an A2A server when it differs from its bound URL. |
 | `AGENTCREW_HUB_HOST` | Base host used to resolve `@hub/...` agent configuration URIs. Defaults to `https://agentplace.cloud`. |
@@ -533,6 +557,7 @@ in this guide.
 | --- | --- |
 | Provider is unavailable | Verify a supported provider credential or login, `AGENTCREW_PROVIDER`, and `AGENTCREW_MODEL_ID`. |
 | Agent is unavailable | Check `enabled = true`, the TOML syntax, and the `SW_AGENTS_CONFIG` path. |
+| Cursor agent is unavailable | Check `CURSOR_API_KEY`, the `[[cursor_agents]]` TOML entry, `cwd`, and Cursor account access. |
 | MCP server fails | Confirm executable/URL, JSON syntax, `env`/`headers`, and `enabledForAgents`. Test the local command separately. |
 | API key error | Check that the credential is active, correctly named, and has no accidental whitespace. Do not print it in logs. |
 | Configuration does not load | Check the active path override, file permissions, and JSON/TOML syntax. |

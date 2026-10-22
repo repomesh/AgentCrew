@@ -84,11 +84,10 @@ agentcrew chat --provider opencode_go
 agentcrew chatgpt-auth
 agentcrew chat --provider openai_codex
 
-# Experimental xAI Subscription (requires an AgentCrew-authorized OAuth client ID)
-export XAI_OAUTH_CLIENT_ID='your-authorized-client-id'
+# xAI Subscription (supported for eligible accounts)
 agentcrew xai-auth
 agentcrew chat --provider xai --model-id grok-4.7
-# Other curated models (account entitlement has not been live-validated)
+# Other curated subscription models
 agentcrew chat --provider xai --model-id grok-build-0.1
 agentcrew chat --provider xai --model-id grok-4.3
 # Local sign-out/reset (does not revoke the remote xAI session)
@@ -99,13 +98,13 @@ agentcrew copilot-auth
 agentcrew chat --provider github_copilot
 ```
 
-> xAI Subscription support for these models is experimental and has not been
-> live-validated against an authorized AgentCrew client/account. Eligibility,
-> allowance, overage and billing depend on xAI's current terms and account
-> entitlement. Displayed token cost of 0.0 is an accounting convention, **not**
-> proof that requests are free. Grok Build 0.1 uses the model's default reasoning
-> because supported selectable efforts are not established for this integration.
-> `xai-auth --logout` deletes local tokens only; it cannot revoke them remotely.
+> xAI Subscription uses AgentCrew's built-in OAuth device login and the direct
+> xAI Responses API. Availability and model access depend on your current xAI
+> plan and account entitlement. Allowances, overages, and billing are controlled
+> by xAI; a displayed token cost of 0.0 does **not** mean requests are free.
+> Grok Build 0.1 uses the model's default reasoning because it does not expose
+> selectable reasoning effort through this integration. `xai-auth --logout`
+> deletes local tokens only; it cannot revoke them remotely.
 
 **Pay-as-you-go API keys:**
 
@@ -146,6 +145,7 @@ schema, llama.cpp configuration, model capabilities, and sampling options.
 | Google Gemini    | Free tier available        | Budget-friendly, strong reasoning      |
 | GitHub Copilot   | Included with subscription | Coding-focused, no extra cost          |
 | ChatGPT Codex    | Included with Plus/Pro sub | No extra cost for subscribers          |
+| xAI Subscription | Included with eligible plan | Grok models through OAuth device login |
 | Custom           | Free (local)               | Fully offline (Ollama, llama.cpp...)   |
 
 > **Which provider should I pick?**
@@ -157,6 +157,7 @@ schema, llama.cpp configuration, model capabilities, and sampling options.
 > | Have a Command Code subscription    | **Command Code**                     |
 > | Have ChatGPT Plus / Pro             | `openai_codex` — no extra cost       |
 > | Have GitHub Copilot                 | `github_copilot` — no extra cost     |
+> | Have an eligible xAI subscription   | `xai` — OAuth device login           |
 > | Want a free tier to start           | **Google Gemini**                    |
 > | Need fully offline / air-gapped     | **Custom** (Ollama, llama.cpp, etc.) |
 
@@ -189,6 +190,31 @@ system_prompt = """You are an expert software engineer.
 Focus on code quality, security, and maintainability.
 Today is {current_date}."""
 ```
+
+### Use Cursor Agent
+
+Cursor Agent is a supported AgentCrew agent type for repository editing and
+coding tasks. The standard AgentCrew installation includes the Cursor SDK; the
+Cursor IDE and CLI are not required. Set your Cursor API key, then add a
+`[[cursor_agents]]` entry:
+
+```bash
+export CURSOR_API_KEY="your-cursor-api-key"
+```
+
+```toml
+[[cursor_agents]]
+name = "CursorCoder"
+description = "Edits the current repository with Cursor Agent."
+model_id = "composer-2.5"
+cwd = "."
+tools = ["memory"]
+```
+
+Files stay on your machine while inference is hosted by Cursor. Start AgentCrew
+and select the agent with `/agent CursorCoder`. See
+[Cursor Agent configuration](CONFIGURATION.md#cursor-agents) for all fields and
+model-selection options.
 
 ### 5. Start working
 
