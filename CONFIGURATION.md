@@ -315,6 +315,12 @@ storage of completed chat turns. When behavior persistence is available, it
 also enables behavior learning. Persisted behaviors are included in Cursor task
 context even without memory enabled.
 
+For `model_id = "auto-smart"`, set `optimize_for` to `"cost"`, `"balanced"`,
+or `"intelligence"` to select **Cost**, **Balance**, or **Intelligence**.
+**Balance** is the default for existing configurations without this field.
+Only `auto-smart` sends this setting to the Cursor SDK; `auto` and other models
+keep their existing behavior.
+
 ### Agent Fields
 
 Local agent fields are:

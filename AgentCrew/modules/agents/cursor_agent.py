@@ -17,6 +17,10 @@ from loguru import logger
 
 from AgentCrew.modules.agents.agent_response_stream import AgentResponseStream
 from AgentCrew.modules.agents.base import BaseAgent, MessageType
+from AgentCrew.modules.config.agents_config import (
+    DEFAULT_CURSOR_OPTIMIZE_FOR,
+    validate_cursor_optimize_for,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping
@@ -147,6 +151,7 @@ def create_cursor_agent_from_definition(
         cwd=str(agent_def.get("cwd") or "."),
         tools=agent_def.get("tools") or [],
         services=services,
+        optimize_for=agent_def.get("optimize_for", DEFAULT_CURSOR_OPTIMIZE_FOR),
     )
 
 
@@ -191,6 +196,7 @@ class CursorAgent(BaseAgent):
         cwd: str = ".",
         tools: list[str] | None = None,
         services: dict[str, Any] | None = None,
+        optimize_for: str = DEFAULT_CURSOR_OPTIMIZE_FOR,
     ) -> None:
         super().__init__(name, description)
         self.tools = list(tools or [])
@@ -199,6 +205,7 @@ class CursorAgent(BaseAgent):
 
         self._memory_coordinator = AgentMemoryCoordinator(self)
         self.model_id = model_id or DEFAULT_MODEL_ID
+        self.optimize_for = validate_cursor_optimize_for(optimize_for)
         self.cwd = _resolve_cwd(cwd)
         self._cwd_owner = f"cursor:{id(self)}"
         self._cwd_claimed = False
@@ -214,17 +221,22 @@ class CursorAgent(BaseAgent):
         self, agent_def: Mapping[str, Any], services: dict[str, Any] | None = None
     ) -> None:
         """Update routing fields and tool configuration without connecting to Cursor."""
+        optimize_for = validate_cursor_optimize_for(
+            agent_def.get("optimize_for", DEFAULT_CURSOR_OPTIMIZE_FOR)
+        )
         self.description = str(agent_def.get("description") or "")
         model_id = str(agent_def.get("model_id") or DEFAULT_MODEL_ID)
         cwd = _resolve_cwd(str(agent_def.get("cwd") or "."))
         tools = list(agent_def.get("tools") or [])
         changed = (
-            model_id != self.model_id
+            (model_id == "auto-smart" and optimize_for != self.optimize_for)
+            or model_id != self.model_id
             or cwd != self.cwd
             or tools != self.tools
             or (services is not None and services is not self.services)
         )
         self.model_id = model_id
+        self.optimize_for = optimize_for
         self.tools = tools
         if changed:
             self.dispose_sdk_agent()
@@ -446,6 +458,19 @@ class CursorAgent(BaseAgent):
         )
         return "\n\n".join([*context, plan])
 
+    def _sdk_model_selection(self, sdk: Any) -> Any:
+        if self.model_id != "auto-smart":
+            return self.model_id
+        return sdk.ModelSelection(
+            id="auto-smart",
+            params=[
+                sdk.ModelParameterValue(
+                    id="optimize_for",
+                    value=validate_cursor_optimize_for(self.optimize_for),
+                )
+            ],
+        )
+
     def _ensure_sdk_agent(self) -> Any:
         with self._sdk_lock:
             if self._sdk_agent is not None:
@@ -460,7 +485,7 @@ class CursorAgent(BaseAgent):
             sdk = _load_cursor_sdk()
             agent = sdk.Agent.create(
                 name=self.name,
-                model=self.model_id,
+                model=self._sdk_model_selection(sdk),
                 api_key=os.environ.get("CURSOR_API_KEY"),
                 local=sdk.LocalAgentOptions(
                     cwd=self.cwd,
@@ -937,7 +962,7 @@ def _delegate_to_cursor(
         sdk = _load_cursor_sdk()
         agent = sdk.Agent.create(
             name=f"{target.name}-oneshot",
-            model=target.model_id,
+            model=target._sdk_model_selection(sdk),
             api_key=os.environ.get("CURSOR_API_KEY"),
             local=sdk.LocalAgentOptions(
                 cwd=target.cwd,

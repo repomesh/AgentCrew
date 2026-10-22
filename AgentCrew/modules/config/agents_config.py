@@ -89,6 +89,19 @@ class RemoteAgentConfig:
         }
 
 
+CURSOR_OPTIMIZE_FOR_VALUES = ("cost", "balanced", "intelligence")
+DEFAULT_CURSOR_OPTIMIZE_FOR = "balanced"
+
+
+def validate_cursor_optimize_for(value: str) -> str:
+    if value not in CURSOR_OPTIMIZE_FOR_VALUES:
+        raise ValueError(
+            f"Invalid Cursor optimize_for {value!r}; expected one of "
+            f"{', '.join(CURSOR_OPTIMIZE_FOR_VALUES)}"
+        )
+    return value
+
+
 @dataclass
 class CursorAgentConfig:
     """Type-safe representation of a Cursor SDK agent entry in agents.toml."""
@@ -99,6 +112,10 @@ class CursorAgentConfig:
     model_id: str = "composer-2.5"
     cwd: str = "."
     tools: list[str] = field(default_factory=list)
+    optimize_for: str = DEFAULT_CURSOR_OPTIMIZE_FOR
+
+    def __post_init__(self) -> None:
+        validate_cursor_optimize_for(self.optimize_for)
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "CursorAgentConfig":
@@ -109,6 +126,7 @@ class CursorAgentConfig:
             model_id=data.get("model_id") or "composer-2.5",
             cwd=data.get("cwd") or ".",
             tools=data.get("tools", []),
+            optimize_for=data.get("optimize_for", DEFAULT_CURSOR_OPTIMIZE_FOR),
         )
 
     def to_dict(self) -> dict[str, Any]:
@@ -119,6 +137,7 @@ class CursorAgentConfig:
             "model_id": self.model_id,
             "cwd": self.cwd,
             "tools": self.tools,
+            "optimize_for": validate_cursor_optimize_for(self.optimize_for),
         }
 
 
