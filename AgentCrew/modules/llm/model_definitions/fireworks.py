@@ -44,6 +44,17 @@ FIREWORKS_MODELS = [
         output_token_price_1m=0.66,
     ),
     Model(
+        id="accounts/fireworks/models/deepseek-v4p1-flash-1017",
+        provider="fireworks",
+        name="DeepSeek V4.1 Flash 1017",
+        description="DeepSeek V4.1 Flash 1017 on Fireworks — multimodal reasoning model for coding and agentic tasks",
+        capabilities=["tool_use", "thinking", "vision", "stream", "structured_output"],
+        max_context_token=400_000,
+        input_token_price_1m=0.30,
+        cached_token_price_1m=0.006,
+        output_token_price_1m=1.20,
+    ),
+    Model(
         id="accounts/fireworks/models/deepseek-v4-flash-vision-exp",
         provider="fireworks",
         name="DeepSeek V4 Flash Vision Exp",
